@@ -1,0 +1,8 @@
+{
+  "id": "react-review",
+  "name": "React Review",
+  "description": "Review React components for consistency, performance, and best practices.",
+  "version": "1.0.0",
+  "tags": ["react", "review", "frontend", "components"],
+  "enabled": true
+}

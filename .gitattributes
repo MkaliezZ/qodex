@@ -1,0 +1,16 @@
+* text=auto
+
+*.ts text
+*.tsx text
+*.rs text
+*.md text
+*.json text
+*.toml text
+*.yaml text
+*.yml text
+
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.webp binary
+*.gif binary

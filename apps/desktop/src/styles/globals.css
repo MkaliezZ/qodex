@@ -1,0 +1,384 @@
+/* ============================================================
+   Qodex Design System — Dark Fluid Glass
+   Based on: Qodex Fluid UI Design Spec v1.0 + UI Design System
+   Polish pass: macOS Sequoia + Linear depth hierarchy
+   ============================================================ */
+
+/* --- Reset & Base --- */
+*,
+*::before,
+*::after {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html, body, #root {
+  height: 100%;
+  width: 100%;
+  overflow: hidden;
+}
+
+body {
+  font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+    Helvetica, Arial, sans-serif;
+  font-size: 14px;
+  line-height: 22px;
+  color: rgba(255, 255, 255, 0.85);
+  background-color: #070A12;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  user-select: none;
+}
+
+/* --- Fluid Gradient Background --- */
+.qodex-bg {
+  position: fixed;
+  inset: 0;
+  background:
+    radial-gradient(ellipse at 20% 20%, rgba(91, 140, 255, 0.22), transparent 32%),
+    radial-gradient(ellipse at 80% 10%, rgba(155, 92, 255, 0.18), transparent 30%),
+    radial-gradient(ellipse at 60% 90%, rgba(72, 214, 255, 0.14), transparent 36%),
+    #070A12;
+  z-index: 0;
+  pointer-events: none;
+  animation: gradient-drift 30s ease-in-out infinite alternate;
+}
+
+@keyframes gradient-drift {
+  0%   { background-position: 0% 0%; }
+  100% { background-position: 5% 3%; }
+}
+
+/* --- Glass Panel — depth layer 1 (base) --- */
+.glass-panel {
+  background: rgba(255, 255, 255, 0.06);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  border: 1px solid rgba(255, 255, 255, 0.10);
+  box-shadow:
+    0 20px 60px rgba(0, 0, 0, 0.40),
+    0 8px 24px rgba(0, 0, 0, 0.25),
+    inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  border-radius: 24px;
+}
+
+/* --- Glass Panel — depth layer 2 (elevated / floating) --- */
+.glass-panel-elevated {
+  background: rgba(255, 255, 255, 0.08);
+  backdrop-filter: blur(32px);
+  -webkit-backdrop-filter: blur(32px);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  box-shadow:
+    0 24px 80px rgba(0, 0, 0, 0.50),
+    0 12px 32px rgba(0, 0, 0, 0.30),
+    inset 0 1px 0 rgba(255, 255, 255, 0.10);
+  border-radius: 24px;
+}
+
+/* --- Glass Panel — depth layer 0 (subtle / inline) --- */
+.glass-panel-subtle {
+  background: rgba(255, 255, 255, 0.04);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  box-shadow:
+    0 4px 12px rgba(0, 0, 0, 0.15);
+  border-radius: 16px;
+}
+
+/* --- Scrollbar — minimal, dark, hover-reveal --- */
+::-webkit-scrollbar {
+  width: 4px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.06);
+  border-radius: 2px;
+  transition: background 220ms ease;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.16);
+}
+*:hover::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.10);
+}
+
+/* --- Layout --- */
+.qodex-layout {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  height: 100vh;
+  width: 100vw;
+  gap: 8px;
+  padding: 8px;
+}
+
+/* --- Left Rail: 220px (was 240px) --- */
+.qodex-left-rail {
+  width: 220px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* --- Center Workspace --- */
+.qodex-center {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* --- Right Context Panel: 280px (was 320px) --- */
+.qodex-right-panel {
+  width: 280px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* --- Panel Inner --- */
+.panel-inner {
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  overflow-y: auto;
+  flex: 1;
+}
+
+.panel-header {
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: rgba(255, 255, 255, 0.35);
+  padding-bottom: 8px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+/* --- Typography --- */
+.text-caption {
+  font-size: 12px;
+  line-height: 18px;
+  color: rgba(255, 255, 255, 0.45);
+}
+
+.text-body {
+  font-size: 14px;
+  line-height: 22px;
+}
+
+.text-code {
+  font-family: "JetBrains Mono", "SF Mono", "Fira Code", monospace;
+  font-size: 13px;
+  line-height: 20px;
+}
+
+/* --- Accent Colors --- */
+.accent-blue   { color: #5B8CFF; }
+.accent-violet { color: #9B5CFF; }
+.accent-cyan   { color: #48D6FF; }
+.accent-mint   { color: #4FFFC2; }
+.accent-amber  { color: #FFB020; }
+.accent-red    { color: #FF5C7A; }
+.accent-green  { color: #4DFF9D; }
+
+/* --- Interactive Elements --- */
+.qodex-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 8px 16px;
+  background: rgba(91, 140, 255, 0.12);
+  border: 1px solid rgba(91, 140, 255, 0.20);
+  border-radius: 12px;
+  color: #5B8CFF;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 120ms ease;
+}
+.qodex-button:hover {
+  background: rgba(91, 140, 255, 0.20);
+  border-color: rgba(91, 140, 255, 0.35);
+  transform: translateY(-1px);
+}
+.qodex-button:active {
+  transform: translateY(0);
+  background: rgba(91, 140, 255, 0.16);
+}
+
+.qodex-button-secondary {
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.10);
+  color: rgba(255, 255, 255, 0.70);
+}
+.qodex-button-secondary:hover {
+  background: rgba(255, 255, 255, 0.10);
+  border-color: rgba(255, 255, 255, 0.18);
+  color: rgba(255, 255, 255, 0.90);
+}
+
+.qodex-button-icon {
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border-radius: 10px;
+  font-size: 16px;
+}
+
+/* --- Inputs — refined, closer to Linear/Raycast --- */
+.qodex-input {
+  width: 100%;
+  padding: 10px 14px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 12px;
+  color: rgba(255, 255, 255, 0.85);
+  font-size: 14px;
+  font-family: inherit;
+  outline: none;
+  transition: all 120ms ease;
+}
+.qodex-input:focus {
+  border-color: rgba(91, 140, 255, 0.35);
+  background: rgba(255, 255, 255, 0.06);
+  box-shadow: 0 0 0 2px rgba(91, 140, 255, 0.10);
+}
+.qodex-input::placeholder {
+  color: rgba(255, 255, 255, 0.25);
+}
+
+/* --- Model Badge --- */
+.model-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  background: rgba(91, 140, 255, 0.10);
+  border: 1px solid rgba(91, 140, 255, 0.18);
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 500;
+  color: #5B8CFF;
+}
+
+.model-badge-violet {
+  background: rgba(155, 92, 255, 0.10);
+  border-color: rgba(155, 92, 255, 0.18);
+  color: #9B5CFF;
+}
+
+.model-badge-cyan {
+  background: rgba(72, 214, 255, 0.10);
+  border-color: rgba(72, 214, 255, 0.18);
+  color: #48D6FF;
+}
+
+/* --- Section with Title --- */
+.section-title {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: rgba(255, 255, 255, 0.30);
+  padding: 4px 0;
+}
+
+/* --- Divider --- */
+.qodex-divider {
+  height: 1px;
+  background: rgba(255, 255, 255, 0.06);
+  margin: 4px 0;
+}
+
+/* --- Avatar/Dot --- */
+.status-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.status-dot-active { background: #4DFF9D; }
+.status-dot-idle    { background: rgba(255, 255, 255, 0.20); }
+.status-dot-offline { background: rgba(255, 255, 255, 0.08); }
+
+/* --- Skill Card --- */
+.skill-card {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 12px;
+  cursor: default;
+  transition: all 120ms ease;
+}
+.skill-card:hover {
+  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(255, 255, 255, 0.10);
+}
+
+/* --- Transition helpers --- */
+.fade-in {
+  animation: fadeIn 220ms ease;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* --- Empty State --- */
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 24px 16px;
+  text-align: center;
+  color: rgba(255, 255, 255, 0.25);
+}
+.empty-state-icon {
+  font-size: 22px;
+  opacity: 0.35;
+  margin-bottom: 2px;
+}
+.empty-state-text {
+  font-size: 13px;
+  line-height: 18px;
+  font-weight: 400;
+}
+.empty-state-text strong {
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.40);
+}
+
+/* --- Spinner for Run button --- */
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+/* --- Blinking cursor for streaming indicator --- */
+@keyframes blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
+}

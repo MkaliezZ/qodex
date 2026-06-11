@@ -1,0 +1,79 @@
+# Node
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Build
+dist/
+build/
+coverage/
+.next/
+.nuxt/
+.turbo/
+
+# TypeScript
+*.tsbuildinfo
+
+# Environment
+.env
+.env.*
+!.env.example
+
+# Logs
+logs/
+*.log
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+
+# Tauri
+src-tauri/target/
+src-tauri/**/*.rs.bk
+
+# Rust
+target/
+
+# Database
+*.sqlite
+*.sqlite3
+*.db
+
+# Temporary
+tmp/
+temp/
+.cache/
+
+# Qodex Runtime
+qodex-data/
+qodex-cache/
+qodex-index/
+qodex-memory/
+
+# Agent Artifacts
+agent-output/
+agent-temp/
+
+# MCP Runtime
+mcp-runtime/
+
+# Generated Embeddings
+embeddings/
+
+# Test Output
+playwright-report/
+test-results/
+
+# Secrets
+secrets/
+*.pem
+*.key
+
+# Local Config
+qodex-config/local/

@@ -1,0 +1,8 @@
+{
+  "id": "bug-hunter",
+  "name": "Bug Hunter",
+  "description": "Analyze code for common bugs, edge cases, and runtime errors.",
+  "version": "1.0.0",
+  "tags": ["debug", "testing", "edge-cases", "bugs"],
+  "enabled": false
+}

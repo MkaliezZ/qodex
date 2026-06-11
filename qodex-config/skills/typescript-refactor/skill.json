@@ -1,0 +1,8 @@
+{
+  "id": "typescript-refactor",
+  "name": "TypeScript Refactor",
+  "description": "Refactor TypeScript code for better type safety and readability.",
+  "version": "1.0.0",
+  "tags": ["typescript", "refactor", "type-safety", "clean-code"],
+  "enabled": true
+}
