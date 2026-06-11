@@ -3,22 +3,89 @@
 ## Project Summary
 
 - **Mission:** Desktop-first, multi-model, skill-enabled, MCP-compatible, diff-first AI coding agent.
-- **Directory:** `~/Desktop/Qodex`
+- **Repository Root:** Qodex
 - **Startup guide:** `docs/P0_Project_Definition/Qodex_Agent_Startup_Guide.md`
 
-## Current State
+## Current Release
 
-- ✅ Repository organized (M0 complete)
-- ⬜ Monorepo initialized
-- ⬜ Tauri desktop shell
-- ⬜ Provider SDK
-- ⬜ Agent Runtime
-- ⬜ Project Runtime
-- ⬜ Diff Engine
-- ⬜ Skill Engine
-- ⬜ Permission Layer
-- ⬜ Git Runtime
-- ⬜ MCP Runtime
+Version: v0.1.0-alpha
+
+Status: Public Alpha
+
+GitHub Repository:
+https://github.com/MkaliezZ/qodex
+
+---
+
+## Completed Milestones
+
+✅ M0 — Repository Organization
+
+✅ M1 — Desktop Shell
+
+✅ M2 — Provider SDK
+
+✅ M3 — Agent Runtime
+
+✅ M4 — Project Runtime
+
+✅ M5 — Context Engine
+
+✅ M6 — Diff Engine
+
+✅ M7 — Git Runtime
+
+✅ M8 — Skill Runtime
+
+✅ M9 — MCP Runtime
+
+✅ M10 — Multi-Agent Runtime
+
+---
+
+## Current Packages
+
+✅ provider-sdk
+
+✅ project-runtime
+
+✅ context-engine
+
+✅ agent-runtime
+
+✅ diff-engine
+
+✅ git-runtime
+
+✅ skill-runtime
+
+✅ mcp-runtime
+
+✅ multi-agent-runtime
+
+---
+
+## Current Metrics
+
+Public Repository: Live
+
+GitHub Release: v0.1.0-alpha
+
+License: MIT
+
+Tests: 887+
+
+Discussion Board: Enabled
+
+ADR Records: 11
+
+---
+
+## Next Milestone
+
+M11 — Planning & Execution Runtime
+
+Status: Ready To Begin
 
 ## Doc Structure
 
