@@ -2,77 +2,117 @@
 
 > Desktop-first, multi-model, skill-enabled, MCP-compatible, diff-first AI coding agent.
 
-**Core philosophy:** Codex Workflow, Any Model, Skills Included.
+**Codex Workflow, Any Model, Skills Included.**
 
-Qodex is NOT a chatbot wrapper, NOT an IDE replacement, and NOT OpenAI-only.
-
----
-
-## Quick Start
-
-```
-pnpm install
-pnpm dev
-```
-
-Requirements: Node.js 18+, pnpm, Rust (for Tauri).
+Qodex is an AI coding agent that follows the Codex workflow philosophy while remaining **provider-agnostic**. Unlike tools locked to a single model vendor, Qodex supports OpenAI, DeepSeek, OpenRouter, and any OpenAI-compatible endpoint through a unified Provider SDK.
 
 ---
 
-## Reading Order
+## Features
 
-Before development, read in this order:
+| Feature | Description |
+|:--|:--|
+| **Provider SDK** | Unified interface for OpenAI, DeepSeek, OpenRouter, Custom — all models through one API |
+| **Context Engine** | Structured prompt assembly: Rules → Memory → Skills → Metadata → Files → Task |
+| **Agent Runtime** | Task lifecycle management with streaming, cancellation, and event bus |
+| **Diff Engine** | Safe patch-based editing — model never writes files directly |
+| **Git Runtime** | Checkpoints, commits, branches, restore — no Git knowledge required |
+| **Skill Runtime** | Domain-specific guidelines via markdown skills with deterministic keyword resolution |
+| **MCP Runtime** | External tool discovery and permission-gated execution |
+| **Multi-Agent Runtime** | Coordinator + 4 specialists (Review, Refactor, Research, Testing) with report aggregation |
+| **Project Runtime** | Open local projects, build file trees, read and select files |
 
-1. `docs/P0_Project_Definition/Qodex_Agent_Startup_Guide.md` — Start here
-2. `docs/P0_Project_Definition/` — PRD, Roadmap, Product Requirements
-3. `docs/P1_Architecture/` — System Architecture
-4. `docs/P2_Engineering_Pack/` — Engineering specs (Provider SDK, Agent Runtime, etc.)
-5. `docs/P4_Core_Protocols/` — Core protocols (Context, Memory, Security, etc.)
-6. `qodex/rules.md` — Project rules
-7. `qodex/memory.md` — Session memory
-8. `qodex/adr/` — Architecture Decision Records
+---
+
+## Architecture Diagram
+
+```
+User Input
+    │
+    ▼
+ContextEngine
+  Rules → Memory → Skills → Metadata → Files → Task
+    │
+    ▼
+MultiAgentRuntime
+  Coordinator → Planner → Review/Refactor/Research/Testing
+    │
+    ▼
+AgentRuntime (Task State Machine + Event Bus)
+    │
+    ▼
+Provider SDK → Model (OpenAI / DeepSeek / etc.)
+    │
+    ▼
+DiffEngine → PatchProposal → Apply / Reject / Rollback
+    │
+    ▼
+GitRuntime → Checkpoint → Commit → Restore
+```
 
 ---
 
 ## Repository Structure
 
 ```
-qodex/               — AI agent workspace (rules, memory, ADRs)
-docs/                — All documentation, organized by category
-  P0_Project_Definition/   — PRD, roadmap, startup guide
-  P1_Architecture/         — System architecture, tech stack
-  P2_Engineering_Pack/    — Engineering implementation specs
-  P3_Source_of_Truth/     — Database schema, API contracts, DSL
-  P4_Core_Protocols/      — Context, multi-agent, memory, security
-  P5_Deep_Core_Design/    — Deep design documents
-  P6_UI_System/           — UI design blueprints, components
-  P7_Runtime_Specs/       — Runtime compatibility, tool specs
-  P8_Agent_Handoff/       — Agent handoff prompts
-  assets/                 — Images, diagrams
-starter/             — Starter monorepo skeleton (pnpm workspace)
+Qodex/
+├── apps/desktop/           ← Tauri + React desktop UI
+├── packages/
+│   ├── provider-sdk/       ← Model provider abstraction
+│   ├── agent-runtime/      ← Task execution orchestration
+│   ├── project-runtime/    ← File system access
+│   ├── context-engine/     ← Context assembly pipeline
+│   ├── diff-engine/        ← Patch generation & apply
+│   ├── git-runtime/        ← Git operations & checkpoints
+│   ├── skill-runtime/      ← Skill loading & resolution
+│   ├── mcp-runtime/        ← MCP tool management
+│   └── multi-agent-runtime/ ← Multi-agent orchestration
+├── docs/                   ← Specifications & development logs
+└── qodex-config/           ← AI agent workspace
 ```
-
-See `docs/DOCUMENT_INDEX.md` for a complete file listing.
 
 ---
 
-## Development Milestones
+## Quick Start
 
-| # | Milestone | Status |
-|:--|:--|:--:|
-| M0 | Repo Setup | ⬜ |
-| M1 | Desktop Shell (Tauri + React) | ⬜ |
-| M2 | Provider SDK | ⬜ |
-| M3 | Agent Runtime | ⬜ |
-| M4 | Project Runtime | ⬜ |
-| M5 | Diff Engine | ⬜ |
-| M6 | Skill Engine | ⬜ |
-| M7 | Permission Layer | ⬜ |
-| M8 | Git Runtime | ⬜ |
-| M9 | MCP Runtime | ⬜ |
+```bash
+# Requirements: Node.js 18+, pnpm 9+
+pnpm install
+cd apps/desktop && pnpm dev
+```
+
+Open http://localhost:1420 in your browser.
+
+Full guide: `docs/QUICK_START.md`
+
+---
+
+## Test Suite
+
+```bash
+pnpm -r test
+```
+
+887+ tests across 9 packages.
+
+---
+
+## Status
+
+**Alpha release — v0.1.0-alpha**
+
+10 milestones complete. 9 packages. 887 tests. Zero defects.
+
+Full history: `docs/development/DEVLOG.md`
 
 ---
 
 ## License
 
-Proprietary — All rights reserved.
+MIT — see `LICENSE` file.
+
+---
+
+## Contributing
+
+See `CONTRIBUTING.md`.
