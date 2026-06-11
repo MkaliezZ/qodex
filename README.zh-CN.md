@@ -123,7 +123,20 @@ pnpm -r test
 
 - **当前版本:** v0.1.0-alpha（预发布）
 - **已完成里程碑:** M0–M10
-- **下个里程碑:** M11 Planning & Execution Runtime
+
+**已完成的里程碑:**
+
+Provider SDK · Project Runtime · Context Engine · Agent Runtime · Diff Engine · Git Runtime · Skill Runtime · MCP Runtime · Multi-Agent Runtime
+
+**待定里程碑:**
+
+| 里程碑 | 描述 | 状态 |
+|:--|:--|:--:|
+| M11 | Planning & Execution Runtime | ⬜ 待定 |
+| M12 | Execution Graph | ⬜ 待定 |
+| M13 | Internationalization | ⬜ 待定 |
+| M14 | Marketplace Foundation | ⬜ 待定 |
+
 - **变更日志:** [DEVLOG.md](docs/development/DEVLOG.md)
 
 ---
