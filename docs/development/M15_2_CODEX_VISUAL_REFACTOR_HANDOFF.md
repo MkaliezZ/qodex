@@ -1,7 +1,9 @@
 # M15.2 — Codex Visual Refactor Handoff
 
-**Target:** Codex (Claude Code with DeepSeek V4 Pro)  
+**Target:** Codex
 **Constraint:** This is a **UI-only visual refactor**. Do NOT modify any runtime packages. Do NOT change behavior.
+
+This handoff is written for Codex as the implementation agent. Do not assume DeepSeek model names or Claude Code-specific behavior. Follow the repository files and this handoff as source of truth.
 
 ---
 
