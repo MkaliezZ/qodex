@@ -252,7 +252,68 @@ Qodex desktop UX is now suitable for public alpha evaluation. All false affordan
 ---
 
 *Generated: 2026-06-12*
-*Updated: 2026-06-12 (M10 + M10.5 + M11)*
+*Updated: 2026-06-12 (M10 + M10.5 + M11 + M12)*
+
+---
+
+## M12 — Execution Graph Runtime Foundation
+
+**Date:** 2026-06-12
+
+**Status:** Completed ✅
+
+### Motivation
+
+The ExecutionGraph existed only as a transient computational artifact during M11's GraphExecutor runs. Graph nodes lacked their own lifecycle, persistence model, inspection surface, and replay capability.
+
+### Goals
+
+* Elevate graphs to first-class runtime entities with full lifecycle
+* Archive execution history with immutable snapshots
+* Replay graphs/nodes/paths in read-only mode
+* Graph traversal (topological sort, dependency walk)
+* Node orchestration with injected executor pattern
+* Framework-agnostic graph-level event bus
+
+### Packages
+
+- `packages/execution-graph-runtime` — 78 tests
+
+### Architecture
+
+```
+Planning Runtime (M11) → Plan
+    ↓
+Execution Graph Runtime (M12) → Build → Validate → Run → Archive → Replay
+    ↓
+Multi-Agent Runtime (M10) → Execute nodes (injected)
+```
+
+### Delivered
+
+- GraphLifecycle: 8 statuses with legal/illegal transition enforcement
+- ArchiveManager: immutable GraphSnapshot + ExecutionRecord, append-only
+- ReplayEngine: graph/node/path replay, read-only, no side effects
+- GraphTraverser: topological sort, dependency walk, reverse walk, all paths
+- GraphInspector: query graphs, nodes, progress, archives, history
+- NodeOrchestrator: dispatch with retry/blocking, executor injection
+- GraphEventBus: 13 graph-level event types
+- ExecutionGraphRuntime: full lifecycle API (build → start → archive → replay)
+
+### Validation
+
+| Check | Result |
+|:--|:--|
+| Unit tests (12 suites) | 78/78 ✅ |
+| Cross-package total | 1070 ✅ |
+| Cross-package imports | 0 (zero @qodex/* imports) |
+| Archived immutable | ✅ |
+| Replay read-only | ✅ |
+| No regressions | 992 existing green ✅ |
+
+### Commit
+
+`e3fd6c3` — `feat(execution-graph-runtime): implement M12 execution graph runtime foundation`
 
 ---
 

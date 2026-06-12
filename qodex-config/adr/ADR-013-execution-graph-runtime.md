@@ -1,6 +1,6 @@
 # ADR-013 — Execution Graph Runtime
 
-- **Status:** Proposed
+- **Status:** Accepted
 - **Date:** 2026-06-12
 - **Depends on:** ADR-012 — Planning & Execution Runtime
 
@@ -244,4 +244,4 @@ The Execution Graph Runtime **MUST NOT:**
 
 ## Decision Outcome
 
-**Proposed.** Pending implementation in M12 — Execution Graph Runtime.
+**Accepted.** Implemented in M12 — Execution Graph Runtime Foundation (78 tests, 78/78 passing, cross-package total 1070).
