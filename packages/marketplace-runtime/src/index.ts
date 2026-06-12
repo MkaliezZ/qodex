@@ -1,13 +1,16 @@
-export { MarketplaceRuntime } from "./runtime/runtime.js";
-export { AdapterRegistry, QodexNativeAdapter, OpenClawAdapter, ClaudeCodeAdapter } from "./adapters/adapters.js";
-export { SkillDiscoverer } from "./discovery/discoverer.js";
-export { SkillInstaller } from "./installer/installer.js";
-export { validateManifest, parseManifest } from "./manifest/schema.js";
-export { parseVersion, compareVersions, isUpdateAvailable, satisfiesCompatibility } from "./versioning/versioning.js";
-export type { SkillManifestV1, InstallResult, InstallStatus, InstallIndex } from "./models/manifest.js";
-export type { SkillAdapter } from "./models/adapter.js";
+/**
+ * Browser-safe entry point — @qodex/marketplace-runtime
+ *
+ * Explicitly does NOT export:
+ * - SkillInstaller (uses fs)
+ * - Adapters (uses fs)
+ * - SkillDiscoverer (uses fs)
+ * - LocalRegistryCache (uses fs)
+ *
+ * Use @qodex/marketplace-runtime/node for Node-only exports.
+ */
 
-// ── Registry ──
+// ── Registry (browser-safe) ──
 export { RegistryRuntime } from "./registry/registry.js";
 export { SourceManager } from "./registry/source.js";
 export { SyncEngine } from "./registry/sync.js";
@@ -21,3 +24,11 @@ export type {
   PublisherProfile, CompatibilityMetadata, UpdateCandidate,
   SyncState, SyncResult, RegistryEvent, RegistryEventType,
 } from "./registry/events.js";
+
+// ── Versioning (browser-safe) ──
+export { parseVersion, compareVersions, isUpdateAvailable, satisfiesCompatibility } from "./versioning/versioning.js";
+
+// ── Manifest (browser-safe) ──
+export { validateManifest, parseManifest } from "./manifest/schema.js";
+export type { SkillManifestV1, InstallResult, InstallStatus, InstallIndex } from "./models/manifest.js";
+export type { SkillAdapter } from "./models/adapter.js";
