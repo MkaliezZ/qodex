@@ -12,7 +12,7 @@ const en = (id: string, version: string): RegistryEntry => ({
 
 describe("RegistryRuntime integration", () => {
   it("full cycle: source → mock sync → search → update detect", async () => {
-    const rt = new RegistryRuntime("/tmp/qodex-int-test");
+    const rt = new RegistryRuntime();
     rt.clearCache();
 
     // Add source
@@ -43,7 +43,7 @@ describe("RegistryRuntime integration", () => {
 
     // Cache export/import
     const exported = rt.exportCache();
-    const rt2 = new RegistryRuntime("/tmp/qodex-int-test2");
+    const rt2 = new RegistryRuntime();
     rt2.clearCache();
     rt2.importCache(exported);
     expect(rt2.getEntry("skill-a")?.name).toBe("skill-a");

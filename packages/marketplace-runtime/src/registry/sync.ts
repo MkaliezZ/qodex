@@ -1,6 +1,6 @@
 import type { RegistrySource, RegistryEntry, SyncResult, RegistryEvent } from "./events.js";
 import { validateEntry } from "./entry.js";
-import type { LocalRegistryCache } from "./cache.js";
+import type { RegistryCache } from "./cache.js";
 
 type FetchFn = (url: string) => Promise<{ ok: boolean; status: number; json: () => Promise<unknown> }>;
 
@@ -8,7 +8,7 @@ export class SyncEngine {
   private listeners: Array<(e: RegistryEvent) => void> = [];
 
   constructor(
-    private cache: LocalRegistryCache,
+    private cache: RegistryCache,
     private fetch: FetchFn = globalThis.fetch as FetchFn,
   ) {}
 
@@ -64,8 +64,8 @@ export class SyncEngine {
         result.removedEntries++;
       }
 
-      this.cache.save();
-      this.cache.saveSyncState(source.id, { sourceId: source.id, lastSyncAt: Date.now(), entryCount: Object.keys(this.cache.getEntries()).length });
+      this.cache.save?.();
+      this.cache.saveSyncState?.(source.id, { sourceId: source.id, lastSyncAt: Date.now(), entryCount: Object.keys(this.cache.getEntries()).length });
       this.emit({ type: "registry.sync.completed", payload: result, timestamp: Date.now() });
     } catch (err) {
       result.errors.push(err instanceof Error ? err.message : "Unknown error");

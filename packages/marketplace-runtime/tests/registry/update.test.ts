@@ -12,7 +12,7 @@ const en = (id: string, version = "1.0.0"): RegistryEntry => ({
 
 describe("update detection", () => {
   it("detects update available", () => {
-    const rt = new RegistryRuntime("/tmp/qodex-reg-test-update");
+    const rt = new RegistryRuntime();
     rt.clearCache();
     // Manually insert entry with newer version
     (rt as any).cache.setEntry("a", en("a", "2.0.0"));
@@ -22,14 +22,14 @@ describe("update detection", () => {
   });
 
   it("no update when version match", () => {
-    const rt = new RegistryRuntime("/tmp/qodex-reg-test-uptodate");
+    const rt = new RegistryRuntime();
     rt.clearCache();
     (rt as any).cache.setEntry("a", en("a", "1.0.0"));
     expect(rt.checkUpdates([{ id: "a", version: "1.0.0" }]).length).toBe(0);
   });
 
   it("skips blocked entries", () => {
-    const rt = new RegistryRuntime("/tmp/qodex-reg-test-blocked");
+    const rt = new RegistryRuntime();
     rt.clearCache();
     const blocked = en("b", "2.0.0");
     blocked.trust = { level: "blocked" };

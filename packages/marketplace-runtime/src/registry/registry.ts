@@ -1,19 +1,18 @@
 import type { RegistrySource, RegistryEntry, RegistryVersion, SyncResult, RegistryEvent, UpdateCandidate } from "./events.js";
 import { SourceManager } from "./source.js";
 import { SyncEngine } from "./sync.js";
-import { LocalRegistryCache } from "./cache.js";
+import { MemoryRegistryCache, type RegistryCache } from "./cache.js";
 import { SearchIndex } from "./search.js";
 import { evaluateTrust, isBlocked } from "./trust.js";
 
 export class RegistryRuntime {
   private sources = new SourceManager();
-  private cache: LocalRegistryCache;
+  private cache: RegistryCache;
   private syncEngine: SyncEngine;
   private searchIndex: SearchIndex;
 
-  constructor(storageRoot?: string) {
-    this.cache = new LocalRegistryCache(storageRoot);
-    this.cache.load();
+  constructor(cache?: RegistryCache) {
+    this.cache = cache ?? new MemoryRegistryCache();
     this.syncEngine = new SyncEngine(this.cache);
     this.searchIndex = new SearchIndex(() => Object.values(this.cache.getEntries()));
   }

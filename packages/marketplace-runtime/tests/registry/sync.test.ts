@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import { SyncEngine } from "../../src/registry/sync.js";
-import { LocalRegistryCache } from "../../src/registry/cache.js";
+import { MemoryRegistryCache } from "../../src/registry/cache.js";
 import type { RegistryEntry } from "../../src/registry/events.js";
 
 function mockFetch(entries: unknown[]) {
@@ -19,11 +19,11 @@ const en: RegistryEntry = {
 };
 
 describe("SyncEngine", () => {
-  let cache: LocalRegistryCache;
+  let cache: MemoryRegistryCache;
   let engine: SyncEngine;
 
   beforeEach(() => {
-    cache = new LocalRegistryCache("/tmp/qodex-sync-test");
+    cache = new MemoryRegistryCache();
     cache.clear();
     engine = new SyncEngine(cache, mockFetch([en]));
   });
