@@ -124,4 +124,132 @@ M10 will introduce multi-agent coordination protocols, planner/coder/reviewer ro
 
 ---
 
+## M10 — Multi-Agent Runtime Foundation
+
+**Date:** 2026-06-12
+
+**Status:** Completed ✅
+
+### Goals
+
+* Coordinator-Agent architecture with 4 specialists
+* Planner for task decomposition
+* Aggregated report generation
+* Integration with all existing runtimes
+
+### Packages
+
+- `packages/multi-agent-runtime` — 195 tests
+
+### Delivered
+
+- Coordinator: manages planning → delegation → aggregation
+- Specialist agents: Review, Refactor, Research, Testing
+- Planner: task decomposition with plan execution tracking
+- Report: aggregated results from all specialist agents
+- Alpha integration test suite (27 integration tests)
+- Production review (46 tests)
+- Scenario tests including error handling and long-running sessions
+
+### Validation
+
+| Suite | Count | Status |
+|:--|:--:|:--:|
+| Unit tests | 195 | ✅ |
+| Alpha integration | 27 | ✅ |
+| Production review | 46 | ✅ |
+
+---
+
+## M10.5 — UX Audit & Interaction Completion
+
+**Date:** 2026-06-12
+
+**Status:** Completed ✅
+
+### Motivation
+
+Public alpha user feedback identified multiple false affordances in the desktop UI. Several navigation items appeared interactive but had no behavior attached. This milestone focused on interaction completion and UX consistency with zero runtime architecture changes.
+
+### Goals
+
+* Eliminate false affordances across the desktop shell
+* Complete navigation interactions (Files, Sessions, Skills, Git, Settings)
+* Improve empty states and discoverability
+* Refine Context Panel hierarchy and readability
+* Validate desktop usability before M11
+
+### Navigation
+
+Implemented active view routing (`activeView` state in `AppShell`) with six views:
+
+| View | Behavior |
+|:--|:--|
+| Agent (default) | AgentTimeline + PromptBar |
+| Files | Project tree or "No project opened" empty state |
+| Sessions | "Session history coming soon" placeholder |
+| Skills | Loaded skills list with enabled/disabled status |
+| Git | Branch, checkpoints, repository status |
+| Settings | Model provider, theme, language, version (v0.1.0-alpha) |
+
+### New Files
+
+- `apps/desktop/src/views/FilesView.tsx`
+- `apps/desktop/src/views/SessionsView.tsx`
+- `apps/desktop/src/views/SkillsView.tsx`
+- `apps/desktop/src/views/GitView.tsx`
+- `apps/desktop/src/views/SettingsView.tsx`
+- `docs/development/UX_AUDIT.md`
+
+### Interaction Fixes
+
+| Before | After |
+|:--|:--|
+| Sessions nav — dead button | ✅ Switches to SessionsView |
+| Skills nav — dead button | ✅ Switches to SkillsView |
+| Git nav — dead button | ✅ Switches to GitView |
+| Settings nav — dead button | ✅ Switches to SettingsView |
+| Model badge ▼ — no onClick | ✅ Popover with info message |
+| Skill / button — decorative | ✅ Popover with skill list + "Manage skills →" |
+| ⊕ Attach button — no onClick | ✅ Placeholder feedback |
+| ⊞ Context button — no onClick | ✅ Placeholder feedback |
+
+### Context Panel Refinements
+
+- Added `SectionDivider` between every section
+- Extracted `SectionLabel`, `SectionValue`, `SectionValueMuted` components
+- Reduced visual noise; no cards, no emojis, no colored blocks
+- Consistent 14px/11px hierarchy with clear spacing
+
+### UX Audit Results
+
+| Category | Count |
+|:--|:--:|
+| KEEP | 14 |
+| FIX | 8 |
+| REMOVE | 0 |
+
+### Validation
+
+| Check | Result |
+|:--|:--|
+| Full test suite | 887/887 passing ✅ |
+| Desktop TypeScript | Zero new errors ✅ |
+| UX smoke test | 7/7 interactions ✅ |
+| Runtime smoke test | Context + Agent + Diff ✅ |
+| Dead navigation | None ✅ |
+| Console errors | None ✅ |
+| Regression count | 0 ✅ |
+
+### Outcome
+
+Qodex desktop UX is now suitable for public alpha evaluation. All false affordances removed. Every visible interactive element either works or clearly communicates its status.
+
+### Commit
+
+`6f5959c` — `feat(ui): complete navigation interactions and remove false affordances`
+
+---
+
 *Generated: 2026-06-12*
+*Updated: 2026-06-12 (M10 + M10.5)*
