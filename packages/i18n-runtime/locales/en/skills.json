@@ -1,0 +1,5 @@
+{
+  "general": { "name": "General", "description": "General-purpose coding assistance" },
+  "typescript": { "name": "TypeScript", "description": "TypeScript language expertise" },
+  "react": { "name": "React", "description": "React component patterns" }
+}

@@ -1,0 +1,5 @@
+{
+  "general": { "name": "通用", "description": "通用编程辅助" },
+  "typescript": { "name": "TypeScript", "description": "TypeScript 语言专业知识" },
+  "react": { "name": "React", "description": "React 组件模式" }
+}

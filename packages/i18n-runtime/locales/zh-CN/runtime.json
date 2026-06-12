@@ -1,0 +1,12 @@
+{
+  "error": {
+    "project_not_found": "找不到项目",
+    "graph_not_found": "找不到图",
+    "graph_validation_failed": "图验证失败",
+    "cannot_start": "无法在当前状态下启动图",
+    "cannot_archive": "无法在当前状态下归档图",
+    "unknown_locale": "未知语言"
+  },
+  "notification": { "execution_complete": "执行完成", "execution_failed": "执行失败" },
+  "mode": { "review": "审查模式" }
+}

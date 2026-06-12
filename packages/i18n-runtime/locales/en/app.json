@@ -1,0 +1,58 @@
+{
+  "sidebar": { "files": "Files", "sessions": "Sessions", "skills": "Skills", "git": "Git", "settings": "Settings" },
+  "action": { "run": "Run", "open_project": "Open Project", "cancel": "Cancel" },
+  "empty": {
+    "no_project": "No project opened",
+    "no_session": "Session history coming soon",
+    "no_skills": "No skills loaded",
+    "no_repo": "No repository detected",
+    "agent_workspace": "Type a prompt and click Run to start.",
+    "diff_preview": "No changes to review."
+  },
+  "status": { "ready": "Ready", "project_loaded": "Project loaded", "no_project": "No project" },
+  "model": { "label": "Model", "provider": "Model Provider", "not_configured": "Not configured" },
+  "settings": {
+    "title": "Settings", "theme": "Theme", "language": "Language", "version": "Version",
+    "dark": "Dark", "light_coming": "Light theme coming soon.",
+    "english": "English", "i18n_progress": "Internationalization in progress (M13).",
+    "public_alpha": "Public alpha release.",
+    "configure_keys": "Configure API keys in the provider settings panel."
+  },
+  "context": {
+    "sources": "Context Sources", "generate": "Run a prompt to generate context",
+    "selected_files": "Selected Files", "select_files": "Select files from the project tree.",
+    "tokens": "Tokens", "mode": "Mode", "review_mode": "Review Mode",
+    "review_desc": "Generate diff · User approves writes"
+  },
+  "git_view": {
+    "repository": "Repository", "current_branch": "Current Branch",
+    "checkpoints": "Checkpoints", "not_available": "Not available in development mode.",
+    "repository_status": "Repository Status",
+    "no_repo_detected": "No repository detected",
+    "git_production": "Git integration is available in production builds."
+  },
+  "sessions_view": {
+    "coming_soon": "Session history coming soon",
+    "coming_soon_desc": "Sessions, task history, and agent conversations will appear here in a future update."
+  },
+  "files_view": {
+    "open_dir": "Open a project directory to browse files."
+  },
+  "project": { "project_opened": "Project opened" },
+  "agent": {
+    "workspace": "Agent Workspace", "prompt_placeholder": "Ask Qodex to modify your project...",
+    "streaming": "Streaming..."
+  },
+  "diff": {
+    "preview": "Diff Preview", "no_changes": "No changes to review.",
+    "diffs_appear": "Diffs will appear here after agent actions.",
+    "reject": "✕ Reject", "apply": "✓ Apply", "applied": "✓ Applied"
+  },
+  "skill": {
+    "insert": "Insert skill", "loaded_skills": "Loaded Skills",
+    "manage_skills": "Manage skills →", "enabled": "Enabled", "disabled": "Disabled",
+    "builtin": "Built-in"
+  },
+  "model_switcher": { "config_coming": "Provider configuration coming soon." },
+  "not_available": { "file_attachment": "File attachment coming soon...", "context_selector": "Context selector coming soon..." }
+}

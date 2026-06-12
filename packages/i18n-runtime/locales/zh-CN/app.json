@@ -1,0 +1,56 @@
+{
+  "sidebar": { "files": "文件", "sessions": "会话", "skills": "技能", "git": "Git", "settings": "设置" },
+  "action": { "run": "运行", "open_project": "打开项目", "cancel": "取消" },
+  "empty": {
+    "no_project": "未打开项目",
+    "no_session": "会话历史即将推出",
+    "no_skills": "未加载技能",
+    "no_repo": "未检测到仓库",
+    "agent_workspace": "输入提示词并点击运行以开始。",
+    "diff_preview": "没有需要审查的更改。"
+  },
+  "status": { "ready": "就绪", "project_loaded": "项目已加载", "no_project": "无项目" },
+  "model": { "label": "模型", "provider": "模型提供商", "not_configured": "未配置" },
+  "settings": {
+    "title": "设置", "theme": "主题", "language": "语言", "version": "版本",
+    "dark": "暗色", "light_coming": "亮色主题即将推出。",
+    "english": "English", "i18n_progress": "国际化进行中 (M13)。",
+    "public_alpha": "公开 Alpha 版本。",
+    "configure_keys": "在提供商设置面板中配置 API 密钥。"
+  },
+  "context": {
+    "sources": "上下文来源", "generate": "发送提示词以生成上下文",
+    "selected_files": "已选文件", "select_files": "从项目树中选择文件。",
+    "tokens": "令牌", "mode": "模式", "review_mode": "审查模式",
+    "review_desc": "生成差异 · 用户批准写入"
+  },
+  "git_view": {
+    "repository": "仓库", "current_branch": "当前分支",
+    "checkpoints": "检查点", "not_available": "开发模式下不可用。",
+    "repository_status": "仓库状态",
+    "no_repo_detected": "未检测到仓库",
+    "git_production": "Git 集成在生产构建中可用。"
+  },
+  "sessions_view": {
+    "coming_soon": "会话历史即将推出",
+    "coming_soon_desc": "会话、任务历史和代理对话将在未来更新中出现。"
+  },
+  "files_view": { "open_dir": "打开项目目录以浏览文件。" },
+  "project": { "project_opened": "项目已打开" },
+  "agent": {
+    "workspace": "代理工作区", "prompt_placeholder": "请描述要修改的内容...",
+    "streaming": "流式输出中..."
+  },
+  "diff": {
+    "preview": "差异预览", "no_changes": "没有需要审查的更改。",
+    "diffs_appear": "差异将在代理操作后出现在此处。",
+    "reject": "✕ 拒绝", "apply": "✓ 应用", "applied": "✓ 已应用"
+  },
+  "skill": {
+    "insert": "插入技能", "loaded_skills": "已加载技能",
+    "manage_skills": "管理技能 →", "enabled": "已启用", "disabled": "已禁用",
+    "builtin": "内置"
+  },
+  "model_switcher": { "config_coming": "提供商配置即将推出。" },
+  "not_available": { "file_attachment": "文件附件即将推出...", "context_selector": "上下文选择器即将推出..." }
+}

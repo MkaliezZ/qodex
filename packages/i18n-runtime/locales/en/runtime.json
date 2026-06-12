@@ -1,0 +1,15 @@
+{
+  "error": {
+    "project_not_found": "Project not found",
+    "graph_not_found": "Graph not found",
+    "graph_validation_failed": "Graph validation failed",
+    "cannot_start": "Cannot start graph in current state",
+    "cannot_archive": "Cannot archive graph in current state",
+    "unknown_locale": "Unknown locale"
+  },
+  "notification": {
+    "execution_complete": "Execution completed",
+    "execution_failed": "Execution failed"
+  },
+  "mode": { "review": "Review Mode" }
+}
