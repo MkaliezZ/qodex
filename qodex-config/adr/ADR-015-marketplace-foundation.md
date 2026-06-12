@@ -1,6 +1,6 @@
 # ADR-015 — Marketplace Foundation
 
-- **Status:** Proposed
+- **Status:** Accepted
 - **Date:** 2026-06-12
 - **Depends on:** ADR-008 — Skill Runtime, ADR-013 — Execution Graph Runtime
 
@@ -343,6 +343,6 @@ Marketplace Foundation (M14)
 
 ## Decision Outcome
 
-**Proposed.** Pending implementation in M14 — Marketplace Foundation.
+**Accepted.** Implemented in M14 — Marketplace Foundation (40 tests, 40/40 passing, cross-package total 1145). M14 completes the M0–M14 milestone cycle.
 
 **Scope:** Skills only (Option A). MCP marketplace, themes, and workflows deferred to future milestones.

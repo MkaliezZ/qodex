@@ -449,4 +449,65 @@ Result
 
 ### Commit
 
-`9cce752` — `feat(planning-runtime): implement M11 planning and execution runtime foundation`
+`9cce752` — `feat(planning-runtime): implement M11 planning and execution runtime foundation
+
+---
+
+## M14 — Marketplace Foundation
+
+**Date:** 2026-06-12
+
+**Status:** Completed ✅
+
+### Motivation
+
+12 core runtimes existed but users lacked an ecosystem layer. Skills were hardcoded, installation was unsupported, no manifest standard or version tracking existed.
+
+### Goals
+
+* Skill manifest schema (`skill.json`)
+* Format detection: Qodex Native, OpenClaw, Claude Code
+* Adapter architecture for cross-format compatibility
+* Install/remove/update lifecycle with rollback
+* Semantic versioning + compatibility checking
+* Local-only installation (no remote registry)
+* Zero code execution during import
+
+### Packages
+
+- `packages/marketplace-runtime` — 40 tests
+
+### Delivered
+
+- Schema: validateManifest/parseManifest with kebab-case, SemVer, compatibility checks
+- Versioning: parseVersion, compareVersions, isUpdateAvailable, satisfiesCompatibility
+- Adapters: QodexNative, OpenClaw, ClaudeCode with AdapterRegistry
+- Installer: install/uninstall/update with backup, index persistence, path traversal guard
+- Discoverer: directory scan with multi-skill directory support
+- MarketplaceRuntime: unified API with 12 methods
+
+### Adapter Support
+
+| Format | Detection | Import |
+|---|---|---|
+| Qodex Native | ✅ | ✅ |
+| OpenClaw | ✅ | ✅ |
+| Claude Code | ✅ | ✅ |
+
+### Validation
+
+| Check | Result |
+|:--|:--|
+| Unit tests | 40/40 ✅ |
+| Cross-package total | 1145 ✅ |
+| Code execution during import | 0 |
+| Regressions | 0 |
+
+### Commit
+
+`45f4032` — `feat(marketplace-runtime): implement M14 marketplace foundation`
+
+---
+
+*Generated: 2026-06-12*
+*Updated: 2026-06-12 (M0–M14 Complete)*`
