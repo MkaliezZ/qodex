@@ -1,6 +1,6 @@
 # ADR-016 — Provider Integration Strategy
 
-- **Status:** Proposed
+- **Status:** Accepted
 - **Date:** 2026-06-12
 - **Depends on:** ADR-002 — Provider Model Abstraction
 
@@ -246,4 +246,4 @@ M16:   MCP Marketplace
 
 ## Decision Outcome
 
-**Proposed.** Recommended as the first Beta milestone before M15.
+**Accepted.** Implemented in Beta 0 — Provider Integration. Real provider configuration UI, ProviderContext, Agent Runtime wiring. Zero SDK/Agent Runtime changes.
