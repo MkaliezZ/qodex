@@ -1,6 +1,6 @@
 import { createContext, useContext, useState, useCallback, useEffect, useMemo } from "react";
-import { RegistryRuntime } from "../../../../packages/marketplace-runtime/src/index";
-import type { RegistrySource, RegistryEntry, UpdateCandidate, SyncResult } from "../../../../packages/marketplace-runtime/src/index";
+import { RegistryRuntime } from "@qodex/marketplace-runtime";
+import type { RegistrySource, RegistryEntry, UpdateCandidate, SyncResult } from "@qodex/marketplace-runtime";
 
 interface RegistryCtxValue {
   rt: RegistryRuntime;

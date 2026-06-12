@@ -1,4 +1,4 @@
-import type { RegistryEntry } from "../../../../packages/marketplace-runtime/src/index";
+import type { RegistryEntry } from "@qodex/marketplace-runtime";
 import { TrustBadge } from "./TrustBadge";
 
 const cardStyle: React.CSSProperties = { padding: "10px 12px", background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.06)", borderRadius: 10, cursor: "pointer" };

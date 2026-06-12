@@ -1,4 +1,4 @@
-import type { TrustLevel } from "../../../../packages/marketplace-runtime/src/index";
+import type { TrustLevel } from "@qodex/marketplace-runtime";
 
 const styles: Record<TrustLevel, { color: string; label: string }> = {
   local: { color: "rgba(255,255,255,0.30)", label: "" },
