@@ -252,4 +252,80 @@ Qodex desktop UX is now suitable for public alpha evaluation. All false affordan
 ---
 
 *Generated: 2026-06-12*
-*Updated: 2026-06-12 (M10 + M10.5)*
+*Updated: 2026-06-12 (M10 + M10.5 + M11)*
+
+---
+
+## M11 — Planning & Execution Runtime Foundation
+
+**Date:** 2026-06-12
+
+**Status:** Completed ✅
+
+### Motivation
+
+The system could load context, execute agents, produce diffs, and coordinate specialists, but lacked a planning layer. Tasks were executed directly from prompts with no execution graph, no plan lifecycle, and no replanning capability.
+
+### Goals
+
+* Goal decomposition into structured plans
+* Execution graph as a Directed Acyclic Graph (DAG)
+* Deterministic sequential execution engine
+* Replanning on failure, dependency change, or user request
+* Framework-agnostic event system
+* Type-only imports from other packages (no circular deps)
+
+### Packages
+
+- `packages/planning-runtime` — 105 tests
+
+### Architecture
+
+```
+User Goal
+    ↓
+Planner (goal → plan decomposition)
+    ↓
+ExecutionGraph (DAG of nodes)
+    ↓
+GraphExecutor (sequential node execution)
+    ↓
+Multi-Agent Runtime (delegated execution)
+    ↓
+Result
+```
+
+### Delivered
+
+- Planner: deterministic goal-to-plan decomposition with 5 keyword workflows + default
+- ExecutionGraph: DAG construction, cycle detection, orphan detection, readiness calculation
+- GraphExecutor: sequential deterministic exec with retry, blocking, cancellation
+- Replanner: failure/dependency_change/user_request triggers, max depth=3
+- PlanningEventBus: 11 typed events, framework-agnostic, no React/dom dependencies
+- PlanningRuntime: full lifecycle (createPlan → startExecution → replan → serialization)
+- Serialization: exportGraph/importGraph round-trip with zero information loss
+
+### Safety Constraints
+
+- ❌ No file writes (delegated to Diff Engine)
+- ❌ No diff auto-apply (UI layer exclusive)
+- ❌ No git operations (delegated to Git Runtime)
+- ❌ No MCP execution (delegated to MCP Runtime + Permission Engine)
+- ❌ No shell execution
+- ❌ No permission bypass
+- ✅ Coordinates only, never executes
+
+### Validation
+
+| Check | Result |
+|:--|:--|
+| Unit tests (11 suites) | 105/105 ✅ |
+| Cross-package total | 992 ✅ |
+| Circular dependencies | 0 ✅ |
+| Architecture compliance | Boundary enforced ✅ |
+| No regressions | 887 existing tests green ✅ |
+| Production review | 13 scenarios PASS ✅ |
+
+### Commit
+
+`9cce752` — `feat(planning-runtime): implement M11 planning and execution runtime foundation`

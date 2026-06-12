@@ -1,6 +1,6 @@
 # ADR-012 — Planning & Execution Runtime
 
-- **Status:** Proposed
+- **Status:** Accepted
 - **Date:** 2026-06-12
 - **Decided by:** Qodex Team
 
@@ -198,4 +198,4 @@ The planning runtime describes *what* should happen; other runtimes execute *how
 
 ## Decision Outcome
 
-**Proposed.** Pending implementation in M11 — Planning & Execution Runtime.
+**Accepted.** Implemented in M11 — Planning & Execution Runtime Foundation (105 tests, 105/105 passing, cross-package total 992).
