@@ -1,6 +1,6 @@
 # ADR-014 — Internationalization Runtime & Localization System
 
-- **Status:** Proposed
+- **Status:** Accepted
 - **Date:** 2026-06-12
 - **Depends on:** None
 
@@ -366,4 +366,4 @@ No runtime package should hardcode user-facing strings after M13 adoption. The i
 
 ## Decision Outcome
 
-**Proposed.** Pending implementation in M13 — Internationalization Runtime & Localization System.
+**Accepted.** Implemented in M13 — Internationalization Runtime & Localization System (35 tests, 35/35 passing, cross-package total 1105).

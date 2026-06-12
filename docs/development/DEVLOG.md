@@ -252,7 +252,67 @@ Qodex desktop UX is now suitable for public alpha evaluation. All false affordan
 ---
 
 *Generated: 2026-06-12*
-*Updated: 2026-06-12 (M10 + M10.5 + M11 + M12)*
+*Updated: 2026-06-12 (M10 + M10.5 + M11 + M12 + M13)*
+
+---
+
+## M13 — Internationalization Runtime & Localization System
+
+**Date:** 2026-06-12
+
+**Status:** Completed ✅
+
+### Motivation
+
+The desktop UI, skill metadata, and runtime messages were all hardcoded in English with manual Chinese synchronization. This did not scale for future locales and caused translation drift.
+
+### Goals
+
+* Centralized locale registry (en, zh-CN)
+* Deterministic locale resolution (user → project → system → default)
+* Fallback chain: region → language → default (zh-TW → zh → en)
+* Per-key fallback (missing key in target → en value)
+* Translation key system replacing hardcoded strings
+* Skill metadata localization
+* Bundle validation (missing key detection)
+* Zero network loading, zero eval
+
+### Packages
+
+- `packages/i18n-runtime` — 35 tests
+- `locales/en/` + `locales/zh-CN/` — 6 JSON files
+
+### Delivered
+
+- LocaleRegistry: add/get/remove/list with default locale
+- LocaleResolver: deterministic user→project→system→default chain
+- FallbackEngine: zh-TW→zh→en, per-key fallback, nested key resolution
+- Validation: bundle validation + missing key detection
+- I18nRuntime: t(), setLocale(), loadBundle(), onChange(), export/import
+- Skill metadata: getLocalizedName/getLocalizedDescription per locale
+- I18nEventBus: locale:changed + bundle:loaded events
+
+### Translation Coverage
+
+| Namespace | en | zh-CN | Keys |
+|---|---:|---:|
+| app.json | ✅ | ✅ | 56 |
+| runtime.json | ✅ | ✅ | 9 |
+| skills.json | ✅ | ✅ | 3 |
+
+### Validation
+
+| Check | Result |
+|:--|:--|
+| Unit tests (4 suites) | 35/35 ✅ |
+| Cross-package total | 1105 ✅ |
+| Network loading | Zero ✅ |
+| Eval/dynamic execution | Zero ✅ |
+| Regressions | 0 |
+
+### Commit
+
+`03043dd` — `feat(i18n-runtime): implement M13 internationalization runtime and localization system`
 
 ---
 
