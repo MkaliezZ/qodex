@@ -1,21 +1,15 @@
+import { ProviderSettings } from "../components/ProviderSettings";
+
 export function SettingsView() {
   return (
-    <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden", padding: 16 }}>
+    <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "auto", padding: 16 }}>
       <div style={{ fontSize: 11, fontWeight: 600, color: "rgba(255,255,255,0.30)", marginBottom: 12, letterSpacing: "0.05em" }}>
         Settings
       </div>
 
-      {/* Model Provider */}
-      <div style={{ marginBottom: 16 }}>
-        <div style={{ fontSize: 11, fontWeight: 500, color: "rgba(255,255,255,0.40)", marginBottom: 4 }}>
-          Model Provider
-        </div>
-        <div style={{ fontSize: 13, color: "rgba(255,255,255,0.50)" }}>
-          Not configured
-        </div>
-        <div style={{ fontSize: 12, color: "rgba(255,255,255,0.18)", marginTop: 2 }}>
-          Configure API keys in the provider settings panel.
-        </div>
+      {/* Provider Configuration */}
+      <div style={{ marginBottom: 20 }}>
+        <ProviderSettings />
       </div>
 
       {/* Theme */}

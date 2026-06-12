@@ -4,6 +4,7 @@ import { AgentTimeline } from "./AgentTimeline";
 import { PromptBar } from "./PromptBar";
 import { ContextPanel } from "./ContextPanel";
 import { useRuntime } from "../hooks/useRuntime";
+import { ProviderContextProvider } from "./ProviderContext";
 import { FilesView } from "../views/FilesView";
 import { SessionsView } from "../views/SessionsView";
 import { SkillsView } from "../views/SkillsView";
@@ -78,6 +79,7 @@ export function AppShell() {
 
   return (
     <RuntimeContext.Provider value={enhancedRuntime}>
+      <ProviderContextProvider>
       <div className="qodex-bg" />
       <div className="qodex-layout">
         <div className="qodex-left-rail"><ProjectRail /></div>
@@ -90,6 +92,7 @@ export function AppShell() {
           </div>
         </div>
       </div>
+      </ProviderContextProvider>
     </RuntimeContext.Provider>
   );
 }

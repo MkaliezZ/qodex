@@ -7,9 +7,23 @@ import { ContextEngine } from "@qodex/context-engine";
 import type { ContextBundle } from "@qodex/context-engine";
 import { DiffEngine } from "@qodex/diff-engine";
 import type { PatchProposal } from "@qodex/diff-engine";
+import { useProviderContext } from "../components/ProviderContext";
 
 export function useRuntime() {
-  const runtimeRef = useRef<AgentRuntime>(new AgentRuntime());
+  const { getProvider } = useProviderContext();
+
+  const createRuntime = useCallback(() => {
+    const provider = getProvider();
+    if (provider) {
+      return new AgentRuntime({
+        providers: new Map([[provider.id, provider]]),
+        defaultProviderId: provider.id,
+      });
+    }
+    return new AgentRuntime();
+  }, [getProvider]);
+
+  const runtimeRef = useRef<AgentRuntime>(createRuntime());
   const projectRef = useRef<ProjectRuntime | null>(null);
   const ctxRef = useRef<ContextEngine>(new ContextEngine());
   const diffRef = useRef<DiffEngine>(new DiffEngine());
