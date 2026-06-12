@@ -12,6 +12,7 @@ export function ProjectRail() {
     { label: "Skills", view: "skills" },
     { label: "Git", view: "git" },
     { label: "Settings", view: "settings" },
+    { label: "Marketplace", view: "marketplace" },
   ];
 
   const renderTreeNode = (node: ProjectTreeNode, depth: number = 0) => {

@@ -1,4 +1,5 @@
 import { ProviderSettings } from "../components/ProviderSettings";
+import { RegistrySourceForm } from "../components/RegistrySourceForm";
 
 export function SettingsView() {
   return (
@@ -10,6 +11,11 @@ export function SettingsView() {
       {/* Provider Configuration */}
       <div style={{ marginBottom: 20 }}>
         <ProviderSettings />
+      </div>
+
+      {/* Registry Sources */}
+      <div style={{ marginBottom: 20, padding: "12px", background: "rgba(255,255,255,0.02)", borderRadius: 10, border: "1px solid rgba(255,255,255,0.04)" }}>
+        <RegistrySourceForm />
       </div>
 
       {/* Theme */}

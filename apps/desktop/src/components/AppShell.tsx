@@ -5,16 +5,18 @@ import { PromptBar } from "./PromptBar";
 import { ContextPanel } from "./ContextPanel";
 import { useRuntime } from "../hooks/useRuntime";
 import { ProviderContextProvider } from "./ProviderContext";
+import { RegistryContextProvider } from "./RegistryContext";
 import { FilesView } from "../views/FilesView";
 import { SessionsView } from "../views/SessionsView";
 import { SkillsView } from "../views/SkillsView";
 import { GitView } from "../views/GitView";
 import { SettingsView } from "../views/SettingsView";
+import { MarketplaceView } from "../views/MarketplaceView";
 import type { ProjectTree, FileContent } from "@qodex/project-runtime";
 import type { ContextBundle } from "@qodex/context-engine";
 import type { PatchProposal } from "@qodex/diff-engine";
 
-export type ActiveView = "agent" | "files" | "sessions" | "skills" | "git" | "settings";
+export type ActiveView = "agent" | "files" | "sessions" | "skills" | "git" | "settings" | "marketplace";
 
 interface RuntimeContextValue {
   isRunning: boolean;
@@ -47,6 +49,7 @@ function CenterContent({ activeView }: { activeView: ActiveView }) {
     case "skills": return <SkillsView />;
     case "git": return <GitView />;
     case "settings": return <SettingsView />;
+    case "marketplace": return <MarketplaceView />;
     case "agent":
     default:
       return (
@@ -89,7 +92,9 @@ function AppShellInner() {
 export function AppShell() {
   return (
     <ProviderContextProvider>
+      <RegistryContextProvider>
       <AppShellInner />
+      </RegistryContextProvider>
     </ProviderContextProvider>
   );
 }
