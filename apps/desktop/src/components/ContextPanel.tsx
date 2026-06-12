@@ -1,5 +1,35 @@
 import { useRuntimeContext } from "./AppShell";
 
+function SectionDivider() {
+  return (
+    <div style={{ height: 1, background: "rgba(255,255,255,0.05)", margin: "0 0 16px" }} />
+  );
+}
+
+function SectionLabel({ children }: { children: React.ReactNode }) {
+  return (
+    <div style={{ fontSize: 11, fontWeight: 500, color: "rgba(255,255,255,0.35)", marginBottom: 6 }}>
+      {children}
+    </div>
+  );
+}
+
+function SectionValue({ children }: { children: React.ReactNode }) {
+  return (
+    <div style={{ fontSize: 14, fontWeight: 500, color: "rgba(255,255,255,0.85)" }}>
+      {children}
+    </div>
+  );
+}
+
+function SectionValueMuted({ children }: { children: React.ReactNode }) {
+  return (
+    <div style={{ fontSize: 13, fontWeight: 400, color: "rgba(255,255,255,0.35)" }}>
+      {children}
+    </div>
+  );
+}
+
 export function ContextPanel() {
   const { selectedFileCount, selectedFileSize, projectName, lastBundle, estimatedTokens } = useRuntimeContext();
 
@@ -18,36 +48,19 @@ export function ContextPanel() {
       ]
     : [];
 
-  const sectionLabel: React.CSSProperties = {
-    fontSize: 11,
-    fontWeight: 500,
-    color: "rgba(255,255,255,0.45)",
-    marginBottom: 6,
-  };
-
-  const sectionValue: React.CSSProperties = {
-    fontSize: 14,
-    fontWeight: 500,
-    color: "rgba(255,255,255,0.85)",
-  };
-
-  const sectionValueMuted: React.CSSProperties = {
-    fontSize: 13,
-    fontWeight: 400,
-    color: "rgba(255,255,255,0.40)",
-  };
-
   return (
-    <div style={{ padding: "14px", display: "flex", flexDirection: "column", gap: 30, overflow: "auto", flex: 1 }}>
+    <div style={{ padding: "14px", display: "flex", flexDirection: "column", gap: 0, overflow: "auto", flex: 1 }}>
       {/* Model */}
       <div>
-        <div style={sectionLabel}>Model</div>
-        <div style={sectionValue}>DeepSeek V4 Pro</div>
+        <SectionLabel>Model</SectionLabel>
+        <SectionValue>DeepSeek V4 Pro</SectionValue>
       </div>
+
+      <SectionDivider />
 
       {/* Context */}
       <div>
-        <div style={sectionLabel}>Context</div>
+        <SectionLabel>Context Sources</SectionLabel>
         {sources.length > 0 ? (
           <div style={{ display: "flex", flexDirection: "column", gap: 2, marginTop: 4 }}>
             {sources.map((s) => (
@@ -55,7 +68,7 @@ export function ContextPanel() {
                 key={s.name}
                 style={{
                   fontSize: 13,
-                  color: s.active ? "rgba(255,255,255,0.65)" : "rgba(255,255,255,0.20)",
+                  color: s.active ? "rgba(255,255,255,0.65)" : "rgba(255,255,255,0.18)",
                   fontWeight: s.active ? 500 : 400,
                 }}
               >
@@ -64,55 +77,63 @@ export function ContextPanel() {
             ))}
           </div>
         ) : (
-          <div style={sectionValueMuted}>
-            Send a prompt to see context sources.
-          </div>
+          <SectionValueMuted>
+            Run a prompt to generate context
+          </SectionValueMuted>
         )}
       </div>
 
+      <SectionDivider />
+
       {/* Selected Files */}
       <div>
-        <div style={sectionLabel}>Selected Files</div>
+        <SectionLabel>Selected Files</SectionLabel>
         {selectedFileCount > 0 ? (
-          <div style={sectionValue}>
+          <SectionValue>
             {selectedFileCount} file{selectedFileCount !== 1 ? "s" : ""}
             <span style={{ color: "rgba(255,255,255,0.25)", fontWeight: 400, marginLeft: 8, fontSize: 12 }}>
               {formatSize(selectedFileSize)}
             </span>
-          </div>
+          </SectionValue>
         ) : (
-          <div style={sectionValueMuted}>
+          <SectionValueMuted>
             {projectName ? "Select files from the project tree." : "No project opened."}
-          </div>
+          </SectionValueMuted>
         )}
       </div>
 
+      <SectionDivider />
+
       {/* Tokens */}
       <div>
-        <div style={sectionLabel}>Tokens</div>
-        <div style={sectionValueMuted}>
+        <SectionLabel>Tokens</SectionLabel>
+        <SectionValueMuted>
           {estimatedTokens > 0 ? `${estimatedTokens.toLocaleString()} / 128K` : "0 / 128K"}
-        </div>
+        </SectionValueMuted>
         <div style={{ height: 2, background: "rgba(255,255,255,0.04)", borderRadius: 1, overflow: "hidden", marginTop: 6 }}>
           <div style={{ width: estimatedTokens > 0 ? `${Math.min((estimatedTokens / 128000) * 100, 100)}%` : "0%", height: "100%", background: "#5B8CFF", borderRadius: 1, transition: "width 220ms ease" }} />
         </div>
       </div>
 
+      <SectionDivider />
+
       {/* Mode */}
       <div>
-        <div style={sectionLabel}>Mode</div>
+        <SectionLabel>Mode</SectionLabel>
         <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
           <span style={{ width: 5, height: 5, borderRadius: "50%", background: "#4FFFC2", flexShrink: 0 }} />
-          <span style={sectionValue}>Review Mode</span>
+          <SectionValue>Review Mode</SectionValue>
         </div>
-        <div style={{ fontSize: 12, color: "rgba(255,255,255,0.25)", marginTop: 2, paddingLeft: 11 }}>
+        <div style={{ fontSize: 12, color: "rgba(255,255,255,0.22)", marginTop: 2, paddingLeft: 11 }}>
           Generate diff · User approves writes
         </div>
       </div>
 
+      <SectionDivider />
+
       {/* Git */}
       <div>
-        <div style={sectionLabel}>Git</div>
+        <SectionLabel>Git</SectionLabel>
         <div style={{ fontSize: 13, color: "rgba(255,255,255,0.40)", display: "flex", alignItems: "center", gap: 6 }}>
           <span>main</span>
           <span style={{ color: "rgba(255,255,255,0.10)" }}>·</span>

@@ -22,6 +22,17 @@ export function PromptBar() {
     }
   };
 
+  const handleNotAvailable = (feature: string) => {
+    // Simple alert-less feedback — could be enhanced later
+    if (inputRef.current) {
+      inputRef.current.placeholder = `${feature} coming soon...`;
+      setTimeout(() => {
+        if (inputRef.current)
+          inputRef.current.placeholder = "Ask Qodex to modify your project...";
+      }, 2000);
+    }
+  };
+
   return (
     <div
       style={{
@@ -98,6 +109,7 @@ export function PromptBar() {
           <button
             className="qodex-button qodex-button-secondary"
             title="Attach files"
+            onClick={() => handleNotAvailable("File attachment")}
             style={{
               width: 26,
               height: 26,
@@ -107,6 +119,7 @@ export function PromptBar() {
               color: "rgba(255,255,255,0.30)",
               border: "1px solid rgba(255,255,255,0.04)",
               background: "transparent",
+              cursor: "pointer",
             }}
           >
             ⊕
@@ -114,6 +127,7 @@ export function PromptBar() {
           <button
             className="qodex-button qodex-button-secondary"
             title="Context selector"
+            onClick={() => handleNotAvailable("Context selector")}
             style={{
               width: 26,
               height: 26,
@@ -123,6 +137,7 @@ export function PromptBar() {
               color: "rgba(255,255,255,0.30)",
               border: "1px solid rgba(255,255,255,0.04)",
               background: "transparent",
+              cursor: "pointer",
             }}
           >
             ⊞

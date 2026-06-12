@@ -1,16 +1,17 @@
 import { useRuntimeContext } from "./AppShell";
+import type { ActiveView } from "./AppShell";
 import type { ProjectTreeNode } from "@qodex/project-runtime";
 
 export function ProjectRail() {
-  const { projectName, fileTree, openProject, toggleFileSelection } =
+  const { projectName, fileTree, openProject, toggleFileSelection, activeView, setActiveView } =
     useRuntimeContext();
 
-  const sections = [
-    { label: "Files", active: true },
-    { label: "Sessions", active: false },
-    { label: "Skills", active: false },
-    { label: "Git", active: false },
-    { label: "Settings", active: false },
+  const navItems: { label: string; view: ActiveView }[] = [
+    { label: "Files", view: "files" },
+    { label: "Sessions", view: "sessions" },
+    { label: "Skills", view: "skills" },
+    { label: "Git", view: "git" },
+    { label: "Settings", view: "settings" },
   ];
 
   const renderTreeNode = (node: ProjectTreeNode, depth: number = 0) => {
@@ -62,7 +63,7 @@ export function ProjectRail() {
         </div>
         {isDir &&
           node.expanded &&
-          node.children.map((child) => renderTreeNode(child, depth + 1))}
+          node.children.map((child: ProjectTreeNode) => renderTreeNode(child, depth + 1))}
       </div>
     );
   };
@@ -124,38 +125,42 @@ export function ProjectRail() {
 
       <div className="qodex-divider" style={{ margin: "2px 12px" }} />
 
-      {/* Navigation — text only */}
+      {/* Navigation */}
       <div className="panel-inner" style={{ gap: 1, padding: "8px 12px" }}>
-        {sections.map((s) => (
-          <button
-            key={s.label}
-            className="qodex-button qodex-button-secondary"
-            style={{
-              width: "100%",
-              justifyContent: "flex-start",
-              padding: "7px 10px",
-              borderRadius: 8,
-              background: s.active
-                ? "rgba(91, 140, 255, 0.10)"
-                : "transparent",
-              border: s.active
-                ? "1px solid rgba(91, 140, 255, 0.15)"
-                : "1px solid transparent",
-              color: s.active
-                ? "rgba(255,255,255,0.90)"
-                : "rgba(255,255,255,0.40)",
-              fontWeight: s.active ? 600 : 400,
-              fontSize: 13,
-              letterSpacing: "0.01em",
-            }}
-          >
-            {s.label}
-          </button>
-        ))}
+        {navItems.map((item) => {
+          const isActive = activeView === item.view;
+          return (
+            <button
+              key={item.label}
+              className="qodex-button qodex-button-secondary"
+              onClick={() => setActiveView(item.view)}
+              style={{
+                width: "100%",
+                justifyContent: "flex-start",
+                padding: "7px 10px",
+                borderRadius: 8,
+                background: isActive
+                  ? "rgba(91, 140, 255, 0.10)"
+                  : "transparent",
+                border: isActive
+                  ? "1px solid rgba(91, 140, 255, 0.15)"
+                  : "1px solid transparent",
+                color: isActive
+                  ? "rgba(255,255,255,0.90)"
+                  : "rgba(255,255,255,0.40)",
+                fontWeight: isActive ? 600 : 400,
+                fontSize: 13,
+                letterSpacing: "0.01em",
+              }}
+            >
+              {item.label}
+            </button>
+          );
+        })}
       </div>
 
-      {/* File Tree */}
-      {projectName && fileTree ? (
+      {/* File Tree - only in agent/files views when project loaded */}
+      {activeView === "agent" && projectName && fileTree ? (
         <div
           className="panel-inner"
           style={{ gap: 0, padding: "8px 12px", overflow: "auto", flex: 1 }}
@@ -163,9 +168,9 @@ export function ProjectRail() {
           <div style={{ fontSize: 11, fontWeight: 600, color: "rgba(255,255,255,0.30)", padding: "0 0 6px", letterSpacing: "0.05em" }}>
             {projectName}
           </div>
-          {fileTree.children.map((child) => renderTreeNode(child))}
+          {fileTree.children.map((child: ProjectTreeNode) => renderTreeNode(child))}
         </div>
-      ) : (
+      ) : activeView === "agent" ? (
         <div
           className="panel-inner"
           style={{ flex: 1, justifyContent: "center", alignItems: "center" }}
@@ -174,7 +179,7 @@ export function ProjectRail() {
             Open Project
           </button>
         </div>
-      )}
+      ) : null}
 
       {/* Footer */}
       <div
