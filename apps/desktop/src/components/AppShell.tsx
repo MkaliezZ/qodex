@@ -42,16 +42,11 @@ export function useRuntimeContext() { return useContext(RuntimeContext); }
 
 function CenterContent({ activeView }: { activeView: ActiveView }) {
   switch (activeView) {
-    case "files":
-      return <FilesView />;
-    case "sessions":
-      return <SessionsView />;
-    case "skills":
-      return <SkillsView />;
-    case "git":
-      return <GitView />;
-    case "settings":
-      return <SettingsView />;
+    case "files": return <FilesView />;
+    case "sessions": return <SessionsView />;
+    case "skills": return <SkillsView />;
+    case "git": return <GitView />;
+    case "settings": return <SettingsView />;
     case "agent":
     default:
       return (
@@ -67,32 +62,34 @@ function CenterContent({ activeView }: { activeView: ActiveView }) {
   }
 }
 
-export function AppShell() {
+/** Inner shell — useRuntime() must run inside ProviderContextProvider */
+function AppShellInner() {
   const runtime = useRuntime();
   const [activeView, setActiveView] = useState<ActiveView>("agent");
 
-  const enhancedRuntime = {
-    ...runtime,
-    activeView,
-    setActiveView,
-  };
+  const enhancedRuntime = { ...runtime, activeView, setActiveView };
 
   return (
     <RuntimeContext.Provider value={enhancedRuntime}>
-      <ProviderContextProvider>
       <div className="qodex-bg" />
       <div className="qodex-layout">
         <div className="qodex-left-rail"><ProjectRail /></div>
-        <div className="qodex-center">
-          <CenterContent activeView={activeView} />
-        </div>
+        <div className="qodex-center"><CenterContent activeView={activeView} /></div>
         <div className="qodex-right-panel">
           <div className="glass-panel" style={{ flex: 1, overflow: "hidden" }}>
             <ContextPanel />
           </div>
         </div>
       </div>
-      </ProviderContextProvider>
     </RuntimeContext.Provider>
+  );
+}
+
+/** Outer shell — ProviderContextProvider wraps everything so useRuntime sees provider state */
+export function AppShell() {
+  return (
+    <ProviderContextProvider>
+      <AppShellInner />
+    </ProviderContextProvider>
   );
 }

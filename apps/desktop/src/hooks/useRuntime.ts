@@ -10,20 +10,20 @@ import type { PatchProposal } from "@qodex/diff-engine";
 import { useProviderContext } from "../components/ProviderContext";
 
 export function useRuntime() {
-  const { getProvider } = useProviderContext();
+  const { config, getProvider } = useProviderContext();
 
-  const createRuntime = useCallback(() => {
+  const [runtime, setRuntime] = useState(() => {
     const provider = getProvider();
     if (provider) {
       return new AgentRuntime({
         providers: new Map([[provider.id, provider]]),
         defaultProviderId: provider.id,
+        defaultModelId: config.modelId ?? undefined,
       });
     }
     return new AgentRuntime();
-  }, [getProvider]);
+  });
 
-  const runtimeRef = useRef<AgentRuntime>(createRuntime());
   const projectRef = useRef<ProjectRuntime | null>(null);
   const ctxRef = useRef<ContextEngine>(new ContextEngine());
   const diffRef = useRef<DiffEngine>(new DiffEngine());
@@ -33,27 +33,37 @@ export function useRuntime() {
   const [isRunning, setIsRunning] = useState(false);
   const [streamedText, setStreamedText] = useState<string>("");
 
-  // Project state
   const [projectName, setProjectName] = useState<string | null>(null);
   const [fileTree, setFileTree] = useState<ProjectTree | null>(null);
   const [selectedFileCount, setSelectedFileCount] = useState(0);
   const [selectedFileSize, setSelectedFileSize] = useState(0);
   const [contextFiles, setContextFiles] = useState<FileContent[]>([]);
 
-  // Context Engine state
   const [lastBundle, setLastBundle] = useState<ContextBundle | null>(null);
   const [estimatedTokens, setEstimatedTokens] = useState(0);
 
-  // Diff Engine state
   const [pendingProposal, setPendingProposal] = useState<PatchProposal | null>(null);
   const [currentProposal, setCurrentProposal] = useState<PatchProposal | null>(null);
 
+  // Recreate runtime when provider config changes (only when idle)
   useEffect(() => {
-    const rt = runtimeRef.current;
-    const s = rt.createSession("Qodex Session");
-    setSession(s);
+    if (isRunning) return;
+    const provider = getProvider();
+    const newRuntime = provider
+      ? new AgentRuntime({
+          providers: new Map([[provider.id, provider]]),
+          defaultProviderId: provider.id,
+          defaultModelId: config.modelId ?? undefined,
+        })
+      : new AgentRuntime();
+    setRuntime(newRuntime);
+    setSession(newRuntime.createSession("Qodex Session"));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [config.providerId, config.apiKey, config.modelId, config.baseUrl]);
 
-    const unsub = rt.subscribe((event: AnyAgentEvent) => {
+  // Subscribe to events whenever runtime changes
+  useEffect(() => {
+    const unsub = runtime.subscribe((event: AnyAgentEvent) => {
       switch (event.type) {
         case "task.started":
           setCurrentTask(event.payload.task);
@@ -69,7 +79,7 @@ export function useRuntime() {
           break;
         case "task.failed":
           setIsRunning(false);
-          setStreamedText((prev) => prev + `\n[Error: ${event.payload.error}]`);
+          setStreamedText((prev) => prev + `\n[Error: ${event.payload.error ?? "Unknown error"}]`);
           break;
         case "task.cancelled":
           setIsRunning(false);
@@ -77,7 +87,7 @@ export function useRuntime() {
       }
     });
     return () => unsub();
-  }, []);
+  }, [runtime]);
 
   const openProject = useCallback(async () => {
     try {
@@ -118,33 +128,24 @@ export function useRuntime() {
 
   const sendPrompt = useCallback(async (prompt: string) => {
     if (!session || !prompt.trim()) return;
-    const rt = runtimeRef.current;
-    const ctx = ctxRef.current;
-    const bundle = await ctx.buildContext({ prompt, selectedFiles: contextFiles });
+    const bundle = await ctxRef.current.buildContext({ prompt, selectedFiles: contextFiles });
     setLastBundle(bundle);
     setEstimatedTokens(bundle.estimatedTokens);
-    const task = rt.createTask(session.id, bundle.assembledPrompt);
-    await rt.runTask(task.id);
+    const task = runtime.createTask(session.id, bundle.assembledPrompt);
+    await runtime.runTask(task.id);
 
-    // Demo: generate a mock patch proposal after completion
     if (contextFiles.length > 0) {
       setTimeout(async () => {
         const files = await Promise.all(
           contextFiles.map(async (f) => ({
-            path: f.path,
-            oldContent: f.content,
-            newContent: `${f.content}\n// Modified by Qodex\n`,
+            path: f.path, oldContent: f.content, newContent: `${f.content}\n// Modified by Qodex\n`,
           })),
         );
-        const proposal = diffRef.current.createProposal(
-          task.id,
-          `${files.length} file(s) modified`,
-          files,
-        );
+        const proposal = diffRef.current.createProposal(task.id, `${files.length} file(s) modified`, files);
         setPendingProposal(proposal);
       }, 500);
     }
-  }, [session, contextFiles]);
+  }, [session, runtime, contextFiles]);
 
   const applyProposal = useCallback(async () => {
     if (!pendingProposal) return;
