@@ -32,6 +32,10 @@ export default defineConfig(async () => ({
         workspaceRoot,
         "packages/diff-engine/src/index.ts",
       ),
+      "@qodex/marketplace-runtime": path.resolve(
+        workspaceRoot,
+        "packages/marketplace-runtime/src/index.ts",
+      ),
     },
   },
   server: {
