@@ -7,7 +7,7 @@ export function AgentTimeline() {
   const hasContent = streamedText.length > 0;
 
   return (
-    <div className="panel-inner" style={{ gap: 12, padding: "12px 16px" }}>
+    <div className="panel-inner" data-testid="agent-timeline" style={{ gap: 12, padding: "12px 16px" }}>
       {/* Header */}
       <div
         style={{

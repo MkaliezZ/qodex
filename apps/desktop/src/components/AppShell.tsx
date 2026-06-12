@@ -72,7 +72,7 @@ function AppShellInner() {
   return (
     <RuntimeContext.Provider value={enhancedRuntime}>
       <div className="qodex-bg" />
-      <div className="qodex-layout">
+      <div className="qodex-layout" data-testid="app-shell">
         <div className="qodex-left-rail"><ProjectRail /></div>
         <div className="qodex-center"><CenterContent activeView={activeView} /></div>
         <div className="qodex-right-panel">

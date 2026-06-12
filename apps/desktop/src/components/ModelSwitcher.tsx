@@ -15,7 +15,7 @@ export function ModelSwitcher() {
 
   return (
     <div style={{ position: "relative" }}>
-      <div className="model-badge" onClick={() => setOpen(!open)} style={{ cursor: "pointer", userSelect: "none" }}>
+      <div className="model-badge" data-testid="model-switcher" onClick={() => setOpen(!open)} style={{ cursor: "pointer", userSelect: "none" }}>
         <span>{label}</span>
         <span style={{ fontSize: 9, opacity: 0.5, marginLeft: 4 }}>▼</span>
       </div>

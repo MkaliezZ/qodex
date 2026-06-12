@@ -49,6 +49,7 @@ export function PromptBar() {
             ref={inputRef}
             className="qodex-input"
             placeholder="Ask Qodex to modify your project..."
+            data-testid="prompt-input"
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={handleKeyDown}
@@ -69,6 +70,7 @@ export function PromptBar() {
         </div>
         <button
           className="qodex-button"
+          data-testid="send-button"
           onClick={handleRun}
           disabled={isRunning}
           style={{
