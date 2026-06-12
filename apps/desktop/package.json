@@ -13,6 +13,7 @@
     "@qodex/agent-runtime": "workspace:*",
     "@qodex/context-engine": "workspace:*",
     "@qodex/diff-engine": "workspace:*",
+    "@qodex/marketplace-runtime": "workspace:^",
     "@qodex/project-runtime": "workspace:*",
     "@qodex/provider-sdk": "workspace:*",
     "@tauri-apps/api": "^2.0.0",
