@@ -247,3 +247,15 @@ M16:   MCP Marketplace
 ## Decision Outcome
 
 **Accepted.** Implemented in Beta 0 — Provider Integration. Real provider configuration UI, ProviderContext, Agent Runtime wiring. Zero SDK/Agent Runtime changes.
+
+---
+
+### Beta 0.1 — Provider Runtime Wiring Hotfix
+
+**Date:** 2026-06-12  |  **Status:** Completed ✅
+
+**Fixed:** ProviderContextProvider wrapping order — AppShell split into AppShell/AppShellInner so useRuntime always executes inside ProviderContext. AgentRuntime rebuilds when provider config changes (providerId, apiKey, modelId, baseUrl). Event subscriptions clean up on runtime replacement. Runtime not replaced while task running.
+
+**Result:** Real provider path reachable from sendPrompt(). Mock fallback preserved. API key memory-only policy enforced. 1145/1145 tests passing.
+
+**Commit:** `3872439` — `fix(desktop): wire provider context before runtime, refresh agent runtime on config change`
