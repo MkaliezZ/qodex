@@ -1,6 +1,6 @@
 # ADR-017 — Registry & Sync Runtime
 
-- **Status:** Proposed
+- **Status:** Accepted
 - **Date:** 2026-06-13
 - **Depends on:** ADR-015 — Marketplace Foundation
 
