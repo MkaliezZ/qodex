@@ -510,4 +510,12 @@ Result
 ---
 
 *Generated: 2026-06-12*
-*Updated: 2026-06-12 (M0–M14 Complete)*`
+*Updated: 2026-06-13 (M0–M15.2 Planning)*
+
+---
+
+### M15.2 — Desktop Visual Refactor Planning
+
+**Date:** 2026-06-13  |  **Status:** Planning Complete — Awaiting Codex
+
+Added M15.2 desktop visual refactor plan and Codex implementation handoff. Direction: dark glass AI engineering cockpit, local-first agentic IDE, premium desktop command center. UI-only refactor. Runtime packages out of scope. OpenClaw paused; next step is Codex implementation.
