@@ -10,7 +10,7 @@ import type { PatchProposal } from "@qodex/diff-engine";
 import { useProviderContext } from "../components/ProviderContext";
 
 export function useRuntime() {
-  const { config, getProvider } = useProviderContext();
+  const { config, getProvider, getResolvedModel } = useProviderContext();
 
   const [runtime, setRuntime] = useState(() => {
     const provider = getProvider();
@@ -53,13 +53,13 @@ export function useRuntime() {
       ? new AgentRuntime({
           providers: new Map([[provider.id, provider]]),
           defaultProviderId: provider.id,
-          defaultModelId: config.modelId ?? undefined,
+          defaultModelId: getResolvedModel() ?? undefined,
         })
       : new AgentRuntime();
     setRuntime(newRuntime);
     setSession(newRuntime.createSession("Qodex Session"));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [config.providerId, config.apiKey, config.modelId, config.baseUrl]);
+  }, [config.providerId, config.apiKey, config.modelId, config.manualModelId, config.baseUrl]);
 
   // Subscribe to events whenever runtime changes
   useEffect(() => {

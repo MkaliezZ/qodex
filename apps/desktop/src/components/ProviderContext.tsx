@@ -6,6 +6,7 @@ export interface ProviderConfig {
   providerId: string | null;
   apiKey: string | null;
   modelId: string | null;
+  manualModelId: string | null;
   baseUrl: string;
   connected: boolean;
   error: string | null;
@@ -16,10 +17,12 @@ interface ProviderContextValue {
   setProvider: (id: string) => void;
   setApiKey: (key: string) => void;
   setModel: (id: string) => void;
+  setManualModel: (id: string) => void;
   setBaseUrl: (url: string) => void;
   testConnection: () => Promise<boolean>;
   getProvider: () => ModelProvider | null;
   listModels: () => Promise<ModelInfo[]>;
+  getResolvedModel: () => string | null;
 }
 
 const ProviderCtx = createContext<ProviderContextValue>({} as ProviderContextValue);
@@ -38,14 +41,19 @@ function createProviderInstance(id: string, apiKey: string, baseUrl: string): Mo
 
 export function ProviderContextProvider({ children }: { children: React.ReactNode }) {
   const [config, setConfig] = useState<ProviderConfig>({
-    providerId: null, apiKey: null, modelId: null, baseUrl: "https://api.openai.com/v1",
-    connected: false, error: null,
+    providerId: null, apiKey: null, modelId: null, manualModelId: null,
+    baseUrl: "https://api.openai.com/v1", connected: false, error: null,
   });
 
   const setProvider = useCallback((id: string) => setConfig((c) => ({ ...c, providerId: id, connected: false, error: null })), []);
   const setApiKey = useCallback((key: string) => setConfig((c) => ({ ...c, apiKey: key || null, connected: false, error: null })), []);
   const setModel = useCallback((id: string) => setConfig((c) => ({ ...c, modelId: id })), []);
+  const setManualModel = useCallback((id: string) => setConfig((c) => ({ ...c, manualModelId: id || null })), []);
   const setBaseUrl = useCallback((url: string) => setConfig((c) => ({ ...c, baseUrl: url })), []);
+
+  const getResolvedModel = useCallback((): string | null => {
+    return config.modelId || config.manualModelId || null;
+  }, [config.modelId, config.manualModelId]);
 
   const getProvider = useCallback((): ModelProvider | null => {
     if (!config.providerId || !config.apiKey) return null;
@@ -76,8 +84,10 @@ export function ProviderContextProvider({ children }: { children: React.ReactNod
     } catch { return []; }
   }, [config.providerId, config.apiKey, config.baseUrl]);
 
-  const value = useMemo(() => ({ config, setProvider, setApiKey, setModel, setBaseUrl, testConnection, getProvider, listModels }),
-    [config, setProvider, setApiKey, setModel, setBaseUrl, testConnection, getProvider, listModels]);
+  const value = useMemo(() => ({
+    config, setProvider, setApiKey, setModel, setManualModel, setBaseUrl,
+    testConnection, getProvider, listModels, getResolvedModel,
+  }), [config, setProvider, setApiKey, setModel, setManualModel, setBaseUrl, testConnection, getProvider, listModels, getResolvedModel]);
 
   return <ProviderCtx.Provider value={value}>{children}</ProviderCtx.Provider>;
 }
