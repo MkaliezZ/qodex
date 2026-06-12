@@ -1,6 +1,6 @@
 import { createContext, useContext, useState, useCallback, useMemo } from "react";
 import type { ModelProvider, ModelInfo } from "@qodex/provider-sdk";
-import { OpenAIProvider, DeepSeekProvider, OpenRouterProvider, CustomProvider } from "@qodex/provider-sdk";
+import { OpenAIProvider, DeepSeekProvider, OpenRouterProvider, CustomProvider, AnthropicProvider } from "@qodex/provider-sdk";
 
 export interface ProviderConfig {
   providerId: string | null;
@@ -30,6 +30,7 @@ function createProviderInstance(id: string, apiKey: string, baseUrl: string): Mo
     case "openai": return new OpenAIProvider({ apiKey });
     case "deepseek": return new DeepSeekProvider({ apiKey });
     case "openrouter": return new OpenRouterProvider({ apiKey });
+    case "anthropic": return new AnthropicProvider({ apiKey });
     case "custom": return new CustomProvider({ id: "custom", name: "Custom", baseUrl, apiKey });
     default: return new DeepSeekProvider({ apiKey });
   }

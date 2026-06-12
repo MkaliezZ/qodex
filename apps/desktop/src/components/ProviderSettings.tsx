@@ -29,6 +29,7 @@ export function ProviderSettings() {
           <option value="openai">OpenAI</option>
           <option value="deepseek">DeepSeek</option>
           <option value="openrouter">OpenRouter</option>
+          <option value="anthropic">Anthropic</option>
           <option value="custom">Custom (OpenAI-compatible)</option>
         </select>
       </div>

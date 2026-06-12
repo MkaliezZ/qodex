@@ -82,6 +82,12 @@ export {
 } from "./providers/custom/index.js";
 export type { CustomProviderOptions } from "./providers/custom/index.js";
 
+export {
+  AnthropicProvider,
+  createAnthropicProvider,
+} from "./providers/anthropic/index.js";
+export type { AnthropicProviderOptions } from "./providers/anthropic/index.js";
+
 // ── Utils ────────────────────────────────────────────
 export {
   httpRequest,

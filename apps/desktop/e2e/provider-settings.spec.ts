@@ -9,7 +9,7 @@ test.describe("provider-settings", () => {
 
   test("9 - provider dropdown has 4 options", async ({ page }) => {
     const options = page.locator('[data-testid="provider-select"] option');
-    await expect(options).toHaveCount(5); // 4 + 1 disabled placeholder
+    await expect(options).toHaveCount(6); // 5 providers + 1 disabled placeholder
   });
 
   test("10 - api key input masked by default", async ({ page }) => {

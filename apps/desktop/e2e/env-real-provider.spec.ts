@@ -67,4 +67,20 @@ test.describe("env-real-provider", () => {
     const timeline = page.locator('[data-testid="agent-timeline"]');
     await expect(timeline).not.toBeEmpty({ timeout: 30000 });
   });
+
+  test("32 - real anthropic configure connect prompt streaming", async ({ page }) => {
+    const key = process.env.ANTHROPIC_API_KEY;
+    test.skip(!key, "ANTHROPIC_API_KEY not set — skipping real-provider test");
+
+    await setupApp(page);
+    await page.click("text=Settings");
+    await page.selectOption('[data-testid="provider-select"]', "anthropic");
+    await page.fill('[data-testid="api-key-input"]', key);
+    await page.click('[data-testid="connection-test-button"]');
+    await expect(page.locator('[data-testid="connection-status"]')).toBeVisible({ timeout: 15000 });
+    await page.click("text=Files");
+    await page.fill('[data-testid="prompt-input"]', "Say hello in one word.");
+    await page.click('[data-testid="send-button"]');
+    await expect(page.locator('[data-testid="agent-timeline"]')).not.toBeEmpty({ timeout: 30000 });
+  });
 });
