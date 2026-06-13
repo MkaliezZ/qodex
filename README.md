@@ -6,7 +6,7 @@
 
 **Codex Workflow, Any Model, Skills Included.**
 
-![Alpha](https://img.shields.io/badge/status-alpha-orange)
+![Beta](https://img.shields.io/badge/status-beta-blue)
 ![License](https://img.shields.io/badge/license-MIT-blue)
 ![Tests](https://img.shields.io/badge/tests-887%20passing-green)
 ![Platform](https://img.shields.io/badge/platform-Desktop%20(Tauri)-purple)
@@ -118,7 +118,7 @@ pnpm -r test
 | [Architecture](docs/ARCHITECTURE.md) | Deep dive into all 9 packages |
 | [Dev Log](docs/development/DEVLOG.md) | Complete development history |
 | [ADR Records](qodex-config/adr/) | Architecture Decision Records |
-| [Release Notes](docs/development/RELEASE_NOTES_v0.1.0-alpha.md) | v0.1.0-alpha changelog |
+| [Release Notes](docs/development/RELEASE_NOTES_v0.2.0-beta.1.md) | v0.2.0-beta.1 changelog |
 
 ---
 
