@@ -54,10 +54,10 @@ function CenterContent({ activeView }: { activeView: ActiveView }) {
     default:
       return (
         <>
-          <div className="glass-panel" style={{ flex: 1, overflow: "hidden", display: "flex", flexDirection: "column" }}>
+          <div className="glass-panel workspace-panel" style={{ flex: 1, overflow: "hidden", display: "flex", flexDirection: "column" }}>
             <AgentTimeline />
           </div>
-          <div className="glass-panel-subtle" style={{ flexShrink: 0 }}>
+          <div className="glass-panel-subtle prompt-panel" style={{ flexShrink: 0 }}>
             <PromptBar />
           </div>
         </>
@@ -79,7 +79,7 @@ function AppShellInner() {
         <div className="qodex-left-rail"><ProjectRail /></div>
         <div className="qodex-center"><CenterContent activeView={activeView} /></div>
         <div className="qodex-right-panel">
-          <div className="glass-panel" style={{ flex: 1, overflow: "hidden" }}>
+          <div className="glass-panel context-panel-shell" style={{ flex: 1, overflow: "hidden" }}>
             <ContextPanel />
           </div>
         </div>

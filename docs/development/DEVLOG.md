@@ -510,12 +510,25 @@ Result
 ---
 
 *Generated: 2026-06-12*
-*Updated: 2026-06-13 (M0–M15.2 Planning)*
+*Updated: 2026-06-14 (M0–M15.2)*
 
 ---
 
-### M15.2 — Desktop Visual Refactor Planning
+### M15.2 — Desktop Visual Refactor
 
-**Date:** 2026-06-13  |  **Status:** Planning Complete — Awaiting Codex
+**Date:** 2026-06-14  |  **Status:** Completed — Visual Acceptance Passed
 
-Added M15.2 desktop visual refactor plan and Codex implementation handoff. Direction: dark glass AI engineering cockpit, local-first agentic IDE, premium desktop command center. UI-only refactor. Runtime packages out of scope. OpenClaw paused; next step is Codex implementation.
+Completed the UI-only desktop visual refactor and visual acceptance. The AppShell, ProjectRail, Settings, Provider settings, Registry Sources, Marketplace, registry cards, and trust badges now share a polished dark-glass local-first agent workbench presentation. Runtime behavior, package boundaries, provider configuration behavior, and registry data flows remain unchanged.
+
+#### Validation
+
+- Visual acceptance passed.
+- Marketplace runtime tests passed: 85/85.
+- Desktop app smoke test passed.
+- App starts successfully with no blank page.
+- Marketplace, Settings, and Registry Sources navigation works.
+- Browser console had no warnings or errors.
+- `git diff --check` passed.
+- Desktop typecheck caveat: no dedicated desktop typecheck script exists; fallback validation was blocked by existing runtime package type errors, and the M15.2 desktop UI files did not introduce observed type errors.
+- Desktop E2E caveat: no dedicated desktop e2e script exists; fallback Playwright Chromium was blocked by environment `SIGTRAP`/`EPERM`.
+- Result-state screenshots used temporary local preview data; preview data has been removed from final code.

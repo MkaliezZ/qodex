@@ -11,44 +11,70 @@ export function MarketplaceView() {
   const detail = detailId ? searchResults.find((e) => e.id === detailId) ?? null : null;
 
   return (
-    <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden", padding: 16 }}>
-      <div style={{ fontSize: 11, fontWeight: 600, color: "rgba(255,255,255,0.30)", marginBottom: 10, letterSpacing: "0.05em" }}>Marketplace</div>
-      <div style={{ display: "flex", gap: 2, marginBottom: 12 }}>
-        {(["discover", "updates"] as const).map((t) => (
-          <button key={t} onClick={() => setTab(t)}
-            style={{ padding: "4px 12px", borderRadius: 6, fontSize: 12, cursor: "pointer", border: "1px solid transparent",
-              background: tab === t ? "rgba(91,140,255,0.10)" : "transparent",
-              borderColor: tab === t ? "rgba(91,140,255,0.15)" : "transparent",
-              color: tab === t ? "#5B8CFF" : "rgba(255,255,255,0.30)", fontWeight: tab === t ? 600 : 400 }}>
-            {t === "discover" ? "Discover" : "Updates"}
-          </button>
-        ))}
+    <div className="view-page marketplace-view">
+      <header className="view-header marketplace-header">
+        <div>
+          <div className="view-eyebrow">Curated for local agents</div>
+          <h1>Marketplace</h1>
+          <p>Discover trusted skills and integrations for your Qodex workbench.</p>
+        </div>
+        <div className="marketplace-orbit" aria-hidden="true"><span>Q</span></div>
+      </header>
+
+      <div className="marketplace-toolbar">
+        <div className="pill-tabs">
+          {(["discover", "updates"] as const).map((t) => (
+            <button key={t} onClick={() => setTab(t)} className={tab === t ? "pill-tab pill-tab-active" : "pill-tab"}>
+              {t === "discover" ? "Discover" : "Updates"}
+              {t === "updates" && <span className="tab-count">0</span>}
+            </button>
+          ))}
+        </div>
+        <span className="marketplace-security">Verified registry metadata</span>
       </div>
 
       {tab === "discover" && (
-        <>
-          <input style={{ width: "100%", padding: "6px 10px", background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 8, color: "#fff", fontSize: 13, outline: "none", marginBottom: 10 }}
-            placeholder="Search registry..." value={query} onChange={(e) => { setQuery(e.target.value); search(e.target.value); setDetailId(null); }} />
+        <div className="marketplace-content">
+          <div className="search-shell">
+            <span className="search-icon">/</span>
+            <input
+              className="marketplace-search"
+              placeholder="Search skills, providers, or capabilities..."
+              value={query}
+              onChange={(e) => { setQuery(e.target.value); search(e.target.value); setDetailId(null); }}
+            />
+            <span className="search-shortcut">⌘ K</span>
+          </div>
 
           {detail ? (
             <RegistryEntryDetail entry={detail} onClose={() => setDetailId(null)} />
           ) : searchResults.length === 0 ? (
-            <div style={{ fontSize: 12, color: "rgba(255,255,255,0.20)", textAlign: "center", padding: 20 }}>
-              {query ? "No matching skills found." : "Search for skills to discover."}
+            <div className="marketplace-empty">
+              <div className="marketplace-empty-art"><span>Q</span></div>
+              <div className="view-eyebrow">{query ? "No matches" : "Registry ready"}</div>
+              <h2>{query ? "Nothing matched that search" : "Find your next capability"}</h2>
+              <p>{query ? "Try another name, publisher, or capability." : "Search connected registries for trusted skills, tools, and agent integrations."}</p>
+              <div className="empty-hints"><span>Local-first</span><span>Trust metadata</span><span>Version aware</span></div>
             </div>
           ) : (
-            <div style={{ display: "flex", flexDirection: "column", gap: 6, overflow: "auto", flex: 1 }}>
-              {searchResults.map((e) => (
-                <RegistryEntryCard key={e.id} entry={e} onClick={() => { selectEntry(e.id); setDetailId(e.id); }} />
-              ))}
+            <div className="registry-results">
+              <div className="results-heading"><span>{searchResults.length} result{searchResults.length === 1 ? "" : "s"}</span><span>Registry entries</span></div>
+              <div className="registry-card-grid">
+                {searchResults.map((e) => (
+                  <RegistryEntryCard key={e.id} entry={e} onClick={() => { selectEntry(e.id); setDetailId(e.id); }} />
+                ))}
+              </div>
             </div>
           )}
-        </>
+        </div>
       )}
 
       {tab === "updates" && (
-        <div style={{ fontSize: 12, color: "rgba(255,255,255,0.20)", textAlign: "center", padding: 20 }}>
-          Update detection coming soon. Check back after installing registry skills.
+        <div className="marketplace-empty">
+          <div className="marketplace-empty-art marketplace-empty-art-update"><span>↻</span></div>
+          <div className="view-eyebrow">Everything current</div>
+          <h2>No updates available</h2>
+          <p>Installed registry skills and their available updates will appear here.</p>
         </div>
       )}
     </div>

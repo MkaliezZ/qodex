@@ -1,44 +1,50 @@
 import type { RegistryEntry } from "@qodex/marketplace-runtime";
 import { TrustBadge } from "./TrustBadge";
 
-const cardStyle: React.CSSProperties = { padding: "10px 12px", background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.06)", borderRadius: 10, cursor: "pointer" };
-
 export function RegistryEntryCard({ entry, onClick }: { entry: RegistryEntry; onClick: () => void }) {
   const blocked = entry.trust?.level === "blocked";
   return (
-    <div onClick={onClick} style={{ ...cardStyle, opacity: blocked ? 0.5 : 1 }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <span style={{ fontSize: 13, fontWeight: 600, color: "rgba(255,255,255,0.85)" }}>{entry.name}</span>
+    <button onClick={onClick} className={`registry-entry-card${blocked ? " registry-entry-blocked" : ""}`}>
+      <div className="registry-entry-topline">
+        <div className="registry-entry-mark">{entry.name.slice(0, 1).toUpperCase()}</div>
         <TrustBadge level={entry.trust?.level ?? "community"} warnings={entry.trust?.warnings} />
       </div>
-      <div style={{ fontSize: 11, color: "rgba(255,255,255,0.35)", marginTop: 2 }}>{entry.description}</div>
-      <div style={{ display: "flex", gap: 6, marginTop: 4, fontSize: 10, color: "rgba(255,255,255,0.25)" }}>
-        <span>v{entry.latestVersion}</span>
-        <span>·</span>
-        <span>{entry.publisher.name}</span>
-        {entry.tags.map((t: string) => <span key={t} style={{ background: "rgba(255,255,255,0.04)", padding: "0 4px", borderRadius: 4 }}>{t}</span>)}
+      <div className="registry-entry-copy">
+        <h3>{entry.name}</h3>
+        <p>{entry.description}</p>
       </div>
-    </div>
+      <div className="registry-entry-footer">
+        <span>v{entry.latestVersion}</span>
+        <span>{entry.publisher.name}</span>
+        <div className="registry-entry-tags">
+          {entry.tags.slice(0, 2).map((t: string) => <span key={t}>{t}</span>)}
+        </div>
+      </div>
+    </button>
   );
 }
 
 export function RegistryEntryDetail({ entry, onClose }: { entry: RegistryEntry; onClose: () => void }) {
   const blocked = entry.trust?.level === "blocked";
   return (
-    <div style={{ padding: 12, background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 10, marginTop: 8 }}>
-      <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8 }}>
-        <span style={{ fontSize: 14, fontWeight: 600, color: "#fff" }}>{entry.name}</span>
-        <button onClick={onClose} style={{ background: "none", border: "none", color: "rgba(255,255,255,0.30)", cursor: "pointer", fontSize: 14 }}>✕</button>
+    <div className={`registry-entry-detail${blocked ? " registry-entry-detail-blocked" : ""}`}>
+      <div className="registry-detail-header">
+        <div className="registry-entry-mark registry-detail-mark">{entry.name.slice(0, 1).toUpperCase()}</div>
+        <div>
+          <div className="view-eyebrow">Registry entry</div>
+          <h2>{entry.name}</h2>
+        </div>
+        <button onClick={onClose} className="detail-close" aria-label="Close detail">×</button>
       </div>
-      <div style={{ fontSize: 12, color: "rgba(255,255,255,0.50)", marginBottom: 6 }}>{entry.description}</div>
+      <p className="registry-detail-description">{entry.description}</p>
       <TrustBadge level={entry.trust?.level ?? "community"} warnings={entry.trust?.warnings} />
-      <div style={{ fontSize: 11, color: "rgba(255,255,255,0.30)", marginTop: 6 }}>
-        <div>Publisher: {entry.publisher.name}</div>
-        <div>Version: {entry.latestVersion}</div>
-        <div>Compatibility: {entry.compatibility.qodexVersion}</div>
-        {blocked && <div style={{ color: "#FF5C7A", fontWeight: 600, marginTop: 4 }}>This package is blocked and cannot be installed.</div>}
+      <div className="registry-detail-grid">
+        <div><span>Publisher</span><strong>{entry.publisher.name}</strong></div>
+        <div><span>Version</span><strong>{entry.latestVersion}</strong></div>
+        <div><span>Compatibility</span><strong>{entry.compatibility.qodexVersion}</strong></div>
       </div>
-      {!blocked && <button style={{ marginTop: 8, padding: "4px 12px", background: "rgba(91,140,255,0.15)", border: "1px solid rgba(91,140,255,0.20)", borderRadius: 6, color: "#5B8CFF", fontSize: 12, cursor: "pointer" }}>Install</button>}
+      {blocked && <div className="blocked-notice">This package is blocked and cannot be installed.</div>}
+      {!blocked && <button className="qodex-button registry-install-button">Install skill</button>}
     </div>
   );
 }

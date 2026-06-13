@@ -3,69 +3,53 @@ import { RegistrySourceForm } from "../components/RegistrySourceForm";
 
 export function SettingsView() {
   return (
-    <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "auto", padding: 16 }}>
-      <div style={{ fontSize: 11, fontWeight: 600, color: "rgba(255,255,255,0.30)", marginBottom: 12, letterSpacing: "0.05em" }}>
-        Settings
-      </div>
+    <div className="view-page settings-view">
+      <header className="view-header">
+        <div>
+          <div className="view-eyebrow">Workbench configuration</div>
+          <h1>Settings</h1>
+          <p>Manage the local providers and registries that power your agent workspace.</p>
+        </div>
+        <div className="local-first-chip"><span className="status-dot status-dot-active" /> Local-first</div>
+      </header>
 
-      {/* Provider Configuration */}
-      <div style={{ marginBottom: 20 }}>
-        <ProviderSettings />
-      </div>
+      <div className="settings-grid">
+        <section className="surface-card settings-card settings-card-provider">
+          <div className="card-heading">
+            <div className="card-heading-icon">P</div>
+            <div>
+              <h2>Provider</h2>
+              <p>Connect the model endpoint used by your local agent runtime.</p>
+            </div>
+          </div>
+          <ProviderSettings />
+        </section>
 
-      {/* Registry Sources */}
-      <div style={{ marginBottom: 20, padding: "12px", background: "rgba(255,255,255,0.02)", borderRadius: 10, border: "1px solid rgba(255,255,255,0.04)" }}>
-        <RegistrySourceForm />
-      </div>
+        <section className="surface-card settings-card">
+          <div className="card-heading">
+            <div className="card-heading-icon card-heading-icon-violet">R</div>
+            <div>
+              <h2>Registry Sources</h2>
+              <p>Control the trusted sources used to discover skills and tools.</p>
+            </div>
+          </div>
+          <RegistrySourceForm />
+        </section>
 
-      {/* Theme */}
-      <div style={{ marginBottom: 16 }}>
-        <div style={{ fontSize: 11, fontWeight: 500, color: "rgba(255,255,255,0.40)", marginBottom: 4 }}>
-          Theme
-        </div>
-        <div style={{ fontSize: 13, color: "rgba(255,255,255,0.60)" }}>
-          Dark
-        </div>
-        <div style={{ fontSize: 12, color: "rgba(255,255,255,0.18)", marginTop: 2 }}>
-          Light theme coming soon.
-        </div>
-      </div>
-
-      {/* Language */}
-      <div style={{ marginBottom: 16 }}>
-        <div style={{ fontSize: 11, fontWeight: 500, color: "rgba(255,255,255,0.40)", marginBottom: 4 }}>
-          Language
-        </div>
-        <div style={{ fontSize: 13, color: "rgba(255,255,255,0.60)" }}>
-          English
-        </div>
-        <div style={{ fontSize: 12, color: "rgba(255,255,255,0.18)", marginTop: 2 }}>
-          Internationalization in progress (M13).
-        </div>
-      </div>
-
-      {/* Version */}
-      <div style={{ marginBottom: 16 }}>
-        <div style={{ fontSize: 11, fontWeight: 500, color: "rgba(255,255,255,0.40)", marginBottom: 4 }}>
-          Version
-        </div>
-        <div style={{
-          display: "inline-flex",
-          alignItems: "center",
-          gap: 6,
-          padding: "3px 8px",
-          background: "rgba(91, 140, 255, 0.10)",
-          border: "1px solid rgba(91, 140, 255, 0.15)",
-          borderRadius: 6,
-          fontSize: 12,
-          fontWeight: 500,
-          color: "#5B8CFF",
-        }}>
-          v0.1.0-alpha
-        </div>
-        <div style={{ fontSize: 12, color: "rgba(255,255,255,0.18)", marginTop: 2 }}>
-          Public alpha release.
-        </div>
+        <section className="surface-card settings-card settings-card-compact">
+          <div className="setting-summary">
+            <div><span className="setting-summary-label">Appearance</span><strong>Dark glass</strong></div>
+            <span className="setting-summary-note">System theme support planned</span>
+          </div>
+          <div className="setting-summary">
+            <div><span className="setting-summary-label">Language</span><strong>English</strong></div>
+            <span className="setting-summary-note">Internationalization in progress</span>
+          </div>
+          <div className="setting-summary">
+            <div><span className="setting-summary-label">Build</span><strong className="version-chip">v0.1.0-alpha</strong></div>
+            <span className="setting-summary-note">Public alpha release</span>
+          </div>
+        </section>
       </div>
     </div>
   );

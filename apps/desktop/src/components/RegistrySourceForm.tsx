@@ -1,9 +1,6 @@
 import { useState } from "react";
 import { useRegistryContext } from "./RegistryContext";
 
-const inputStyle: React.CSSProperties = { width: "100%", padding: "5px 8px", background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 6, color: "#fff", fontSize: 12, outline: "none" };
-const btnStyle: React.CSSProperties = { padding: "4px 10px", background: "rgba(91,140,255,0.12)", border: "1px solid rgba(91,140,255,0.15)", borderRadius: 6, color: "#5B8CFF", fontSize: 11, cursor: "pointer" };
-
 export function RegistrySourceForm() {
   const { sources, addSource, removeSource, sync, syncStatus } = useRegistryContext();
   const [name, setName] = useState("");
@@ -19,29 +16,47 @@ export function RegistrySourceForm() {
   };
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-      <div style={{ fontSize: 11, fontWeight: 500, color: "rgba(255,255,255,0.40)" }}>Registry Sources</div>
-      {sources.length === 0 && <div style={{ fontSize: 11, color: "rgba(255,255,255,0.18)" }}>No registry sources configured.</div>}
-      {sources.map((s) => (
-        <div key={s.id} style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: "rgba(255,255,255,0.50)", padding: "4px 6px", background: "rgba(255,255,255,0.02)", borderRadius: 6 }}>
-          <span style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{s.name} — <span style={{ color: "rgba(255,255,255,0.25)", fontSize: 11 }}>{s.url}</span></span>
-          <button onClick={() => removeSource(s.id)} style={{ ...btnStyle, background: "rgba(255,80,100,0.10)", border: "1px solid rgba(255,80,100,0.15)", color: "#FF5C7A", fontSize: 10 }}>Remove</button>
-        </div>
-      ))}
-
-      {/* Add source */}
-      <div style={{ display: "flex", gap: 4 }}>
-        <input placeholder="Name" style={inputStyle} value={name} onChange={(e) => setName(e.target.value)} />
-        <input placeholder="https://..." style={inputStyle} value={url} onChange={(e) => setUrl(e.target.value)} />
-        <button onClick={handleAdd} style={btnStyle}>Add</button>
+    <div className="registry-source-form">
+      <div className="source-list">
+        {sources.length === 0 && (
+          <div className="inline-empty-state">
+            <div className="inline-empty-icon">+</div>
+            <div><strong>No registry sources yet</strong><span>Add a secure HTTPS source to begin discovering marketplace entries.</span></div>
+          </div>
+        )}
+        {sources.map((s) => (
+          <div key={s.id} className="source-row">
+            <div className="source-icon">R</div>
+            <div className="source-meta">
+              <strong>{s.name}</strong>
+              <span>{s.url}</span>
+            </div>
+            <span className="source-enabled"><span className="status-dot status-dot-active" /> Enabled</span>
+            <button onClick={() => removeSource(s.id)} className="qodex-button qodex-button-danger qodex-button-small">Remove</button>
+          </div>
+        ))}
       </div>
-      {error && <div style={{ fontSize: 11, color: "#FF5C7A" }}>{error}</div>}
 
-      {/* Sync */}
+      <div className="source-add-panel">
+        <div className="field-group">
+          <label>Source name</label>
+          <input placeholder="Official registry" className="qodex-input" value={name} onChange={(e) => setName(e.target.value)} />
+        </div>
+        <div className="field-group field-group-grow">
+          <label>HTTPS endpoint</label>
+          <input placeholder="https://registry.example.com" className="qodex-input" value={url} onChange={(e) => setUrl(e.target.value)} />
+        </div>
+        <button onClick={handleAdd} className="qodex-button source-add-button">Add source</button>
+      </div>
+      {error && <div className="form-error">{error}</div>}
+
       {sources.length > 0 && (
-        <button onClick={() => sync()} disabled={syncStatus === "syncing"} style={{ ...btnStyle, opacity: syncStatus === "syncing" ? 0.5 : 1, width: "fit-content" }}>
-          {syncStatus === "syncing" ? "Syncing..." : "Sync Now"}
-        </button>
+        <div className="source-actions">
+          <button onClick={() => sync()} disabled={syncStatus === "syncing"} className="qodex-button qodex-button-secondary qodex-button-small">
+            {syncStatus === "syncing" ? "Syncing..." : "Sync now"}
+          </button>
+          <span>{sources.length} source{sources.length === 1 ? "" : "s"} configured</span>
+        </div>
       )}
     </div>
   );
