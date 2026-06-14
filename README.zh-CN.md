@@ -19,6 +19,7 @@
 ![Tests](https://img.shields.io/badge/tests-887%20passing-green)
 ![Platform](https://img.shields.io/badge/platform-Desktop%20(Tauri)-purple)
 ![TypeScript](https://img.shields.io/badge/TypeScript-5.5-blue)
+[![CI](https://github.com/MkaliezZ/qodex/actions/workflows/ci.yml/badge.svg)](https://github.com/MkaliezZ/qodex/actions/workflows/ci.yml)
 ![Built With](https://img.shields.io/badge/built%20with-Tauri%20%7C%20React-cyan)
 
 ---
