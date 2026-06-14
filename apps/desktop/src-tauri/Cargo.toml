@@ -1,8 +1,8 @@
 [package]
 name = "qodex-desktop"
 version = "0.1.0"
-description = "Qodex Desktop Shell"
-authors = ["Qodex"]
+description = "KerniQ Desktop Shell"
+authors = ["KerniQ"]
 edition = "2021"
 
 [lib]

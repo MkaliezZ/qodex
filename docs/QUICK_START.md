@@ -1,6 +1,6 @@
-# Qodex Quick Start Guide
+# KerniQ Quick Start Guide
 
-Goal: Running Qodex within 10 minutes.
+Goal: Running KerniQ within 10 minutes.
 
 ---
 
@@ -19,7 +19,7 @@ Optional:
 
 ```bash
 git clone <repo-url>
-cd Qodex
+cd <repo-directory>
 pnpm install
 ```
 
@@ -42,7 +42,7 @@ You should see:
 
 ```
 ┌─────────────────────────────────────────────────────┐
-│ [Q] Qodex                                           │
+│ [Q] KerniQ                                           │
 │ No project                                          │
 │                                                     │
 │ Files          │  Agent Workspace          │ Model   │
@@ -94,7 +94,7 @@ Explain this project structure
 
 Click "Run" or press Enter.
 
-Qodex will process the prompt through:
+KerniQ will process the prompt through:
 1. ContextEngine (Rules + Memory + Metadata + selected files)
 2. AgentRuntime (task lifecycle)
 3. MockStreamingProvider (streams a pre-defined response)
@@ -105,7 +105,7 @@ You'll see the response stream live in the Agent Workspace.
 
 ## Step 6: Working with Patches
 
-After files are selected, Qodex generates a patch proposal in the Diff Viewer.
+After files are selected, KerniQ generates a patch proposal in the Diff Viewer.
 
 - Click "Apply" to apply the changes
 - Click "Reject" to discard

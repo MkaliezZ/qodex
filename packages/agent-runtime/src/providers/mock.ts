@@ -1,5 +1,5 @@
 /**
- * Qodex Agent Runtime — Mock Streaming Provider
+ * KerniQ Agent Runtime — Mock Streaming Provider
  *
  * Generates streamed text chunks without API keys.
  * Used for testing the end-to-end execution flow.
@@ -19,7 +19,7 @@ export interface MockProviderOptions {
 const DEFAULT_CHUNKS = [
   "Hello",
   " from",
-  " Qodex",
+  " KerniQ",
   " —",
   " the",
   " desktop-first",

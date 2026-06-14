@@ -1,4 +1,4 @@
-# Qodex — AI Agent Rules
+# KerniQ — AI Agent Rules
 
 ## Non-Negotiable Rules
 

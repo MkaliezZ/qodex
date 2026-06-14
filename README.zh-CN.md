@@ -1,4 +1,4 @@
-# Qodex
+# KerniQ
 
 [English](README.md) | **中文**
 
@@ -10,7 +10,7 @@
 
 ## 状态
 
-![Alpha](https://img.shields.io/badge/status-alpha-orange)
+![Beta](https://img.shields.io/badge/status-beta-blue)
 ![License](https://img.shields.io/badge/license-MIT-blue)
 ![Tests](https://img.shields.io/badge/tests-887%20passing-green)
 ![Platform](https://img.shields.io/badge/platform-Desktop%20(Tauri)-purple)
@@ -21,15 +21,15 @@
 
 ## 项目简介
 
-Qodex 是一款桌面优先、**模型无关**的 AI 编程代理。与绑定单一模型供应商的工具不同，Qodex 通过统一的 Provider SDK 支持 OpenAI、DeepSeek、OpenRouter 以及任何兼容的 API 端点。
+KerniQ 是一款桌面优先、**模型无关**的 AI 编程代理。与绑定单一模型供应商的工具不同，KerniQ 通过统一的 Provider SDK 支持 OpenAI、DeepSeek、OpenRouter 以及任何兼容的 API 端点。
 
-**为什么创建 Qodex？**
+**为什么创建 KerniQ？**
 
-现有的 AI 编程工具（如 Codex、Cursor、Claude Code）通常与特定模型深度绑定。这意味着你的工作流会受到单一提供商的限制。Qodex 的核心设计理念是 **"Codex 工作流，任意模型，技能即插即用"**——你可以自由切换模型，而不必改变工作流。
+现有的 AI 编程工具（如 Codex、Cursor、Claude Code）通常与特定模型深度绑定。这意味着你的工作流会受到单一提供商的限制。KerniQ 的核心设计理念是 **"Codex 工作流，任意模型，技能即插即用"**——你可以自由切换模型，而不必改变工作流。
 
 **与竞品的架构差异**
 
-| 维度 | Qodex | Codex/Cursor/Claude Code |
+| 维度 | KerniQ | Codex/Cursor/Claude Code |
 |:--|:--|:--|
 | 模型支持 | 多模型（OpenAI、DeepSeek 等） | 通常单模型或有限选择 |
 | 技能系统 | 独立 Skill Runtime（纯文本） | 无独立技能层 |
@@ -77,7 +77,7 @@ Qodex 是一款桌面优先、**模型无关**的 AI 编程代理。与绑定单
 ## 仓库结构
 
 ```
-Qodex/
+qodex/                  ← 旧版仓库名称
 ├── apps/desktop/           ← Tauri + React 桌面 UI
 ├── packages/               ← 9 个独立子包
 │   ├── provider-sdk/       ← 模型提供者抽象层
@@ -92,6 +92,9 @@ Qodex/
 ├── docs/                   ← 说明文档与开发日志
 └── qodex-config/           ← AI 代理工作空间
 ```
+
+> **兼容性说明：** 品牌已更新为 KerniQ。为避免破坏现有集成和本地数据，
+> `@qodex/*` 包名、`qodex-config/` 及相关持久化标识暂时保持不变。
 
 ---
 
@@ -121,21 +124,12 @@ pnpm -r test
 
 ## 发布状态
 
-- **当前版本:** v0.1.0-alpha（预发布）
-- **已完成里程碑:** M0–M10
+- **当前版本:** v0.2.0-beta.1（Beta）
+- **已完成里程碑:** M0–M15.2
 
 **已完成的里程碑:**
 
 Provider SDK · Project Runtime · Context Engine · Agent Runtime · Diff Engine · Git Runtime · Skill Runtime · MCP Runtime · Multi-Agent Runtime
-
-**待定里程碑:**
-
-| 里程碑 | 描述 | 状态 |
-|:--|:--|:--:|
-| M11 | Planning & Execution Runtime | ⬜ 待定 |
-| M12 | Execution Graph | ⬜ 待定 |
-| M13 | Internationalization | ⬜ 待定 |
-| M14 | Marketplace Foundation | ⬜ 待定 |
 
 - **变更日志:** [DEVLOG.md](docs/development/DEVLOG.md)
 
@@ -150,7 +144,7 @@ Provider SDK · Project Runtime · Context Engine · Agent Runtime · Diff Engin
 | [架构说明](docs/ARCHITECTURE.md) | 9 个包的设计详解 |
 | [开发日志](docs/development/DEVLOG.md) | 完整开发历史 |
 | [ADR 决策记录](qodex-config/adr/) | 架构决策记录 |
-| [版本发布说明](docs/development/RELEASE_NOTES_v0.1.0-alpha.md) | v0.1.0-alpha |
+| [版本发布说明](docs/development/RELEASE_NOTES_v0.2.0-beta.1.md) | v0.2.0-beta.1 |
 
 ---
 
@@ -162,4 +156,4 @@ Provider SDK · Project Runtime · Context Engine · Agent Runtime · Diff Engin
 
 ## 许可证
 
-MIT © 2026 Qodex
+MIT © 2026 KerniQ

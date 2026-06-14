@@ -16,6 +16,6 @@ test.describe("mock-fallback", () => {
     const sendBtn = page.locator('[data-testid="send-button"]');
     await sendBtn.click();
     const timeline = page.locator('[data-testid="agent-timeline"]');
-    await expect(timeline).toContainText("Qodex", { timeout: 10000 });
+    await expect(timeline).toContainText("KerniQ", { timeout: 10000 });
   });
 });

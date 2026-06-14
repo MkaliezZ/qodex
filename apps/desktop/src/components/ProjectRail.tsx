@@ -66,7 +66,7 @@ export function ProjectRail() {
       <div className="project-header">
         <div className="project-mark">Q</div>
         <div style={{ flex: 1, minWidth: 0 }}>
-          <div className="project-name">{projectName ?? "Qodex"}</div>
+          <div className="project-name">{projectName ?? "KerniQ"}</div>
           <div className="project-state">{projectName ? "Project opened" : "Local agent workbench"}</div>
         </div>
       </div>

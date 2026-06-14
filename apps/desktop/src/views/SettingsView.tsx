@@ -46,8 +46,8 @@ export function SettingsView() {
             <span className="setting-summary-note">Internationalization in progress</span>
           </div>
           <div className="setting-summary">
-            <div><span className="setting-summary-label">Build</span><strong className="version-chip">v0.1.0-alpha</strong></div>
-            <span className="setting-summary-note">Public alpha release</span>
+            <div><span className="setting-summary-label">Build</span><strong className="version-chip">v0.2.0-beta.1</strong></div>
+            <span className="setting-summary-note">Beta release</span>
           </div>
         </section>
       </div>

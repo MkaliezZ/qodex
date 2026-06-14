@@ -22,7 +22,7 @@ assignees: ''
 
 ## Environment
 
-- Qodex version:
+- KerniQ version:
 - OS:
 - Browser:
 - Node.js version:

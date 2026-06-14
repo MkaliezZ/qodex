@@ -40,7 +40,7 @@
   },
   "project": { "project_opened": "Project opened" },
   "agent": {
-    "workspace": "Agent Workspace", "prompt_placeholder": "Ask Qodex to modify your project...",
+    "workspace": "Agent Workspace", "prompt_placeholder": "Ask KerniQ to modify your project...",
     "streaming": "Streaming..."
   },
   "diff": {

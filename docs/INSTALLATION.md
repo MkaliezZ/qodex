@@ -1,4 +1,4 @@
-# Qodex Installation Guide
+# KerniQ Installation Guide
 
 ## macOS
 
@@ -20,11 +20,11 @@ pnpm --version  # Should be 9+
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 ```
 
-### Install Qodex
+### Install KerniQ
 
 ```bash
 git clone <repo-url>
-cd Qodex
+cd <repo-directory>
 pnpm install
 ```
 
@@ -63,11 +63,11 @@ pnpm --version
 # Included with Windows 10 (1803+) and Windows 11
 ```
 
-### Install Qodex
+### Install KerniQ
 
 ```powershell
 git clone <repo-url>
-cd Qodex
+cd <repo-directory>
 pnpm install
 ```
 
@@ -101,11 +101,11 @@ node --version
 pnpm --version
 ```
 
-### Install Qodex
+### Install KerniQ
 
 ```bash
 git clone <repo-url>
-cd Qodex
+cd <repo-directory>
 pnpm install
 ```
 

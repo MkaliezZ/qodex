@@ -1,19 +1,19 @@
-# Contributing to Qodex
+# Contributing to KerniQ
 
-Thanks for your interest in Qodex!
+Thanks for your interest in KerniQ!
 
 ## Setup
 
 ```bash
 git clone <repo>
-cd Qodex
+cd <repo-directory>
 pnpm install              # Install all workspace dependencies
 cd apps/desktop && pnpm dev  # Start the desktop app (Vite dev server)
 ```
 
 ## Development
 
-Qodex is organized as a pnpm monorepo. Each package lives under `packages/` with its own `package.json`, `tsconfig.json`, and test suite.
+KerniQ is organized as a pnpm monorepo. Each package lives under `packages/` with its own `package.json`, `tsconfig.json`, and test suite.
 
 ```bash
 pnpm -r test              # Run all tests across all packages

@@ -57,7 +57,7 @@ export function useRuntime() {
         })
       : new AgentRuntime();
     setRuntime(newRuntime);
-    setSession(newRuntime.createSession("Qodex Session"));
+    setSession(newRuntime.createSession("KerniQ Session"));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [config.providerId, config.apiKey, config.modelId, config.manualModelId, config.baseUrl]);
 
@@ -138,7 +138,7 @@ export function useRuntime() {
       setTimeout(async () => {
         const files = await Promise.all(
           contextFiles.map(async (f) => ({
-            path: f.path, oldContent: f.content, newContent: `${f.content}\n// Modified by Qodex\n`,
+            path: f.path, oldContent: f.content, newContent: `${f.content}\n// Modified by KerniQ\n`,
           })),
         );
         const proposal = diffRef.current.createProposal(task.id, `${files.length} file(s) modified`, files);

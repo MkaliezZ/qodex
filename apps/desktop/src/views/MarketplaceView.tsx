@@ -16,7 +16,7 @@ export function MarketplaceView() {
         <div>
           <div className="view-eyebrow">Curated for local agents</div>
           <h1>Marketplace</h1>
-          <p>Discover trusted skills and integrations for your Qodex workbench.</p>
+          <p>Discover trusted skills and integrations for your KerniQ workbench.</p>
         </div>
         <div className="marketplace-orbit" aria-hidden="true"><span>Q</span></div>
       </header>

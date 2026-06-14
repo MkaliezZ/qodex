@@ -1,10 +1,13 @@
-# Qodex
+# KerniQ
 
 **English** | [中文](README.zh-CN.md)
 
 > Desktop-first, multi-model, skill-enabled, MCP-compatible, diff-first AI coding agent.
 
 **Codex Workflow, Any Model, Skills Included.**
+
+KerniQ was previously known as Qodex. Releases up to and including
+v0.2.0-beta.1 may still reference the Qodex name.
 
 ![Beta](https://img.shields.io/badge/status-beta-blue)
 ![License](https://img.shields.io/badge/license-MIT-blue)
@@ -15,11 +18,11 @@
 
 ---
 
-## What is Qodex?
+## What is KerniQ?
 
-Qodex is an AI coding agent that follows the Codex workflow philosophy while remaining **provider-agnostic**. Unlike tools locked to a single model vendor, Qodex supports OpenAI, DeepSeek, OpenRouter, and any OpenAI-compatible endpoint through a unified Provider SDK.
+KerniQ is an AI coding agent that follows the Codex workflow philosophy while remaining **provider-agnostic**. Unlike tools locked to a single model vendor, KerniQ supports OpenAI, DeepSeek, OpenRouter, and any OpenAI-compatible endpoint through a unified Provider SDK.
 
-**Why Qodex?** Existing AI coding tools (Codex, Cursor, Claude Code) are typically tied to specific models. Qodex decouples the coding workflow from any single provider — you can switch models without changing your workflow.
+**Why KerniQ?** Existing AI coding tools (Codex, Cursor, Claude Code) are typically tied to specific models. KerniQ decouples the coding workflow from any single provider — you can switch models without changing your workflow.
 
 **Key architectural differences:**
 
@@ -67,7 +70,7 @@ User Input → ContextEngine → MultiAgentRuntime → AgentRuntime → Provider
 ## Repository Structure
 
 ```
-Qodex/
+qodex/                  ← legacy repository name
 ├── apps/desktop/           ← Tauri + React desktop UI
 ├── packages/
 │   ├── provider-sdk/       ← Model provider abstraction (35 tests)
@@ -82,6 +85,10 @@ Qodex/
 ├── docs/                   ← Specifications, guides, development logs
 └── qodex-config/           ← AI agent workspace (rules, memory, ADRs, skills)
 ```
+
+> **Legacy compatibility:** The `@qodex/*` package scope, `qodex-config/`, and
+> related persisted identifiers remain unchanged during the KerniQ brand
+> migration to avoid breaking existing integrations and local data.
 
 ---
 

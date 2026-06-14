@@ -1,6 +1,6 @@
 ---
 name: Question
-about: Ask a question about Qodex
+about: Ask a question about KerniQ
 title: ''
 labels: question
 assignees: ''

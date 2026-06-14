@@ -1,8 +1,8 @@
-# Qodex Architecture
+# KerniQ Architecture
 
 ## Overview
 
-Qodex is a modular AI coding agent built as a pnpm monorepo. Each subsystem is an independent package with its own interfaces, tests, and lifecycle. All packages communicate through well-defined TypeScript interfaces — no runtime coupling.
+KerniQ is a modular AI coding agent built as a pnpm monorepo. Each subsystem is an independent package with its own interfaces, tests, and lifecycle. All packages communicate through well-defined TypeScript interfaces — no runtime coupling.
 
 ---
 

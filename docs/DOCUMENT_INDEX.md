@@ -1,4 +1,4 @@
-# Qodex Document Index
+# KerniQ Document Index
 
 Total: **59** markdown documents across **9** categories.
 

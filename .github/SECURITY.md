@@ -2,7 +2,7 @@
 
 ## Reporting a Vulnerability
 
-If you discover a security vulnerability in Qodex, please report it privately.
+If you discover a security vulnerability in KerniQ, please report it privately.
 
 **Do not disclose security issues publicly via GitHub issues, discussions, or pull requests.**
 
@@ -34,4 +34,4 @@ Security issues include but are not limited to:
 | v0.1.0-alpha | ✅ |
 | Older versions | ❌ |
 
-Thank you for helping keep Qodex secure.
+Thank you for helping keep KerniQ secure.

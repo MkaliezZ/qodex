@@ -28,7 +28,7 @@ export function PromptBar() {
       inputRef.current.placeholder = `${feature} coming soon...`;
       setTimeout(() => {
         if (inputRef.current)
-          inputRef.current.placeholder = "Ask Qodex to modify your project...";
+          inputRef.current.placeholder = "Ask KerniQ to modify your project...";
       }, 2000);
     }
   };
@@ -48,7 +48,7 @@ export function PromptBar() {
           <input
             ref={inputRef}
             className="qodex-input"
-            placeholder="Ask Qodex to modify your project..."
+            placeholder="Ask KerniQ to modify your project..."
             data-testid="prompt-input"
             value={input}
             onChange={(e) => setInput(e.target.value)}

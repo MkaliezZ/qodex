@@ -1,4 +1,4 @@
-# Qodex Development Log
+# KerniQ Development Log
 
 > Desktop-first, multi-model, skill-enabled, MCP-compatible, diff-first AI coding agent.
 
@@ -6,7 +6,7 @@
 
 ## Project Overview
 
-Qodex is an AI coding agent that follows the **Codex workflow** philosophy while remaining **provider-agnostic**. Unlike tools locked to a single model provider, Qodex supports OpenAI, DeepSeek, OpenRouter, and any OpenAI-compatible endpoint through a unified Provider SDK.
+KerniQ is an AI coding agent that follows the **Codex workflow** philosophy while remaining **provider-agnostic**. Unlike tools locked to a single model provider, KerniQ supports OpenAI, DeepSeek, OpenRouter, and any OpenAI-compatible endpoint through a unified Provider SDK.
 
 The architecture follows a strict milestone-based development plan (M0-M9), each building on the previous one without deviation. Every milestone includes production-grade testing and a formal production review before proceeding.
 
@@ -532,3 +532,18 @@ Completed the UI-only desktop visual refactor and visual acceptance. The AppShel
 - Desktop typecheck caveat: no dedicated desktop typecheck script exists; fallback validation was blocked by existing runtime package type errors, and the M15.2 desktop UI files did not introduce observed type errors.
 - Desktop E2E caveat: no dedicated desktop e2e script exists; fallback Playwright Chromium was blocked by environment `SIGTRAP`/`EPERM`.
 - Result-state screenshots used temporary local preview data; preview data has been removed from final code.
+
+---
+
+### KerniQ Brand Migration
+
+**Date:** 2026-06-15  |  **Status:** Product-facing rename completed
+
+Renamed the current product-facing brand from Qodex to KerniQ across the desktop
+UI, application metadata, current guides, contributor surfaces, and security
+templates. Existing behavior and runtime boundaries remain unchanged.
+
+Compatibility-sensitive legacy identifiers are intentionally retained,
+including the `@qodex/*` package scope, `qodex-config/`, `qodexVersion`,
+`qodex-native`, `.qodex`, `com.qodex.desktop`, Cargo crate names, and historical
+release/spec records. See `BRAND_MIGRATION_KERNIQ.md` for the migration boundary.

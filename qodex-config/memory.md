@@ -1,9 +1,9 @@
-# Qodex — Session Memory
+# KerniQ — Session Memory
 
 ## Project Summary
 
 - **Mission:** Desktop-first, multi-model, skill-enabled, MCP-compatible, diff-first AI coding agent.
-- **Repository Root:** Qodex
+- **Repository Root:** KerniQ
 - **Startup guide:** `docs/P0_Project_Definition/Qodex_Agent_Startup_Guide.md`
 
 ## Current Release

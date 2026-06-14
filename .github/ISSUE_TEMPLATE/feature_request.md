@@ -1,6 +1,6 @@
 ---
 name: Feature Request
-about: Suggest an idea for Qodex
+about: Suggest an idea for KerniQ
 title: ''
 labels: enhancement
 assignees: ''
