@@ -15,7 +15,7 @@ v0.2.0-beta.1 may still reference the Qodex name.
 
 ![Beta](https://img.shields.io/badge/status-beta-blue)
 ![License](https://img.shields.io/badge/license-MIT-blue)
-![Tests](https://img.shields.io/badge/tests-887%20passing-green)
+![Tests](https://img.shields.io/badge/tests-1210%20passing-green)
 ![Platform](https://img.shields.io/badge/platform-Desktop%20(Tauri)-purple)
 ![TypeScript](https://img.shields.io/badge/TypeScript-5.5-blue)
 [![CI](https://github.com/MkaliezZ/qodex/actions/workflows/ci.yml/badge.svg)](https://github.com/MkaliezZ/qodex/actions/workflows/ci.yml)
@@ -78,15 +78,19 @@ User Input → ContextEngine → MultiAgentRuntime → AgentRuntime → Provider
 qodex/                  ← legacy repository name
 ├── apps/desktop/           ← Tauri + React desktop UI
 ├── packages/
-│   ├── provider-sdk/       ← Model provider abstraction (35 tests)
-│   ├── agent-runtime/      ← Task execution orchestration (50 tests)
-│   ├── project-runtime/    ← File system access (41 tests)
-│   ├── context-engine/     ← Context assembly pipeline (57 tests)
-│   ├── diff-engine/        ← Patch generation & apply (95 tests)
-│   ├── git-runtime/        ← Git operations & checkpoints (123 tests)
-│   ├── skill-runtime/      ← Skill loading & resolution (131 tests)
-│   ├── mcp-runtime/        ← MCP tool management (160 tests)
-│   └── multi-agent-runtime/ ← Multi-agent orchestration (195 tests)
+│   ├── provider-sdk/         ← Model provider abstraction (35 tests)
+│   ├── agent-runtime/        ← Task execution orchestration (50 tests)
+│   ├── project-runtime/      ← File system access (41 tests)
+│   ├── context-engine/       ← Context assembly pipeline (57 tests)
+│   ├── diff-engine/          ← Patch generation & apply (95 tests)
+│   ├── git-runtime/          ← Git operations & checkpoints (123 tests)
+│   ├── planning-runtime/     ← Task planning & dependencies (105 tests)
+│   ├── execution-graph-runtime/ ← Graph-based execution (78 tests)
+│   ├── i18n-runtime/         ← Internationalization (35 tests)
+│   ├── marketplace-runtime/  ← Skill marketplace & registry (85 tests)
+│   ├── skill-runtime/        ← Skill loading & resolution (131 tests)
+│   ├── mcp-runtime/          ← MCP tool management (160 tests)
+│   └── multi-agent-runtime/  ← Multi-agent orchestration (195 tests)
 ├── docs/                   ← Specifications, guides, development logs
 └── qodex-config/           ← AI agent workspace (rules, memory, ADRs, skills)
 ```
@@ -117,7 +121,7 @@ Full guide: [QUICK_START.md](docs/QUICK_START.md)
 pnpm -r test
 ```
 
-**887+ tests** across 9 packages — all passing.
+**1,210+ tests** across 14 packages — all passing.
 
 ---
 
@@ -136,18 +140,15 @@ pnpm -r test
 
 ## Roadmap
 
-**Completed (M0–M10):**
+**Completed (M0–M15.2):**
 
-Provider SDK · Project Runtime · Context Engine · Agent Runtime · Diff Engine · Git Runtime · Skill Runtime · MCP Runtime · Multi-Agent Runtime
+Provider SDK · Project Runtime · Context Engine · Agent Runtime · Diff Engine · Git Runtime · Skill Runtime · MCP Runtime · Multi-Agent Runtime · Planning Runtime · Execution Graph Runtime · i18n Runtime · Marketplace Runtime · Brand Migration · CI Pipeline
 
-**Planned:**
+**Next:** v0.2.0-beta.2 release (source-only), installer workflow, Stage 2 namespace cleanup.
 
-| Milestone | Description | Status |
-|:--|:--|:--:|
-| M11 | Planning & Execution Runtime | ⬜ Tentative |
-| M12 | Execution Graph | ⬜ Tentative |
-| M13 | Internationalization | ⬜ Tentative |
-| M14 | Marketplace Foundation | ⬜ Tentative |
+---
+
+> **Status note:** KerniQ was formerly Qodex. Brand migration, logo/icon assets, TypeScript build fixes, and GitHub Actions CI are complete. Installer/release artifact workflow is not yet configured. Stage 2 internal namespace rename is not included in this release.
 
 ---
 

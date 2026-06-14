@@ -16,7 +16,7 @@
 
 ![Beta](https://img.shields.io/badge/status-beta-blue)
 ![License](https://img.shields.io/badge/license-MIT-blue)
-![Tests](https://img.shields.io/badge/tests-887%20passing-green)
+![Tests](https://img.shields.io/badge/tests-1210%20passing-green)
 ![Platform](https://img.shields.io/badge/platform-Desktop%20(Tauri)-purple)
 ![TypeScript](https://img.shields.io/badge/TypeScript-5.5-blue)
 [![CI](https://github.com/MkaliezZ/qodex/actions/workflows/ci.yml/badge.svg)](https://github.com/MkaliezZ/qodex/actions/workflows/ci.yml)
@@ -84,16 +84,20 @@ KerniQ 是一款桌面优先、**模型无关**的 AI 编程代理。与绑定�
 ```
 qodex/                  ← 旧版仓库名称
 ├── apps/desktop/           ← Tauri + React 桌面 UI
-├── packages/               ← 9 个独立子包
-│   ├── provider-sdk/       ← 模型提供者抽象层
-│   ├── agent-runtime/      ← 任务执行编排
-│   ├── project-runtime/    ← 文件系统访问
-│   ├── context-engine/     ← 上下文组装管线
-│   ├── diff-engine/        ← 补丁生成与应用
-│   ├── git-runtime/        ← Git 操作与检查点
-│   ├── skill-runtime/      ← 技能加载与解析
-│   ├── mcp-runtime/        ← MCP 工具管理
-│   └── multi-agent-runtime/ ← 多代理编排
+├── packages/               ← 14 个独立子包
+│   ├── provider-sdk/         ← 模型提供者抽象层 (35)
+│   ├── agent-runtime/        ← 任务执行编排 (50)
+│   ├── project-runtime/      ← 文件系统访问 (41)
+│   ├── context-engine/       ← 上下文组装管线 (57)
+│   ├── diff-engine/          ← 补丁生成与应用 (95)
+│   ├── git-runtime/          ← Git 操作与检查点 (123)
+│   ├── planning-runtime/     ← 任务规划与依赖 (105)
+│   ├── execution-graph-runtime/ ← 图谱执行引擎 (78)
+│   ├── i18n-runtime/         ← 国际化支持 (35)
+│   ├── marketplace-runtime/  ← Skills 市场与注册表 (85)
+│   ├── skill-runtime/        ← 技能加载与解析 (131)
+│   ├── mcp-runtime/          ← MCP 工具管理 (160)
+│   └── multi-agent-runtime/  ← 多代理编排 (195)
 ├── docs/                   ← 说明文档与开发日志
 └── qodex-config/           ← AI 代理工作空间
 ```
@@ -123,7 +127,7 @@ cd apps/desktop && pnpm dev
 pnpm -r test
 ```
 
-887+ 测试，9 个包，零缺陷。
+1,210+ 测试，14 个包，全部通过。
 
 ---
 
