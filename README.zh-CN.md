@@ -1,5 +1,9 @@
 # KerniQ
 
+<p align="center">
+  <img src="docs/assets/kerniq-logo.png" alt="KerniQ" width="520">
+</p>
+
 [English](README.md) | **中文**
 
 > 桌面优先、多模型、技能可扩展、MCP 兼容、Diff 优先的 AI 编程代理。

@@ -1,5 +1,9 @@
 # KerniQ
 
+<p align="center">
+  <img src="docs/assets/kerniq-logo.png" alt="KerniQ" width="520">
+</p>
+
 **English** | [中文](README.zh-CN.md)
 
 > Desktop-first, multi-model, skill-enabled, MCP-compatible, diff-first AI coding agent.
