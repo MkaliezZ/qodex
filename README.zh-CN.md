@@ -129,7 +129,7 @@ pnpm -r test
 
 ## 发布状态
 
-- **当前版本:** v0.2.0-beta.1（Beta）
+- **当前版本:** v0.2.0-beta.2（Beta）
 - **已完成里程碑:** M0–M15.2
 
 **已完成的里程碑:**
@@ -149,7 +149,7 @@ Provider SDK · Project Runtime · Context Engine · Agent Runtime · Diff Engin
 | [架构说明](docs/ARCHITECTURE.md) | 9 个包的设计详解 |
 | [开发日志](docs/development/DEVLOG.md) | 完整开发历史 |
 | [ADR 决策记录](qodex-config/adr/) | 架构决策记录 |
-| [版本发布说明](docs/development/RELEASE_NOTES_v0.2.0-beta.1.md) | v0.2.0-beta.1 |
+| [版本发布说明](docs/development/RELEASE_NOTES_v0.2.0-beta.2.md) | v0.2.0-beta.2 |
 
 ---
 

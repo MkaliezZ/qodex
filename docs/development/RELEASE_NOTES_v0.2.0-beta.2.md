@@ -23,7 +23,7 @@ Resolved TypeScript compilation errors in `apps/desktop/` that prevented clean b
 ### 🤖 GitHub Actions CI added and passing
 
 - Automated CI pipeline with `install → build → test → whitespace check`
-- Passing on all commits since introduction
+- Passing on the latest commit at release time (subsequent commits trigger independent runs)
 - CI badge included in README
 
 ### ✅ Build and test pipeline validated
@@ -53,7 +53,8 @@ The following legacy identifiers are preserved to avoid breaking existing integr
 
 ### Known limitations
 
-- **Installer/release artifact workflow not yet configured** — no automated build/packaging/release pipeline. Binary distribution requires manual packaging.
+- **Source-only prerelease** — this release ships source code only. Prebuilt installers (DMG, MSI, AppImage) are **not included**. Users must build from source using `pnpm install && pnpm build && pnpm tauri build`.
+- **Installer/release artifact workflow not yet configured** — no automated CI-based build/packaging/release pipeline. Binary distribution requires manual packaging.
 - **Stage 2 namespace rename not included** — CSS class names (`qodex-bg`, `qodex-layout`, `qodex-button`, etc.), Rust binary/module names (`qodex-desktop`, `qodex_desktop_lib`), and repository path (`MkaliezZ/qodex`) remain unchanged. These are deferred to a future cleanup phase.
 - **GitHub Actions Node.js deprecation warning** — `actions/checkout@v4`, `actions/setup-node@v4`, and `pnpm/action-setup@v4` are based on Node.js 20, which will be deprecated on the runner starting 2026-06-16. Update to v5+ or set `FORCE_JAVASCRIPT_ACTIONS_TO_NODE24=true` to extend compatibility.
 
@@ -62,12 +63,13 @@ The following legacy identifiers are preserved to avoid breaking existing integr
 ## Full Changelog
 
 ```
+0db2be2 brand: rename Qodex to KerniQ
 feed0b6 brand: add KerniQ logo and icon assets
 1a3c0f1 fix(build): resolve desktop TypeScript blockers
 1d112e1 ci: add KerniQ GitHub Actions workflow
 3ea1567 ci: install pnpm before setup-node cache
 d7f57a5 docs: add KerniQ beta release readiness audit
-(this commit) docs: prepare KerniQ v0.2.0-beta.2 notes
+9052048 docs: prepare KerniQ v0.2.0-beta.2 notes
 ```
 
 ---

@@ -130,7 +130,7 @@ pnpm -r test
 | [Architecture](docs/ARCHITECTURE.md) | Deep dive into all 9 packages |
 | [Dev Log](docs/development/DEVLOG.md) | Complete development history |
 | [ADR Records](qodex-config/adr/) | Architecture Decision Records |
-| [Release Notes](docs/development/RELEASE_NOTES_v0.2.0-beta.1.md) | v0.2.0-beta.1 changelog |
+| [Release Notes](docs/development/RELEASE_NOTES_v0.2.0-beta.2.md) | v0.2.0-beta.2 changelog |
 
 ---
 
