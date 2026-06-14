@@ -131,7 +131,7 @@ pnpm -r test
 |:--|:--|
 | [Quick Start](docs/QUICK_START.md) | Get running in 10 minutes |
 | [Installation](docs/INSTALLATION.md) | Setup for macOS / Windows / Linux |
-| [Architecture](docs/ARCHITECTURE.md) | Deep dive into all 9 packages |
+| [Architecture](docs/ARCHITECTURE.md) | Deep dive into all 14 packages |
 | [Dev Log](docs/development/DEVLOG.md) | Complete development history |
 | [ADR Records](qodex-config/adr/) | Architecture Decision Records |
 | [Release Notes](docs/development/RELEASE_NOTES_v0.2.0-beta.2.md) | v0.2.0-beta.2 changelog |
@@ -144,7 +144,7 @@ pnpm -r test
 
 Provider SDK · Project Runtime · Context Engine · Agent Runtime · Diff Engine · Git Runtime · Skill Runtime · MCP Runtime · Multi-Agent Runtime · Planning Runtime · Execution Graph Runtime · i18n Runtime · Marketplace Runtime · Brand Migration · CI Pipeline
 
-**Next:** v0.2.0-beta.2 release (source-only), installer workflow, Stage 2 namespace cleanup.
+**Next:** installer workflow, Stage 2 namespace cleanup, and v0.2.0-beta.3 / v0.3 planning.
 
 ---
 

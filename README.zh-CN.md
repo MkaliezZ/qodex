@@ -140,6 +140,8 @@ pnpm -r test
 
 Provider SDK · Project Runtime · Context Engine · Agent Runtime · Diff Engine · Git Runtime · Skill Runtime · MCP Runtime · Multi-Agent Runtime
 
+**下一步：** 安装包构建工作流、Stage 2 命名空间清理，以及 v0.2.0-beta.3 / v0.3 规划。
+
 - **变更日志:** [DEVLOG.md](docs/development/DEVLOG.md)
 
 ---
@@ -150,7 +152,7 @@ Provider SDK · Project Runtime · Context Engine · Agent Runtime · Diff Engin
 |:--|:--|
 | [快速开始](docs/QUICK_START.md) | 10 分钟上手 |
 | [安装指南](docs/INSTALLATION.md) | macOS / Windows / Linux |
-| [架构说明](docs/ARCHITECTURE.md) | 9 个包的设计详解 |
+| [架构说明](docs/ARCHITECTURE.md) | 14 个包的设计详解 |
 | [开发日志](docs/development/DEVLOG.md) | 完整开发历史 |
 | [ADR 决策记录](qodex-config/adr/) | 架构决策记录 |
 | [版本发布说明](docs/development/RELEASE_NOTES_v0.2.0-beta.2.md) | v0.2.0-beta.2 |
