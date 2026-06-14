@@ -6,8 +6,6 @@
  */
 
 import type { PatchFile, PatchHunk, DiffResult } from "../models/patch.js";
-import { PatchConflictError } from "../validation/errors.js";
-
 const CONTEXT_LINES = 3;
 
 /**
@@ -93,7 +91,7 @@ export class DiffGenerator {
   }
 
   private buildHunks(
-    changes: number[],
+    _changes: number[],
     oldLines: string[],
     newLines: string[],
   ): PatchHunk[] {

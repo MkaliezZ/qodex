@@ -6,7 +6,6 @@
  */
 
 import type { PatchProposal, PatchConflict } from "../models/patch.js";
-import { PatchConflictError } from "./errors.js";
 
 export interface ContentProvider {
   readFile(path: string): Promise<string>;

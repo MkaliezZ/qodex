@@ -9,7 +9,7 @@
  */
 
 import type { ModelProvider, ModelInfo, ProviderProtocol } from "../types/provider.js";
-import type { ModelRequest, ModelMessage } from "../types/message.js";
+import type { ModelRequest } from "../types/message.js";
 import type { ModelChunk } from "../types/chunk.js";
 import { httpRequest } from "../utils/index.js";
 import { tryParseJSON } from "../utils/index.js";

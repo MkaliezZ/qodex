@@ -12,7 +12,6 @@
 
 import type { ModelChunk } from "../types/chunk.js";
 import type { ProviderError } from "../errors/index.js";
-import { createError } from "../errors/index.js";
 
 /** Callback signature for provider-specific chunk parsing */
 export type ChunkParser = (raw: string) => ModelChunk | ModelChunk[] | null;

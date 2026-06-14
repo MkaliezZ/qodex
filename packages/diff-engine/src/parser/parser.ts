@@ -5,7 +5,7 @@
  * This allows the agent to output patch text and the engine to apply it.
  */
 
-import type { PatchProposal, PatchFile, PatchHunk } from "../models/patch.js";
+import type { PatchProposal, PatchFile } from "../models/patch.js";
 
 export class PatchParser {
   /**

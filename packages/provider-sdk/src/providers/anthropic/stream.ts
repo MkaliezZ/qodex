@@ -58,15 +58,15 @@ export async function* parseAnthropicSSE(body: ReadableStream<Uint8Array> | null
   }
 }
 
-export function mapSSEToChunks(event: AnthropicSSEEvent, model: string): ModelChunk | null {
+export function mapSSEToChunks(event: AnthropicSSEEvent, _model: string): ModelChunk | null {
   if (event.error) {
     throw Object.assign(new Error(event.error.message || "Stream error"), { type: "stream_error" });
   }
   if (event.delta?.text) {
-    return { type: "text", text: event.delta.text, model };
+    return { type: "text", text: event.delta.text };
   }
   if (event.usage) {
-    return { type: "usage", usage: { inputTokens: event.usage.input_tokens, outputTokens: event.usage.output_tokens }, model };
+    return { type: "usage", inputTokens: event.usage.input_tokens, outputTokens: event.usage.output_tokens };
   }
   return null;
 }

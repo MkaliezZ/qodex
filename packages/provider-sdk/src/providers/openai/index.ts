@@ -28,7 +28,6 @@ export class OpenAIProvider extends BaseOpenAICompatibleProvider {
       defaultModels: DEFAULT_MODELS,
     };
     super(opts);
-    this.protocol = "openai-chat";
   }
 }
 

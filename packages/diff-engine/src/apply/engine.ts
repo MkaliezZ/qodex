@@ -93,7 +93,7 @@ export class ApplyEngine {
    * Reject (discard) a patch without applying.
    * No-op on the file system — just clears the proposal.
    */
-  reject(proposal: PatchProposal): void {
+  reject(_proposal: PatchProposal): void {
     // No file changes on reject — just acknowledge
   }
 

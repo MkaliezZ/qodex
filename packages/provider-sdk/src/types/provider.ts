@@ -6,6 +6,9 @@
  * plugs in through these interfaces.
  */
 
+import type { ModelRequest } from "./message.js";
+import type { ModelChunk } from "./chunk.js";
+
 /** Supported provider wire protocols */
 export type ProviderProtocol =
   | "openai-chat"

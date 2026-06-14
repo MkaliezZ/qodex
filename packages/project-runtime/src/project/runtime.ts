@@ -5,7 +5,7 @@
  * Read-only — no file writing, no patch generation.
  */
 
-import type { Project, ProjectFile, FileContent, ProjectTree, ProjectIndex } from "../types/project.js";
+import type { Project, FileContent, ProjectTree, ProjectIndex } from "../types/project.js";
 import type { FileSystemAdapter } from "../fs/adapter.js";
 import { TreeBuilder } from "../tree/builder.js";
 import { FileReader } from "../files/reader.js";

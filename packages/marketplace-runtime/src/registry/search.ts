@@ -3,7 +3,7 @@ import type { RegistryEntry } from "./events.js";
 export class SearchIndex {
   constructor(private getEntries: () => RegistryEntry[]) {}
 
-  search(query: string, options?: { packageType?: string; trustLevel?: string; includeDeprecated?: boolean }): RegistryEntry[] {
+  search(query: string, _options?: { packageType?: string; trustLevel?: string; includeDeprecated?: boolean }): RegistryEntry[] {
     if (!query.trim()) return this.getEntries();
     const terms = query.toLowerCase().split(/\s+/).filter(Boolean);
     let results = this.getEntries().filter((e) => {

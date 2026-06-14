@@ -7,7 +7,7 @@
 
 import type { ProjectIndex, ProjectIndexEntry } from "../types/project.js";
 import type { FileSystemAdapter } from "../fs/adapter.js";
-import { shouldIgnore, detectLanguage } from "../ignore/rules.js";
+import { detectLanguage } from "../ignore/rules.js";
 
 export class ProjectIndexer {
   private adapter: FileSystemAdapter;

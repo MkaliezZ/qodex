@@ -1,6 +1,6 @@
 import type { TrustLevel, TrustMetadata } from "./events.js";
 
-export function evaluateTrust(entry: { id: string; trust?: { level: TrustLevel } }): { allowed: boolean; warning?: string } {
+export function evaluateTrust(entry: { id: string; trust?: TrustMetadata }): { allowed: boolean; warning?: string } {
   if (!entry.trust) return { allowed: true, warning: "Unverified publisher" };
   const level = entry.trust.level ?? "community";
   switch (level) {

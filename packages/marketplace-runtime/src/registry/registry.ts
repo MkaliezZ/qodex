@@ -3,7 +3,7 @@ import { SourceManager } from "./source.js";
 import { SyncEngine } from "./sync.js";
 import { MemoryRegistryCache, type RegistryCache } from "./cache.js";
 import { SearchIndex } from "./search.js";
-import { evaluateTrust, isBlocked } from "./trust.js";
+import { isBlocked } from "./trust.js";
 
 export class RegistryRuntime {
   private sources = new SourceManager();

@@ -37,8 +37,6 @@ const IGNORE_EXTENSIONS = new Set([
   ".log",
 ]);
 
-const IGNORE_PREFIXES = ["."]; // hidden files/dirs
-
 /**
  * Check whether a path should be ignored during indexing.
  */

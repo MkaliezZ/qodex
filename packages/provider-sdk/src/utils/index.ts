@@ -4,8 +4,7 @@
  * Shared helpers: HTTP client (thin fetch wrapper) and SSE parser.
  */
 
-import { errorFromHttpStatus, errorFromException } from "../errors/index.js";
-import type { ProviderError } from "../errors/index.js";
+import { errorFromHttpStatus } from "../errors/index.js";
 
 /** HTTP request options */
 export interface HttpOptions {

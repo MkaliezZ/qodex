@@ -11,7 +11,6 @@
 
 import type { ModelProvider } from "../types/provider.js";
 import { createError } from "../errors/index.js";
-import type { ProviderError } from "../errors/index.js";
 
 export type ProviderRegistration = {
   provider: ModelProvider;

@@ -1,4 +1,3 @@
-import type { RegistryEntry, RegistryVersion } from "./events.js";
 
 const SEMVER_RE = /^\d+\.\d+\.\d+/;
 const SHA256_RE = /^[a-f0-9]{64}$/i;

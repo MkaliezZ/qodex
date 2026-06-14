@@ -29,11 +29,9 @@ export interface FileSystemAdapter {
  * This is the primary adapter for the Vite dev environment.
  */
 export class WebFileSystemAdapter implements FileSystemAdapter {
-  private handle: FileSystemDirectoryHandle | null = null;
   private pathMap = new Map<string, FileSystemFileHandle | FileSystemDirectoryHandle>();
 
   constructor(private rootHandle: FileSystemDirectoryHandle) {
-    this.handle = rootHandle;
   }
 
   async listDirectory(dirPath: string): Promise<ProjectFile[]> {
