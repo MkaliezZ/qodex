@@ -654,6 +654,7 @@ mod tests {
         assert!(database.delete_session("session-1").unwrap());
         assert!(database.get_session("session-1").unwrap().is_none());
         assert!(database.get_session("session-2").unwrap().is_some());
+        drop(database);
         fs::remove_dir_all(root).unwrap();
     }
 
@@ -684,6 +685,7 @@ mod tests {
                 },
             )
             .unwrap());
+        drop(database);
         fs::remove_dir_all(root).unwrap();
     }
 
