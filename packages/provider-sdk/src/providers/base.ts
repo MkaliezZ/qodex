@@ -9,7 +9,7 @@
  */
 
 import type { ModelProvider, ModelInfo, ProviderProtocol } from "../types/provider.js";
-import type { ModelRequest } from "../types/message.js";
+import type { ModelMessage, ModelRequest, ModelTool } from "../types/message.js";
 import type { ModelChunk } from "../types/chunk.js";
 import { httpRequest } from "../utils/index.js";
 import { tryParseJSON } from "../utils/index.js";
@@ -34,6 +34,7 @@ export class BaseOpenAICompatibleProvider implements ModelProvider {
   readonly id: string;
   readonly name: string;
   readonly protocol: ProviderProtocol;
+  readonly capabilities = { toolAgentLoop: true } as const;
   readonly baseUrl: string;
 
   protected apiKey?: string;
@@ -67,13 +68,21 @@ export class BaseOpenAICompatibleProvider implements ModelProvider {
     }
   }
 
+  supportsAgentTools(_modelId: string): boolean {
+    return this.capabilities.toolAgentLoop;
+  }
+
   async *stream(request: ModelRequest): AsyncIterable<ModelChunk> {
     const body = {
       model: request.model,
-      messages: request.messages,
+      messages: request.messages.map(toOpenAIMessage),
+      ...(request.tools?.length
+        ? { tools: request.tools.map(toOpenAITool), tool_choice: "auto" }
+        : {}),
       temperature: request.temperature ?? 0.2,
       max_tokens: request.maxTokens,
       stream: true,
+      stream_options: { include_usage: true },
     };
 
     try {
@@ -91,63 +100,140 @@ export class BaseOpenAICompatibleProvider implements ModelProvider {
 
       const decoder = new TextDecoder();
       let buffer = "";
-      let lines: string[] = [];
+      const pendingCalls = new Map<number, PendingToolCall>();
+
+      const completePendingCalls = (): ModelChunk[] => {
+        const completed: ModelChunk[] = [];
+        for (const call of [...pendingCalls.values()].sort((left, right) => left.index - right.index)) {
+          if (call.completed) continue;
+          call.completed = true;
+          if (!call.id || !call.name) {
+            completed.push({
+              type: "tool_call_error",
+              id: call.id || undefined,
+              index: call.index,
+              name: call.name || undefined,
+              argumentsText: call.argumentsText,
+              message: "Completed tool call is missing a stable ID or function name.",
+            });
+            continue;
+          }
+          const parsedArguments = tryParseJSON(call.argumentsText || "{}");
+          if (parsedArguments === undefined) {
+            completed.push({
+              type: "tool_call_error",
+              id: call.id,
+              index: call.index,
+              name: call.name,
+              argumentsText: call.argumentsText,
+              message: "Completed tool call arguments are not valid JSON.",
+            });
+            continue;
+          }
+          completed.push({
+            type: "tool_call",
+            id: call.id,
+            name: call.name,
+            arguments: parsedArguments,
+          });
+        }
+        return completed;
+      };
+
+      const parseEvent = (raw: string): ModelChunk[] => {
+        const parsed = tryParseJSON(raw);
+        if (!isRecord(parsed)) return [];
+
+        if (isRecord(parsed.error)) {
+          const message = typeof parsed.error.message === "string"
+            ? parsed.error.message
+            : "The provider returned an error during streaming.";
+          pendingCalls.clear();
+          return [{ type: "error", message }];
+        }
+
+        const chunks: ModelChunk[] = [];
+        if (isRecord(parsed.usage)) {
+          chunks.push({
+            type: "usage",
+            inputTokens: numberValue(parsed.usage.prompt_tokens) ?? numberValue(parsed.usage.input_tokens),
+            outputTokens: numberValue(parsed.usage.completion_tokens) ?? numberValue(parsed.usage.output_tokens),
+          });
+        }
+
+        const choices = Array.isArray(parsed.choices) ? parsed.choices : [];
+        const choice = choices.find(isRecord);
+        if (!choice) return chunks;
+        const delta = isRecord(choice.delta) ? choice.delta : undefined;
+        if (delta && typeof delta.content === "string" && delta.content.length > 0) {
+          chunks.push({ type: "text", text: delta.content });
+        }
+
+        if (delta && Array.isArray(delta.tool_calls)) {
+          delta.tool_calls.forEach((candidate, position) => {
+            if (!isRecord(candidate)) return;
+            const index = numberValue(candidate.index) ?? position;
+            const existing = pendingCalls.get(index) ?? {
+              index,
+              id: "",
+              name: "",
+              argumentsText: "",
+              completed: false,
+            };
+            if (typeof candidate.id === "string" && candidate.id.length > 0) {
+              existing.id = candidate.id;
+            }
+            const fn = isRecord(candidate.function) ? candidate.function : undefined;
+            const nameDelta = fn && typeof fn.name === "string" ? fn.name : undefined;
+            const argumentsDelta = fn && typeof fn.arguments === "string" ? fn.arguments : undefined;
+            if (nameDelta) existing.name += nameDelta;
+            if (argumentsDelta) existing.argumentsText += argumentsDelta;
+            pendingCalls.set(index, existing);
+            chunks.push({
+              type: "tool_call_delta",
+              id: existing.id || `pending-tool-call-${index}`,
+              index,
+              ...(nameDelta ? { name: nameDelta } : {}),
+              ...(argumentsDelta !== undefined ? { argumentsDelta } : {}),
+            });
+          });
+        }
+
+        if (choice.finish_reason === "tool_calls" || choice.finish_reason === "stop") {
+          chunks.push(...completePendingCalls());
+        }
+        return chunks;
+      };
 
       while (true) {
         const { value, done } = await reader.read();
         if (done) break;
 
         buffer += decoder.decode(value, { stream: true });
-        lines = buffer.split("\n");
+        const lines = buffer.split("\n");
         buffer = lines.pop() ?? "";
 
         for (const line of lines) {
-          if (!line.startsWith("data: ")) continue;
-          const data = line.slice(6).trim();
-          if (data === "[DONE]") return;
-
-          const json = tryParseJSON(data);
-          if (!json) continue;
-
-          const delta = (json as any).choices?.[0]?.delta;
-          if (!delta) continue;
-
-          if (delta.content) {
-            yield { type: "text", text: delta.content } as ModelChunk;
+          const normalized = line.trimEnd();
+          if (!normalized.startsWith("data:")) continue;
+          const data = normalized.slice(5).trim();
+          if (data === "[DONE]") {
+            for (const chunk of completePendingCalls()) yield chunk;
+            return;
           }
-
-          if (delta.tool_calls) {
-            for (const tc of delta.tool_calls as Array<{ function?: { name?: string; arguments?: string } }>) {
-              if (tc.function?.name) {
-                yield {
-                  type: "tool_call",
-                  name: tc.function.name,
-                  arguments: tryParseJSON(tc.function.arguments ?? "{}"),
-                } as ModelChunk;
-              }
-            }
-          }
+          for (const chunk of parseEvent(data)) yield chunk;
         }
       }
 
-      // Emit a usage chunk if present in the final non-empty line
-      if (lines.length > 0) {
-        const lastData = lines.filter((l) => l.startsWith("data: ")).pop();
-        if (lastData) {
-          const raw = lastData.slice(6).trim();
-          if (raw && raw !== "[DONE]") {
-            const parsed = tryParseJSON(raw) as Record<string, unknown> | undefined;
-            const usage = (parsed as any)?.usage;
-            if (usage) {
-              yield {
-                type: "usage",
-                inputTokens: usage.prompt_tokens ?? usage.input_tokens,
-                outputTokens: usage.completion_tokens ?? usage.output_tokens,
-              } as ModelChunk;
-            }
-          }
+      buffer += decoder.decode();
+      const trailing = buffer.trim();
+      if (trailing.startsWith("data:")) {
+        const data = trailing.slice(5).trim();
+        if (data !== "[DONE]") {
+          for (const chunk of parseEvent(data)) yield chunk;
         }
       }
+      for (const chunk of completePendingCalls()) yield chunk;
 
     } catch (err) {
       // If already a ProviderError (thrown by httpRequest), use message directly
@@ -175,4 +261,61 @@ export class BaseOpenAICompatibleProvider implements ModelProvider {
       ? { Authorization: `Bearer ${this.apiKey}` }
       : {};
   }
+}
+
+interface PendingToolCall {
+  index: number;
+  id: string;
+  name: string;
+  argumentsText: string;
+  completed: boolean;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function numberValue(value: unknown): number | undefined {
+  return typeof value === "number" && Number.isFinite(value) ? value : undefined;
+}
+
+function toOpenAIMessage(message: ModelMessage): Record<string, unknown> {
+  if (message.role === "assistant") {
+    return {
+      role: "assistant",
+      content: message.content || null,
+      ...(message.toolCalls?.length
+        ? {
+            tool_calls: message.toolCalls.map((call) => ({
+              id: call.id,
+              type: "function",
+              function: {
+                name: call.name,
+                arguments: JSON.stringify(call.arguments ?? {}),
+              },
+            })),
+          }
+        : {}),
+    };
+  }
+  if (message.role === "tool") {
+    return {
+      role: "tool",
+      content: message.content,
+      tool_call_id: message.toolCallId,
+      ...(message.name ? { name: message.name } : {}),
+    };
+  }
+  return { role: message.role, content: message.content };
+}
+
+function toOpenAITool(tool: ModelTool): Record<string, unknown> {
+  return {
+    type: "function",
+    function: {
+      name: tool.name,
+      description: tool.description,
+      parameters: tool.inputSchema,
+    },
+  };
 }

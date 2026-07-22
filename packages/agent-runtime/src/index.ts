@@ -47,3 +47,29 @@ export { TaskStateMachine } from "./state/machine.js";
 // ── Mock Provider ────────────────────────────────────
 export { MockStreamingProvider } from "./providers/mock.js";
 export type { MockProviderOptions } from "./providers/mock.js";
+
+// ── Bounded Agent Loop ───────────────────────────────
+export { AgentLoopRuntime } from "./agent-loop/runtime.js";
+export { AgentToolRegistry, AGENT_TOOLS } from "./agent-loop/tools.js";
+export type { AgentToolErrorCode, AgentToolResult } from "./agent-loop/tools.js";
+export type {
+  AgentLoopStatus,
+  AgentTimelineKind,
+  AgentTimelineEntry,
+  AgentProjectFile,
+  AgentProjectAccess,
+  ProjectCommandCategory,
+  ProjectCommandDefinition,
+  ProjectCommandResult,
+  ProjectCommandRunner,
+  AgentPatchFile,
+  AgentPatchProposal,
+  AgentPatchError,
+  AgentPatchResult,
+  AgentPatchAdapter,
+  PendingCommandApproval,
+  AgentLoopLimits,
+  AgentLoopTask,
+  AgentLoopRuntimeOptions,
+  AgentLoopListener,
+} from "./agent-loop/types.js";

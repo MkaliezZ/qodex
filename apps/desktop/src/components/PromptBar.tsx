@@ -6,10 +6,11 @@ import { useRuntimeContext } from "./AppShell";
 export function PromptBar() {
   const [input, setInput] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
-  const { isRunning, sendPrompt } = useRuntimeContext();
+  const { agentTask, isRunning, sendPrompt } = useRuntimeContext();
+  const taskActive = isRunning || Boolean(agentTask && !["Done", "Failed", "Cancelled", "LimitReached"].includes(agentTask.status));
 
   const handleRun = async () => {
-    if (!input.trim() || isRunning) return;
+    if (!input.trim() || taskActive) return;
     const prompt = input;
     setInput("");
     await sendPrompt(prompt);
@@ -53,7 +54,7 @@ export function PromptBar() {
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={handleKeyDown}
-            disabled={isRunning}
+            disabled={taskActive}
             style={{ paddingRight: 64, minHeight: 40, fontSize: 13 }}
           />
           <div
@@ -72,17 +73,17 @@ export function PromptBar() {
           className="qodex-button"
           data-testid="send-button"
           onClick={handleRun}
-          disabled={isRunning}
+          disabled={taskActive}
           style={{
             height: 40,
             minWidth: 64,
             borderRadius: 8,
             fontSize: 13,
-            opacity: isRunning ? 0.5 : 1,
-            cursor: isRunning ? "not-allowed" : "pointer",
+            opacity: taskActive ? 0.5 : 1,
+            cursor: taskActive ? "not-allowed" : "pointer",
           }}
         >
-          {isRunning ? (
+          {taskActive ? (
             <span className="spinner" style={{ display: "inline-block", width: 14, height: 14, border: "2px solid rgba(255,255,255,0.15)", borderTopColor: "#5B8CFF", borderRadius: "50%", animation: "spin 600ms linear infinite" }} />
           ) : null}
           Run
@@ -104,7 +105,7 @@ export function PromptBar() {
             ·
           </span>
           <span className="text-caption" style={{ fontSize: 11 }}>
-            Review Mode
+            {agentTask ? "Agent Mode" : "Review Mode"}
           </span>
         </div>
         <div style={{ display: "flex", gap: 3 }}>

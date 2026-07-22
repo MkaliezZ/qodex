@@ -547,3 +547,27 @@ Compatibility-sensitive legacy identifiers are intentionally retained,
 including the `@qodex/*` package scope, `qodex-config/`, `qodexVersion`,
 `qodex-native`, `.qodex`, `com.qodex.desktop`, Cargo crate names, and historical
 release/spec records. See `BRAND_MIGRATION_KERNIQ.md` for the migration boundary.
+
+---
+
+### KerniQ Minimal Agent Loop v0.4
+
+**Date:** 2026-07-22  |  **Status:** Implementation complete, final review pending
+
+Added a bounded, provider-neutral multi-turn Agent Mode. Verified
+OpenAI-compatible providers now preserve fragmented tool calls and exact call
+IDs across assistant/tool history. The runtime exposes project-relative search,
+bounded reads, a trusted command catalog, separate patch and command approvals,
+command results returned to the model, hard iteration limits, cancellation, and
+in-memory multi-patch rollback.
+
+The Tauri native runner accepts only a catalog command ID for a root selected and
+authorized in the current desktop session. It does not invoke a shell directly,
+accept model environment variables, or accept raw executable/argv/cwd input.
+Timeout, output truncation, separate stdout/stderr, exit status, cancellation,
+and absolute-root sanitization are enforced. Browser production mode returns a
+structured unsupported result rather than simulating command success.
+
+Limitations remain explicit: project scripts are not an OS sandbox, commands may
+have side effects, every command needs approval, files cannot be created or
+deleted, task history is not persistent, and no automatic Git commit is made.

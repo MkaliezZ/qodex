@@ -91,6 +91,8 @@ export function DiffViewer() {
     rollbackResults,
     isApplying,
     isRollingBack,
+    agentTask,
+    rollbackAllPatches,
   } = useRuntimeContext();
 
   const proposal = pendingProposal ?? currentProposal;
@@ -135,15 +137,28 @@ export function DiffViewer() {
             </button>
           </div>
         ) : currentProposal ? (
-          <button
-            className="qodex-button qodex-button-secondary"
-            data-testid="rollback-patch"
-            onClick={rollbackProposal}
-            disabled={isRollingBack}
-            style={{ height: 26, padding: "0 10px", fontSize: 11, borderRadius: 6 }}
-          >
-            {isRollingBack ? "Rolling back..." : "Rollback"}
-          </button>
+          <div style={{ display: "flex", gap: 5 }}>
+            {agentTask && agentTask.patchHistory.length > 1 ? (
+              <button
+                className="qodex-button qodex-button-secondary"
+                data-testid="rollback-all-patches"
+                onClick={rollbackAllPatches}
+                disabled={isRollingBack}
+                style={{ height: 26, padding: "0 10px", fontSize: 11, borderRadius: 6 }}
+              >
+                Rollback all ({agentTask.patchHistory.length})
+              </button>
+            ) : null}
+            <button
+              className="qodex-button qodex-button-secondary"
+              data-testid="rollback-patch"
+              onClick={rollbackProposal}
+              disabled={isRollingBack}
+              style={{ height: 26, padding: "0 10px", fontSize: 11, borderRadius: 6 }}
+            >
+              {isRollingBack ? "Rolling back..." : "Rollback latest"}
+            </button>
+          </div>
         ) : null}
       </div>
 

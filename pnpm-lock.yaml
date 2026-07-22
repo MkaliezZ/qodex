@@ -82,6 +82,9 @@ importers:
         specifier: workspace:*
         version: link:../provider-sdk
     devDependencies:
+      '@qodex/diff-engine':
+        specifier: workspace:*
+        version: link:../diff-engine
       typescript:
         specifier: ^5.5.0
         version: 5.9.3

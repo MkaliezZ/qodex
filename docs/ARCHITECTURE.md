@@ -9,17 +9,16 @@ KerniQ is a modular AI coding agent built as a pnpm monorepo. Each subsystem is 
 ## Core Flow
 
 ```
-User Input → ContextEngine → MultiAgentRuntime → AgentRuntime → Provider SDK
-                ↓                  ↓                   ↓
-              Skills             Planner            Streaming
-              Memory         Specialists               ↓
-              Metadata        Aggregation          DiffEngine
-              Files                                   ↓
-                                                  Patch Proposal
-                                                       ↓
-                                                  Apply/Reject
-                                                       ↓
-                                                  Git Checkpoint
+User Input → ContextEngine → AgentLoopRuntime → Provider SDK
+                ↓                  ↓                    ↓
+              Skills         Typed Tool Registry   Tool-call stream
+              Memory          Read-only tools             ↓
+              Metadata        Approval pauses       DiffEngine patch
+              Files           Command catalog              ↓
+                                  ↓                  Verified apply
+                         Native no-shell runner             ↓
+                                  ↓                    Tool result
+                            Provider next turn
 ```
 
 ---
@@ -90,7 +89,7 @@ Assembly order:
 
 ### 4. Agent Runtime (`packages/agent-runtime`)
 
-**Purpose:** Orchestrate task execution lifecycle.
+**Purpose:** Orchestrate single-turn tasks and the bounded multi-turn Agent Mode lifecycle.
 
 ```
 AgentRuntime
@@ -102,6 +101,24 @@ AgentRuntime
 Events: task.started, message.chunk, task.completed,
         patch.proposed, patch.applied, patch.rejected
 ```
+
+`AgentLoopRuntime` is a separate explicit state machine for Agent Mode:
+
+```
+Planning → CallingModel → Streaming
+  → ExecutingReadTool → ReturningToolResult → CallingModel
+  → WaitingForPatchApproval → ApplyingPatch → CallingModel
+  → WaitingForCommandApproval → RunningCommand → CallingModel
+  → Done / Failed / Cancelled / LimitReached
+```
+
+Canonical provider history preserves assistant tool calls and tool results by
+exact call ID. The minimal registry exposes only `search_files`, `read_file`,
+`list_project_commands`, and `run_project_command`. Read tools are bounded and
+project-relative. Source writes remain exclusively in the existing DiffEngine
+approval path. Native commands resolve a catalog ID again in Rust, require a
+session-authorized project root, run without a shell invocation, and have fixed
+environment, timeout, output, and cancellation limits.
 
 ### 5. Diff Engine (`packages/diff-engine`)
 
@@ -182,9 +199,13 @@ Output: AgentReport (summary + findings + recommendations)
 Permission Engine (MCP) → every tool call must pass
 Diff-First Editing (Diff Engine) → no direct file writes
 Checkpoint Recovery (Git Runtime) → all changes reversible
-No Autonomous Execution → user must approve every action
+Separate Approval Boundaries → every patch and command requires its own decision
+Bounded Agent Loop → model turns, tools, commands, patches, and duration have hard limits
 Skills are Text-Only → no executable code in skills
 ```
+
+Cataloged project scripts are not an OS sandbox and may have side effects.
+Browser production mode never emulates native command success.
 
 ---
 

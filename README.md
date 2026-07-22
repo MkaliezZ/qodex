@@ -123,7 +123,33 @@ pnpm -r test
 
 **1,210+ tests** across 14 packages — all passing.
 
-## Real Patch Loop
+## Minimal Agent Loop v0.4
+
+KerniQ can run a bounded multi-turn coding-agent loop with verified
+OpenAI-compatible providers. Agent Mode can search eligible project text,
+read bounded file ranges, propose existing-file patches, and return approved
+project test results to the model for a limited failure-to-fix iteration.
+
+Two separate approval boundaries remain mandatory:
+
+- Source changes use `KERNIQ_PATCH_V1`, an exact Diff Viewer, explicit Apply or
+  Reject, stale-content checks, and write readback verification.
+- Project commands must come from the trusted `package.json` or Cargo catalog.
+  Every execution displays the exact executable, arguments, relative working
+  directory, and source before a one-time Approve or Deny decision.
+
+Applied patches are retained in per-task memory so the latest patch or all task
+patches can be rolled back in reverse order with conflict and readback checks.
+
+Agent Mode is deliberately constrained. Cataloged project scripts are not an OS
+sandbox and may have side effects. KerniQ does not provide an arbitrary terminal,
+automatic approval, new-file creation, file deletion, automatic Git commits,
+MCP tools, or persistent task history in v0.4. Native command execution is
+desktop-only; browser mode keeps read tools, approved patches, and rollback but
+returns an explicit unsupported result for commands. Tool-agent support is
+limited to verified OpenAI-compatible providers and models.
+
+## Real Patch Loop v0.3
 
 KerniQ supports a first real model-to-file patch loop for selected existing local
 text files. A configured model may return a versioned `KERNIQ_PATCH_V1` proposal;
@@ -131,8 +157,8 @@ KerniQ parses and validates it, shows the generated unified diff, and writes onl
 after explicit approval. Applied changes are re-read for verification and can be
 rolled back to their exact original contents during the current app session.
 
-This flow is approval-driven, not autonomous. It does not create or delete files,
-execute terminal commands, or persist rollback data across app restarts.
+This flow is approval-driven, not autonomous. It does not create or delete files
+or persist rollback data across app restarts.
 
 In Tauri desktop mode, KerniQ uses the native directory dialog and grants file
 access only to the project directory selected for that session. Browser

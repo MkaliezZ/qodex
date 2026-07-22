@@ -16,13 +16,17 @@ import type { ProjectTree, FileContent } from "@qodex/project-runtime";
 import type { ContextBundle } from "@qodex/context-engine";
 import type { ApplyResult, PatchError, PatchProposal } from "@qodex/diff-engine";
 import type { ProjectAccessSource } from "../platform/types";
+import type { AgentLoopTask } from "@qodex/agent-runtime";
 
 export type ActiveView = "agent" | "files" | "sessions" | "skills" | "git" | "settings" | "marketplace";
 
 interface RuntimeContextValue {
   isRunning: boolean;
+  agentTask: AgentLoopTask | null;
+  agentModeNotice: string | null;
   streamedText: string;
   sendPrompt: (prompt: string) => Promise<void>;
+  stopTask: () => Promise<void>;
   projectName: string | null;
   projectSource: ProjectAccessSource | null;
   fileTree: ProjectTree | null;
@@ -41,8 +45,11 @@ interface RuntimeContextValue {
   isApplying: boolean;
   isRollingBack: boolean;
   applyProposal: () => Promise<void>;
-  rejectProposal: () => void;
+  rejectProposal: () => Promise<void>;
   rollbackProposal: () => Promise<void>;
+  rollbackAllPatches: () => Promise<void>;
+  approveCommand: () => Promise<void>;
+  denyCommand: () => Promise<void>;
   activeView: ActiveView;
   setActiveView: (view: ActiveView) => void;
 }

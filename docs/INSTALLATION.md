@@ -38,6 +38,11 @@ cd apps/desktop && pnpm dev
 cd apps/desktop && pnpm tauri build
 ```
 
+Agent Mode command execution is available only in the Tauri desktop application.
+Commands are limited to discovered project metadata, require approval each time,
+and run inside the explicitly selected project. Project scripts are not an OS
+sandbox and may have side effects.
+
 ---
 
 ## Windows

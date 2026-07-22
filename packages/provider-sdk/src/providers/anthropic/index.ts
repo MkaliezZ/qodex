@@ -17,6 +17,7 @@ export class AnthropicProvider implements ModelProvider {
   readonly id = "anthropic";
   readonly name = "Anthropic";
   readonly protocol: ProviderProtocol = "anthropic";
+  readonly capabilities = { toolAgentLoop: false } as const;
 
   private baseUrl: string;
   private version: string;
@@ -31,6 +32,8 @@ export class AnthropicProvider implements ModelProvider {
   setApiKey(key: string): void { this.apiKey = key; }
 
   async listModels(): Promise<ModelInfo[]> { return ANTHROPIC_MODELS; }
+
+  supportsAgentTools(_modelId: string): boolean { return false; }
 
   async testConnection(): Promise<boolean> {
     if (!this.apiKey) return false;
