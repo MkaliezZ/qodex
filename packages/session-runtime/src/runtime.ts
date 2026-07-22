@@ -17,7 +17,8 @@ import type {
   SessionSummary,
 } from "./types.js";
 import { SESSION_SCHEMA_VERSION } from "./types.js";
-import { validateEntry, validateSession } from "./validation.js";
+import { sanitizeSensitiveText } from "./sensitive-text.js";
+import { sanitizeEntryForPersistence, validateEntry, validateSession } from "./validation.js";
 
 const TERMINAL_ENTRY_STATUS: Partial<Record<SessionEntry["type"], SessionStatus>> = {
   SESSION_COMPLETED: "Completed",
@@ -44,15 +45,16 @@ export class SessionRuntime {
     const createdAt = input.createdAt ?? this.timestamp();
     const id = input.id ?? this.randomId();
     const firstEntryId = this.randomId();
+    const title = sanitizeSensitiveText(input.title);
     const session: SessionRecord = {
       id,
       schemaVersion: SESSION_SCHEMA_VERSION,
-      title: input.title,
+      title,
       status: "Active",
       activeLeafId: firstEntryId,
       projectBindingId: input.projectBindingId ?? null,
-      providerId: input.providerId ?? null,
-      modelId: input.modelId ?? null,
+      providerId: input.providerId ? sanitizeSensitiveText(input.providerId) : null,
+      modelId: input.modelId ? sanitizeSensitiveText(input.modelId) : null,
       createdAt,
       updatedAt: createdAt,
       completedAt: null,
@@ -64,7 +66,7 @@ export class SessionRuntime {
       sequence: 1,
       type: "SESSION_CREATED",
       payloadVersion: 1,
-      payload: { title: input.title },
+      payload: { title },
       safeMetadata: {},
       createdAt,
     };
@@ -79,6 +81,11 @@ export class SessionRuntime {
     const allEntries = await this.store.listEntries(sessionId);
     const activePath = buildActivePath(allEntries, session.activeLeafId);
     const createdAt = input.createdAt ?? this.timestamp();
+    const sanitized = sanitizeEntryForPersistence(
+      input.type,
+      input.payload ?? {},
+      input.safeMetadata ?? {},
+    );
     const entry: SessionEntry = {
       id: input.id ?? this.randomId(),
       sessionId,
@@ -86,8 +93,8 @@ export class SessionRuntime {
       sequence: (allEntries.at(-1)?.sequence ?? 0) + 1,
       type: input.type,
       payloadVersion: input.payloadVersion ?? 1,
-      payload: input.payload ?? {},
-      safeMetadata: input.safeMetadata ?? {},
+      payload: sanitized.payload,
+      safeMetadata: sanitized.safeMetadata,
       createdAt,
     };
     validateEntry(entry);
@@ -142,7 +149,8 @@ export class SessionRuntime {
 
   async recoverSession(sessionId: string): Promise<ProjectedSessionState> {
     const session = await this.requireSession(sessionId);
-    return this.recovery.recover(session, await this.projectCurrentState(sessionId));
+    const activePath = await this.loadActivePath(sessionId);
+    return this.recovery.recover(session, this.projector.project(activePath), activePath);
   }
 
   async recoverIncompleteSessions(): Promise<void> {
@@ -160,7 +168,10 @@ export class SessionRuntime {
   }
 
   async upsertProjectBinding(binding: ProjectBindingInput): Promise<ProjectBinding> {
-    return this.store.upsertProjectBinding(binding);
+    return this.store.upsertProjectBinding({
+      ...binding,
+      displayName: sanitizeSensitiveText(binding.displayName),
+    });
   }
 
   async getProjectBinding(bindingId: string): Promise<ProjectBinding | null> {

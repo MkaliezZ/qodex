@@ -4,6 +4,13 @@ export { SessionProjector } from "./projector.js";
 export { SessionRecorder } from "./recorder.js";
 export { SessionRecoveryService } from "./recovery.js";
 export { SessionRuntime, buildActivePath } from "./runtime.js";
+export {
+  inspectSensitiveText,
+  isSensitiveFieldName,
+  sanitizeSensitiveJson,
+  sanitizeSensitiveText,
+} from "./sensitive-text.js";
+export type { SensitiveTextKind, SensitiveTextScan } from "./sensitive-text.js";
 export type { SessionStore } from "./store.js";
 export {
   SESSION_SCHEMA_VERSION,
@@ -31,4 +38,11 @@ export type {
   SessionSummary,
   UniversalEventType,
 } from "./types.js";
-export { assertSafeJson, assertSafeMetadata, redactJson, validateEntry, validateSession } from "./validation.js";
+export {
+  assertSafeJson,
+  assertSafeMetadata,
+  redactJson,
+  sanitizeEntryForPersistence,
+  validateEntry,
+  validateSession,
+} from "./validation.js";

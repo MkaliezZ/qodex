@@ -105,12 +105,24 @@ export class AgentLoopRuntime {
     if (!proposal || !this.claimApproval(task, "WaitingForPatchApproval")) return cloneTask(task);
 
     this.activeApprovalActions.add(task.id);
-    task.pendingPatch = null;
-    this.setStatus(task, "ApplyingPatch");
     this.beginOperation(task.id);
+    const approvalId = crypto.randomUUID();
+    const executionReceiptId = crypto.randomUUID();
+    let dispatched = false;
     let shouldContinue = false;
     try {
-      if (!this.guardTaskAction(task, "ApplyingPatch")) return cloneTask(task);
+      if (!this.guardTaskAction(task, "WaitingForPatchApproval")) return cloneTask(task);
+      if (this.options.sideEffectLifecycle) {
+        await this.options.sideEffectLifecycle.beforePatchApply({
+          taskId: task.id,
+          proposal,
+          approvalId,
+          executionReceiptId,
+        });
+      }
+      if (!this.guardTaskAction(task, "WaitingForPatchApproval")) return cloneTask(task);
+      task.pendingPatch = null;
+      this.setStatus(task, "ApplyingPatch");
       const approvalEntry = this.addTimeline(task, {
         kind: "patch_approval",
         title: "Patch approved",
@@ -121,10 +133,18 @@ export class AgentLoopRuntime {
       this.activePatchApplies.add(task.id);
       let results;
       try {
+        dispatched = true;
         results = await this.options.patchAdapter.apply(proposal);
       } finally {
         this.activePatchApplies.delete(task.id);
       }
+      await this.options.sideEffectLifecycle?.afterPatchApply({
+        taskId: task.id,
+        proposal,
+        approvalId,
+        executionReceiptId,
+        results,
+      });
       const success = results.length === proposal.files.length
         && results.every((result) => result.success && result.readbackVerified === true);
       approvalEntry.status = success ? "success" : "error";
@@ -167,6 +187,20 @@ export class AgentLoopRuntime {
       this.setStatus(task, "ReturningToolResult");
       shouldContinue = true;
     } catch (error) {
+      if (dispatched) {
+        try {
+          await this.options.sideEffectLifecycle?.afterSideEffectFailure({
+            taskId: task.id,
+            kind: "patch",
+            actionId: proposal.id,
+            approvalId,
+            executionReceiptId,
+            message: error instanceof Error ? error.message : "Patch application failed.",
+          });
+        } catch {
+          // Started evidence remains deliberately unsettled when persistence is unavailable.
+        }
+      }
       if (!this.cancellationRequests.has(task.id)) {
         this.fail(task, error instanceof Error ? error.message : "Patch application failed.");
       }
@@ -221,22 +255,35 @@ export class AgentLoopRuntime {
 
     this.activeApprovalActions.add(task.id);
     const runId = crypto.randomUUID();
-    task.pendingCommand = null;
-    this.setStatus(task, "RunningCommand");
     this.beginOperation(task.id);
-    this.addTimeline(task, {
-      kind: "command_approval",
-      title: "Command approved",
-      status: "success",
-      summary: formatCommand(pending),
-      toolCallId: pending.toolCall.id,
-      actionId: pending.toolCall.id,
-    });
-    let result: ProjectCommandResult;
+    const approvalId = crypto.randomUUID();
+    const executionReceiptId = crypto.randomUUID();
+    let dispatched = false;
     try {
-      if (!this.guardTaskAction(task, "RunningCommand")) return cloneTask(task);
+      if (!this.guardTaskAction(task, "WaitingForCommandApproval")) return cloneTask(task);
+      if (this.options.sideEffectLifecycle) {
+        await this.options.sideEffectLifecycle.beforeCommandStart({
+          taskId: task.id,
+          pending,
+          approvalId,
+          executionReceiptId,
+        });
+      }
+      if (!this.guardTaskAction(task, "WaitingForCommandApproval")) return cloneTask(task);
+      task.pendingCommand = null;
+      this.setStatus(task, "RunningCommand");
+      this.addTimeline(task, {
+        kind: "command_approval",
+        title: "Command approved",
+        status: "success",
+        summary: formatCommand(pending),
+        toolCallId: pending.toolCall.id,
+        actionId: pending.toolCall.id,
+      });
       this.activeCommandRuns.set(task.id, runId);
+      let result: ProjectCommandResult;
       try {
+        dispatched = true;
         result = await runner.run(pending.command, runId);
       } catch (error) {
         result = {
@@ -255,6 +302,13 @@ export class AgentLoopRuntime {
       } finally {
         this.activeCommandRuns.delete(task.id);
       }
+      await this.options.sideEffectLifecycle?.afterCommandComplete({
+        taskId: task.id,
+        pending,
+        approvalId,
+        executionReceiptId,
+        result,
+      });
       if (this.cancellationRequests.has(task.id) || task.status === "Cancelling" || isTerminal(task.status)) {
         if (!isTerminal(task.status)) {
           this.terminateTask(task, "Cancelled", "Agent task cancelled after command execution settled.", "task_cancelled");
@@ -263,6 +317,24 @@ export class AgentLoopRuntime {
       }
       this.appendCommandResult(task, pending, result);
       this.setStatus(task, "ReturningToolResult");
+    } catch (error) {
+      if (dispatched) {
+        try {
+          await this.options.sideEffectLifecycle?.afterSideEffectFailure({
+            taskId: task.id,
+            kind: "command",
+            actionId: pending.toolCall.id,
+            approvalId,
+            executionReceiptId,
+            message: error instanceof Error ? error.message : "Command execution failed.",
+          });
+        } catch {
+          // Started evidence remains deliberately unsettled when persistence is unavailable.
+        }
+      }
+      if (!this.cancellationRequests.has(task.id)) {
+        this.fail(task, error instanceof Error ? error.message : "Command execution failed.");
+      }
     } finally {
       this.activeCommandRuns.delete(task.id);
       this.activeApprovalActions.delete(task.id);

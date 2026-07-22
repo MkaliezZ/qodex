@@ -101,11 +101,12 @@ describe("universal session runtime", () => {
     });
     const entry = (await runtime.loadActivePath(session.id)).at(-1)!;
     expect(entry.safeMetadata.runtimeType).toBe("python");
-    await expect(runtime.appendEntry(session.id, {
-      type: "ACTION_STARTED",
+    const sanitized = await runtime.appendEntry(session.id, {
+      type: "TOOL_COMPLETED",
       payload: { actionId: "py-action", environmentVariables: { SECRET: "value" } },
       safeMetadata: { actionId: "py-action" },
-    })).rejects.toThrow("not safe ledger metadata");
+    });
+    expect(sanitized.payload).toEqual({ actionId: "py-action" });
   });
 
   it("records non-coding actions and artifacts", async () => {
@@ -119,12 +120,17 @@ describe("universal session runtime", () => {
     await runtime.appendEntry(session.id, {
       type: "ACTION_APPROVED",
       payload: { actionId: "research-1" },
-      safeMetadata: { actionId: "research-1" },
+      safeMetadata: { actionId: "research-1", approvalId: "approval-1", approvalGeneration: 0 },
     });
     await runtime.appendEntry(session.id, {
       type: "ACTION_STARTED",
       payload: { actionId: "research-1" },
-      safeMetadata: { actionId: "research-1" },
+      safeMetadata: {
+        actionId: "research-1",
+        approvalId: "approval-1",
+        approvalGeneration: 0,
+        executionReceiptId: "receipt-1",
+      },
     });
     await runtime.appendEntry(session.id, {
       type: "ARTIFACT_CREATED",
@@ -133,7 +139,12 @@ describe("universal session runtime", () => {
     await runtime.appendEntry(session.id, {
       type: "ACTION_COMPLETED",
       payload: { actionId: "research-1" },
-      safeMetadata: { actionId: "research-1" },
+      safeMetadata: {
+        actionId: "research-1",
+        approvalId: "approval-1",
+        approvalGeneration: 0,
+        executionReceiptId: "receipt-1",
+      },
     });
     expect((await runtime.projectCurrentState(session.id)).artifactCount).toBe(1);
   });

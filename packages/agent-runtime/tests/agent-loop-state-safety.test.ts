@@ -5,6 +5,7 @@ import type {
   AgentPatchAdapter,
   AgentPatchProposal,
   AgentProjectAccess,
+  AgentSideEffectLifecycle,
   ProjectCommandResult,
   ProjectCommandRunner,
 } from "../src/agent-loop/types.js";
@@ -121,7 +122,100 @@ function passingResult(commandId = "package-script:test"): ProjectCommandResult 
   };
 }
 
+function lifecycle(overrides: Partial<AgentSideEffectLifecycle> = {}): AgentSideEffectLifecycle {
+  return {
+    beforePatchApply: vi.fn(async () => {}),
+    afterPatchApply: vi.fn(async () => {}),
+    beforeCommandStart: vi.fn(async () => {}),
+    afterCommandComplete: vi.fn(async () => {}),
+    afterSideEffectFailure: vi.fn(async () => {}),
+    ...overrides,
+  };
+}
+
 describe("AgentLoopRuntime v0.4.1 state safety", () => {
+  it("blocks patch dispatch when durable started evidence cannot be persisted", async () => {
+    const sequence = patchThenDoneProvider();
+    const patch = patchAdapter();
+    const runtime = new AgentLoopRuntime({
+      provider: sequence,
+      modelId: "model",
+      project,
+      patchAdapter: patch.adapter,
+      sideEffectLifecycle: lifecycle({
+        beforePatchApply: vi.fn(async () => { throw new Error("session persistence unavailable"); }),
+      }),
+    });
+    const waiting = await runtime.start("patch-barrier-failure", "Propose a patch.");
+    const failed = await runtime.approvePatch(waiting.id);
+    expect(failed.status).toBe("Failed");
+    expect(failed.error).toContain("session persistence unavailable");
+    expect(patch.apply).not.toHaveBeenCalled();
+    expect(patch.getContent()).toBe(original);
+  });
+
+  it("blocks command dispatch when durable started evidence cannot be persisted", async () => {
+    const sequence = commandThenDoneProvider();
+    const patch = patchAdapter();
+    const run = vi.fn(async () => passingResult());
+    const runtime = new AgentLoopRuntime({
+      provider: sequence,
+      modelId: "model",
+      project,
+      patchAdapter: patch.adapter,
+      commandRunner: { run },
+      sideEffectLifecycle: lifecycle({
+        beforeCommandStart: vi.fn(async () => { throw new Error("session persistence unavailable"); }),
+      }),
+    });
+    const waiting = await runtime.start("command-barrier-failure", "Run tests.");
+    const failed = await runtime.approveCommand(waiting.id);
+    expect(failed.status).toBe("Failed");
+    expect(failed.error).toContain("session persistence unavailable");
+    expect(run).not.toHaveBeenCalled();
+  });
+
+  it("commits lifecycle evidence before dispatch and settles it afterward", async () => {
+    const patchSequence = patchThenDoneProvider();
+    const patch = patchAdapter();
+    const patchLifecycle = lifecycle();
+    const patchRuntime = new AgentLoopRuntime({
+      provider: patchSequence,
+      modelId: "model",
+      project,
+      patchAdapter: patch.adapter,
+      sideEffectLifecycle: patchLifecycle,
+    });
+    const waitingPatch = await patchRuntime.start("patch-barrier-order", "Propose a patch.");
+    await patchRuntime.approvePatch(waitingPatch.id);
+    expect(patchLifecycle.beforePatchApply).toHaveBeenCalledOnce();
+    expect(patchLifecycle.afterPatchApply).toHaveBeenCalledOnce();
+    expect(vi.mocked(patchLifecycle.beforePatchApply).mock.invocationCallOrder[0])
+      .toBeLessThan(patch.apply.mock.invocationCallOrder[0]);
+    expect(patch.apply.mock.invocationCallOrder[0])
+      .toBeLessThan(vi.mocked(patchLifecycle.afterPatchApply).mock.invocationCallOrder[0]);
+
+    const commandSequence = commandThenDoneProvider();
+    const run = vi.fn(async () => passingResult());
+    const commandLifecycle = lifecycle();
+    const commandRuntime = new AgentLoopRuntime({
+      provider: commandSequence,
+      modelId: "model",
+      project,
+      patchAdapter: patchAdapter().adapter,
+      commandRunner: { run },
+      sideEffectLifecycle: commandLifecycle,
+    });
+    const waitingCommand = await commandRuntime.start("command-barrier-order", "Run tests.");
+    await commandRuntime.approveCommand(waitingCommand.id);
+    expect(commandLifecycle.beforeCommandStart).toHaveBeenCalledOnce();
+    expect(commandLifecycle.afterCommandComplete).toHaveBeenCalledOnce();
+    expect(vi.mocked(commandLifecycle.beforeCommandStart).mock.invocationCallOrder[0])
+      .toBeLessThan(run.mock.invocationCallOrder[0]);
+    expect(run.mock.invocationCallOrder[0])
+      .toBeLessThan(vi.mocked(commandLifecycle.afterCommandComplete).mock.invocationCallOrder[0]);
+  });
+
   it("disposes a pending patch on Stop and makes late approval actions inert", async () => {
     const sequence = patchThenDoneProvider();
     const patch = patchAdapter();

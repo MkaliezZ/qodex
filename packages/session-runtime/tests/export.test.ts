@@ -38,17 +38,19 @@ describe("redacted session export", () => {
     expect(serialized).toContain("src/a.ts");
   });
 
-  it("rejects API keys and authorization material before persistence", async () => {
+  it("sanitizes API keys and authorization material before persistence", async () => {
     const instance = runtime();
     const session = await instance.createSession({ title: "Secrets" });
-    await expect(instance.appendEntry(session.id, {
+    const keyed = await instance.appendEntry(session.id, {
       type: "TOOL_COMPLETED",
-      payload: { apiKey: "should-never-persist" },
-    })).rejects.toThrow("not safe ledger metadata");
-    await expect(instance.appendEntry(session.id, {
+      payload: { apiKey: "fixture-value-that-must-not-persist", status: "done" },
+    });
+    const authorized = await instance.appendEntry(session.id, {
       type: "MODEL_MESSAGE",
       payload: { text: "Authorization: Bearer abcdefghijklmnop" },
-    })).rejects.toThrow("credential value");
+    });
+    expect(keyed.payload).toEqual({ status: "done" });
+    expect(JSON.stringify(authorized.payload)).not.toContain("abcdefghijklmnop");
   });
 
   it("keeps project verification private and exact", async () => {

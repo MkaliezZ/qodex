@@ -13,6 +13,16 @@ export class SessionRecorder {
   ) {}
 
   record(entry: AppendEntryInput): void {
+    void this.enqueue(entry).catch(() => {
+      // Durable barriers and flush surface the queued persistence failure.
+    });
+  }
+
+  recordDurably(entry: AppendEntryInput): Promise<void> {
+    return this.enqueue(entry);
+  }
+
+  private enqueue(entry: AppendEntryInput): Promise<void> {
     const recordKey = entry.safeMetadata?.recordKey;
     this.queue = this.queue.then(async () => {
       await this.initialize();
@@ -21,6 +31,7 @@ export class SessionRecorder {
       if (recordKey) this.recordKeys.add(recordKey);
       await this.onRecorded?.();
     });
+    return this.queue;
   }
 
   async flush(): Promise<void> {

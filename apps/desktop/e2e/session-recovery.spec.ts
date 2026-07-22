@@ -190,6 +190,70 @@ test.describe("KerniQ Universal Session and Recovery v0.5", () => {
     expect((await readAgentCommandFixture(page)).starts).toBe(1);
   });
 
+  test("started patch evidence becomes Interrupted and never writes after restart", async ({ page }) => {
+    await installPersistentSessionStore(page);
+    await installProjectFixture(page, files, { persistent: true, writeDelayMs: 5000 });
+    await setupApp(page);
+    await configureDeterministicProvider(page, "unused");
+    let providerCalls = 0;
+    await page.route("**/chat/completions", async (route) => {
+      providerCalls += 1;
+      await fulfillSse(route, [textEvent(patchResponse())]);
+    });
+    await openProject(page);
+    await page.fill('[data-testid="prompt-input"]', "Start a delayed patch.");
+    await page.click('[data-testid="send-button"]');
+    await expect(page.locator('[data-testid="agent-state"]')).toHaveText("WaitingForPatchApproval");
+    await page.click('[data-testid="apply-patch"]');
+    await expect(page.locator('[data-testid="agent-state"]')).toHaveText("ApplyingPatch");
+    await expect.poll(async () => page.evaluate(() => (
+      localStorage.getItem("kerniq-e2e-session-ledger")?.includes("PATCH_STARTED") ?? false
+    ))).toBe(true);
+    expect((await readProjectFixture(page)).writes).toBe(0);
+
+    await page.reload();
+    await openSessions(page);
+    await expect(page.locator('[data-testid="session-row"]').first()).toContainText("Interrupted");
+    await page.locator('[data-testid="session-row"]').first().getByRole("button", { name: "Resume recovery" }).click();
+    await expect(page.locator('[data-testid="recovery-banner"]')).toContainText("Execution was interrupted");
+    await expect(page.locator('[data-testid="reauthorize-project"]')).toHaveCount(0);
+    await expect(page.locator('[data-testid="approve-recovered-action"]')).toHaveCount(0);
+    await page.waitForTimeout(400);
+    expect((await readProjectFixture(page)).writes).toBe(0);
+    expect((await readProjectFixture(page)).files["src/value.ts"]).toBe(original);
+    expect(providerCalls).toBe(1);
+  });
+
+  test("session persistence and export redact recognised sensitive text", async ({ page }) => {
+    await installPersistentHarness(page);
+    const privatePath = "/Users/example/Private/project/report.txt";
+    const githubFixture = `github_pat_${"A1".repeat(15)}`;
+    await page.route("**/chat/completions", async (route) => {
+      await fulfillSse(route, [textEvent(`Reviewed ${privatePath}; result token ${githubFixture}`)]);
+    });
+    await openProject(page);
+    await page.fill('[data-testid="prompt-input"]', `Inspect ${privatePath} with ${githubFixture}`);
+    await page.click('[data-testid="send-button"]');
+    await expect(page.locator('[data-testid="agent-state"]')).toHaveText("Done");
+
+    const persisted = await page.evaluate(() => localStorage.getItem("kerniq-e2e-session-ledger") ?? "");
+    expect(persisted).not.toContain(privatePath);
+    expect(persisted).not.toContain(githubFixture);
+    expect(persisted).toContain("[redacted-path]");
+    expect(persisted).toContain("[redacted-secret]");
+
+    await openSessions(page);
+    await expect(page.locator('[data-testid="sessions-view"]')).not.toContainText(privatePath);
+    await expect(page.locator('[data-testid="sessions-view"]')).not.toContainText(githubFixture);
+    const downloadPromise = page.waitForEvent("download");
+    await page.locator('[data-testid="session-row"]').first().locator('[data-testid="export-session"]').click();
+    const stream = await (await downloadPromise).createReadStream();
+    let exported = "";
+    for await (const chunk of stream) exported += chunk.toString();
+    expect(exported).not.toContain(privatePath);
+    expect(exported).not.toContain(githubFixture);
+  });
+
   test("changed command catalog blocks recovered execution", async ({ page }) => {
     await installPersistentSessionStore(page);
     await installProjectFixture(page, files, { persistent: true });

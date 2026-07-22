@@ -178,9 +178,9 @@ export async function installPersistentSessionStore(page: Page): Promise<void> {
 export async function installProjectFixture(
   page: Page,
   files: Record<string, string>,
-  options: { persistent?: boolean } = {},
+  options: { persistent?: boolean; writeDelayMs?: number } = {},
 ): Promise<void> {
-  await page.addInitScript(({ initialFiles, persistent }) => {
+  await page.addInitScript(({ initialFiles, persistent, writeDelayMs }) => {
     const storageKey = "kerniq-e2e-project-state";
     if (persistent && !sessionStorage.getItem("kerniq-project-fixture-initialized")) {
       localStorage.setItem(storageKey, JSON.stringify({ files: initialFiles, writes: 0 }));
@@ -208,6 +208,9 @@ export async function installProjectFixture(
         return {
           write: async (content: string) => { replacement = content; },
           close: async () => {
+            if (writeDelayMs > 0) {
+              await new Promise((resolve) => setTimeout(resolve, writeDelayMs));
+            }
             state.files[this.path] = replacement;
             state.writes += 1;
             persist();
@@ -247,7 +250,11 @@ export async function installProjectFixture(
       configurable: true,
       value: async () => new TestDirectoryHandle("kerniq-smoke", ""),
     });
-  }, { initialFiles: files, persistent: options.persistent === true });
+  }, {
+    initialFiles: files,
+    persistent: options.persistent === true,
+    writeDelayMs: options.writeDelayMs ?? 0,
+  });
 }
 
 export async function changePersistentProjectFile(page: Page, path: string, content: string): Promise<void> {

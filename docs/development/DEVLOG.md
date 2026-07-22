@@ -607,3 +607,27 @@ history, recovery guidance, redacted JSON export, and confirmation-gated local
 history deletion. Browser development truthfully reports its memory-only
 persistence limitation. Signed distribution, cloud sync, cross-device history,
 Git checkpoint recovery, and automatic approvals remain out of scope.
+
+### KerniQ Session Restart Safety, Ledger Integrity, and Privacy v0.5.1
+
+**Date:** 2026-07-23  |  **Status:** Correction implemented, final review pending
+
+Closed the v0.5 review findings around the crash window between approval and a
+mutating side effect. Normal Agent and recovered patch/command paths now await a
+durable started receipt before invoking the Diff Engine or command runner. If
+persistence fails, dispatch is blocked. A started receipt without a matching
+settled receipt recovers only as `Interrupted` and is never reapprovable.
+
+The session projector now enforces explicit approval generations and matching
+action, approval, and execution-receipt identities. It rejects missing
+proposals, start-before-approval, completion-before-start, duplicate lifecycle
+events, completion after denial, mismatches, and active-path appends after a
+terminal outcome.
+
+Session titles, messages, tool summaries, command evidence, metadata, and
+exports now share bounded local scanning for recognised credential and
+absolute-path patterns. Sensitive patch contents are omitted before persistence
+and the patch is marked non-recoverable. Export re-sanitizes session metadata,
+project display names, entries, and patch summaries as defense in depth. This
+pattern-based protection is intentionally bounded and does not claim to detect
+every possible secret.

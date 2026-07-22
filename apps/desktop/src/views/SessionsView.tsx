@@ -1,4 +1,11 @@
-import { AgentToolRegistry, type AgentPatchProposal, type ProjectCommandDefinition, type ProjectCommandRunner } from "@qodex/agent-runtime";
+import {
+  AgentToolRegistry,
+  type AgentPatchProposal,
+  type AgentPatchResult,
+  type ProjectCommandDefinition,
+  type ProjectCommandResult,
+  type ProjectCommandRunner,
+} from "@qodex/agent-runtime";
 import { DiffEngine } from "@qodex/diff-engine";
 import { ProjectRuntime } from "@qodex/project-runtime";
 import type { ProjectedSessionState, SessionEntry, SessionStatus, SessionSummary } from "@qodex/session-runtime";
@@ -167,9 +174,44 @@ export function SessionsView() {
         await runtime.appendEntry(selected.id, {
           type: "PATCH_APPROVED",
           payload: { actionId: pending.actionId },
-          safeMetadata: { actionId: pending.actionId, approvalId },
+          safeMetadata: {
+            actionId: pending.actionId,
+            approvalId,
+            approvalGeneration: pending.approvalGeneration,
+          },
         });
-        const results = await recovery.diff.apply(recovery.patch);
+        const executionReceiptId = crypto.randomUUID();
+        await runtime.appendEntry(selected.id, {
+          type: "PATCH_STARTED",
+          payload: { actionId: pending.actionId },
+          safeMetadata: {
+            actionId: pending.actionId,
+            approvalId,
+            approvalGeneration: pending.approvalGeneration,
+            executionReceiptId,
+            executionStatus: "running",
+          },
+        });
+        let results: AgentPatchResult[];
+        try {
+          results = await recovery.diff.apply(recovery.patch);
+        } catch (cause) {
+          await runtime.appendEntry(selected.id, {
+            type: "ACTION_FAILED",
+            payload: {
+              actionId: pending.actionId,
+              reason: cause instanceof Error ? cause.message : "Recovered patch application failed.",
+            },
+            safeMetadata: {
+              actionId: pending.actionId,
+              approvalId,
+              approvalGeneration: pending.approvalGeneration,
+              executionReceiptId,
+              executionStatus: "failed",
+            },
+          });
+          throw cause;
+        }
         const success = results.length === recovery.patch.files.length
           && results.every((result) => result.success && result.readbackVerified === true);
         await runtime.appendEntry(selected.id, {
@@ -183,14 +225,25 @@ export function SessionsView() {
               ...(result.code ? { code: result.code } : {}),
             })),
           },
-          safeMetadata: { actionId: pending.actionId, approvalId, executionStatus: success ? "success" : "failed" },
+          safeMetadata: {
+            actionId: pending.actionId,
+            approvalId,
+            approvalGeneration: pending.approvalGeneration,
+            executionReceiptId,
+            executionStatus: success ? "success" : "failed",
+          },
         });
         if (!success) throw new Error("The recovered patch failed verified application.");
       } else if (pending.kind === "command" && recovery.command && recovery.runner) {
         await runtime.appendEntry(selected.id, {
           type: "COMMAND_APPROVED",
           payload: { actionId: pending.actionId },
-          safeMetadata: { actionId: pending.actionId, approvalId, toolCallId: pending.actionId },
+          safeMetadata: {
+            actionId: pending.actionId,
+            approvalId,
+            approvalGeneration: pending.approvalGeneration,
+            toolCallId: pending.actionId,
+          },
         });
         const executionReceiptId = crypto.randomUUID();
         await runtime.appendEntry(selected.id, {
@@ -199,18 +252,40 @@ export function SessionsView() {
           safeMetadata: {
             actionId: pending.actionId,
             approvalId,
+            approvalGeneration: pending.approvalGeneration,
             toolCallId: pending.actionId,
             executionReceiptId,
             executionStatus: "running",
           },
         });
-        const result = await recovery.runner.run(recovery.command, crypto.randomUUID());
+        let result: ProjectCommandResult;
+        try {
+          result = await recovery.runner.run(recovery.command, crypto.randomUUID());
+        } catch (cause) {
+          await runtime.appendEntry(selected.id, {
+            type: "ACTION_FAILED",
+            payload: {
+              actionId: pending.actionId,
+              reason: cause instanceof Error ? cause.message : "Recovered command execution failed.",
+            },
+            safeMetadata: {
+              actionId: pending.actionId,
+              approvalId,
+              approvalGeneration: pending.approvalGeneration,
+              toolCallId: pending.actionId,
+              executionReceiptId,
+              executionStatus: "failed",
+            },
+          });
+          throw cause;
+        }
         await runtime.appendEntry(selected.id, {
           type: "COMMAND_COMPLETED",
           payload: { actionId: pending.actionId, ...safeRecoveredCommandResult(result) },
           safeMetadata: {
             actionId: pending.actionId,
             approvalId,
+            approvalGeneration: pending.approvalGeneration,
             toolCallId: pending.actionId,
             executionReceiptId,
             executionStatus: result.cancelled ? "cancelled" : "completed",

@@ -1,8 +1,16 @@
 import type { SafeJson, SafeMetadata, SessionEntry, SessionRecord } from "./types.js";
 import { SESSION_SCHEMA_VERSION } from "./types.js";
+import {
+  inspectSensitiveText,
+  isSensitiveFieldName,
+  sanitizeSensitiveJson,
+  sanitizeSensitiveText,
+} from "./sensitive-text.js";
 
-const SECRET_KEY = /^(?:api.?key|authorization|authorizationHeader|cookie|cookies|credential|credentialId|secret|secretValue|token|headers?|rawEnvironment|environmentVariables|env)$/i;
-const ABSOLUTE_PATH = /^(?:[A-Za-z]:[\\/]|\\\\|\/)/;
+export interface SanitizedEntryData {
+  payload: SafeJson;
+  safeMetadata: SafeMetadata;
+}
 
 export function validateSession(session: SessionRecord): void {
   if (!session.id.trim() || !session.title.trim()) throw new Error("Session identity and title are required.");
@@ -27,7 +35,9 @@ export function assertSafeMetadata(metadata: SafeMetadata): void {
 export function assertSafeJson(value: SafeJson, path: string): void {
   if (value === null || typeof value === "boolean") return;
   if (typeof value === "string") {
-    if (looksLikeSecret(value)) throw new Error(`${path} appears to contain a credential value.`);
+    if (inspectSensitiveText(value).hasSensitiveText) {
+      throw new Error(`${path} contains recognised sensitive text.`);
+    }
     return;
   }
   if (typeof value === "number") {
@@ -39,31 +49,62 @@ export function assertSafeJson(value: SafeJson, path: string): void {
     return;
   }
   for (const [key, child] of Object.entries(value)) {
-    if (SECRET_KEY.test(key)) throw new Error(`${path}.${key} is not safe ledger metadata.`);
+    if (isSensitiveFieldName(key)) throw new Error(`${path}.${key} is not safe ledger metadata.`);
     assertSafeJson(child, `${path}.${key}`);
   }
 }
 
-export function redactJson(value: SafeJson, options: { removeAbsolutePaths?: boolean } = {}): SafeJson {
-  if (typeof value === "string") {
-    if (looksLikeSecret(value)) return "[redacted-secret]";
-    if (options.removeAbsolutePaths && ABSOLUTE_PATH.test(value)) return "[redacted-path]";
-    return value;
+export function sanitizeEntryForPersistence(
+  type: SessionEntry["type"],
+  payload: SafeJson,
+  safeMetadata: SafeMetadata,
+): SanitizedEntryData {
+  if (type !== "PATCH_PROPOSED") {
+    return {
+      payload: sanitizeSensitiveJson(payload),
+      safeMetadata: sanitizeSensitiveJson(safeMetadata as SafeJson) as SafeMetadata,
+    };
   }
-  if (value === null || typeof value === "number" || typeof value === "boolean") return value;
-  if (Array.isArray(value)) return value.map((item) => redactJson(item, options));
-  const result: Record<string, SafeJson> = {};
-  for (const [key, child] of Object.entries(value)) {
-    if (SECRET_KEY.test(key)) continue;
-    result[key] = redactJson(child, options);
+
+  const patch = isRecord(payload) ? payload : {};
+  const files = Array.isArray(patch.files) ? patch.files : [];
+  const sensitiveContent = files.some((file) => isRecord(file)
+    && [file.path, file.oldContent, file.newContent].some((content) => (
+      typeof content === "string" && inspectSensitiveText(content).hasSensitiveText
+    )));
+  if (!sensitiveContent) {
+    return {
+      payload: sanitizeSensitiveJson(payload),
+      safeMetadata: sanitizeSensitiveJson(safeMetadata as SafeJson) as SafeMetadata,
+    };
   }
-  return result;
+
+  const sanitizedPatch = sanitizeSensitiveJson(patch) as Record<string, SafeJson>;
+  sanitizedPatch.files = files.map((file): SafeJson => {
+    if (!isRecord(file)) return {};
+    return {
+      path: typeof file.path === "string" ? sanitizeSensitiveText(file.path) : "[unavailable]",
+      contentRedacted: true,
+    };
+  });
+  return {
+    payload: sanitizedPatch,
+    safeMetadata: {
+      ...(sanitizeSensitiveJson(safeMetadata as SafeJson) as SafeMetadata),
+      recoverable: false,
+      sensitiveContentRedacted: true,
+    },
+  };
 }
 
-function looksLikeSecret(value: string): boolean {
-  return /(?:Bearer\s+[A-Za-z0-9._~+\/-]{8,}|\bsk-[A-Za-z0-9_-]{12,}|(?:api[_-]?key|authorization)\s*[:=]\s*[^\s,;]{8,})/i.test(value);
+export function redactJson(value: SafeJson): SafeJson {
+  return sanitizeSensitiveJson(value);
 }
 
 function validateTimestamp(value: string): void {
   if (!value || Number.isNaN(Date.parse(value))) throw new Error("A valid ISO timestamp is required.");
+}
+
+function isRecord(value: SafeJson): value is Record<string, SafeJson> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }

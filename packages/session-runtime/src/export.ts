@@ -14,9 +14,13 @@ export class SessionExportService {
     const path = await this.runtime.loadActivePath(sessionId);
     const entries = path.map(redactEntry);
     const { projectBindingId: _, activeLeafId: __, ...safeSession } = session;
+    const redactedSession = redactJson({
+      ...safeSession,
+      projectDisplayName: binding?.displayName ?? null,
+    } as SafeJson) as RedactedSessionExport["session"];
     return {
       schemaVersion: session.schemaVersion,
-      session: { ...safeSession, projectDisplayName: binding?.displayName ?? null },
+      session: redactedSession,
       entries,
     };
   }
@@ -25,11 +29,11 @@ export class SessionExportService {
 function redactEntry(entry: SessionEntry): SessionEntry {
   const payload = entry.type === "PATCH_PROPOSED"
     ? redactPatch(entry.payload)
-    : redactJson(entry.payload, { removeAbsolutePaths: true });
+    : redactJson(entry.payload);
   return {
     ...entry,
     payload,
-    safeMetadata: redactJson(entry.safeMetadata as SafeJson, { removeAbsolutePaths: true }) as SessionEntry["safeMetadata"],
+    safeMetadata: redactJson(entry.safeMetadata as SafeJson) as SessionEntry["safeMetadata"],
   };
 }
 
@@ -37,12 +41,12 @@ function redactPatch(value: SafeJson): SafeJson {
   if (!isRecord(value)) return {};
   const files: SafeJson[] = Array.isArray(value.files)
     ? value.files.map((file): SafeJson => isRecord(file)
-      ? { path: redactJson(file.path ?? "", { removeAbsolutePaths: true }) }
+      ? { path: redactJson(file.path ?? "") }
       : {})
     : [];
   return {
     actionId: typeof value.actionId === "string" ? value.actionId : "",
-    summary: typeof value.summary === "string" ? value.summary : "",
+    summary: typeof value.summary === "string" ? redactJson(value.summary) : "",
     files,
   };
 }

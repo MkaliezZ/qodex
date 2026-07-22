@@ -66,6 +66,102 @@ describe("session projection and restart recovery", () => {
     expect(starts).toBe(0);
   });
 
+  it.each([
+    ["patch", "PATCH_PROPOSED", "PATCH_APPROVED", "PATCH_STARTED", "PATCH_APPLIED", "patch_reapproval"],
+    ["command", "COMMAND_PROPOSED", "COMMAND_APPROVED", "COMMAND_STARTED", "COMMAND_COMPLETED", "command_reapproval"],
+  ] as const)("invalidates an approved but not started %s and accepts only a fresh generation", async (
+    kind,
+    proposedType,
+    approvedType,
+    startedType,
+    completedType,
+    reason,
+  ) => {
+    const instance = runtime();
+    const session = await instance.createSession({ title: `Approved ${kind}` });
+    const actionId = `${kind}-approved`;
+    await instance.appendEntry(session.id, {
+      type: proposedType,
+      payload: { actionId },
+      safeMetadata: { actionId },
+    });
+    await instance.appendEntry(session.id, {
+      type: approvedType,
+      payload: { actionId },
+      safeMetadata: { actionId, approvalId: "approval-before-restart", approvalGeneration: 0 },
+    });
+
+    const recovered = await instance.recoverSession(session.id);
+    expect(recovered.status).toBe("RecoveryRequired");
+    expect(recovered.recoveryRequirement?.reason).toBe(reason);
+    expect(recovered.pendingAction?.approved).toBe(false);
+    expect(recovered.pendingAction?.approvalId).toBeNull();
+    expect(recovered.pendingAction?.approvalGeneration).toBe(1);
+
+    const freshEvidence = {
+      actionId,
+      approvalId: "approval-after-restart",
+      approvalGeneration: 1,
+      executionReceiptId: "receipt-after-restart",
+    };
+    await instance.appendEntry(session.id, {
+      type: approvedType,
+      payload: { actionId },
+      safeMetadata: freshEvidence,
+    });
+    await instance.appendEntry(session.id, {
+      type: startedType,
+      payload: { actionId },
+      safeMetadata: freshEvidence,
+    });
+    await instance.appendEntry(session.id, {
+      type: completedType,
+      payload: { actionId },
+      safeMetadata: freshEvidence,
+    });
+    expect((await instance.projectCurrentState(session.id)).pendingAction).toBeNull();
+  });
+
+  it.each([
+    ["patch", "PATCH_PROPOSED", "PATCH_APPROVED", "PATCH_STARTED"],
+    ["command", "COMMAND_PROPOSED", "COMMAND_APPROVED", "COMMAND_STARTED"],
+  ] as const)("maps an unmatched started %s to Interrupted without reapproval", async (
+    kind,
+    proposedType,
+    approvedType,
+    startedType,
+  ) => {
+    const instance = runtime();
+    const session = await instance.createSession({ title: `Started ${kind}` });
+    const actionId = `${kind}-started`;
+    await instance.appendEntry(session.id, {
+      type: proposedType,
+      payload: { actionId },
+      safeMetadata: { actionId },
+    });
+    await instance.appendEntry(session.id, {
+      type: approvedType,
+      payload: { actionId },
+      safeMetadata: { actionId, approvalId: "approval-started", approvalGeneration: 0 },
+    });
+    await instance.appendEntry(session.id, {
+      type: startedType,
+      payload: { actionId },
+      safeMetadata: {
+        actionId,
+        approvalId: "approval-started",
+        approvalGeneration: 0,
+        executionReceiptId: "receipt-started",
+      },
+    });
+
+    const projection = await instance.recoverSession(session.id);
+    expect(projection.status).toBe("Interrupted");
+    expect(projection.recoveryRequirement?.reason).toBe("interrupted");
+    expect(projection.pendingAction?.started).toBe(true);
+    expect(projection.pendingAction?.approved).toBe(false);
+  });
+
   it.each(["CallingModel", "Streaming", "ExecutingReadTool", "ApplyingPatch", "RunningCommand", "ReturningToolResult", "Cancelling"])(
     "maps %s evidence to an honest interrupted state",
     async (runtimeStatus) => {
@@ -105,7 +201,11 @@ describe("session projection and restart recovery", () => {
     await instance.appendEntry(session.id, {
       type: "PATCH_APPROVED",
       payload: { actionId: "patch-1" },
-      safeMetadata: { actionId: "patch-1", approvalId: "approval-after-restart" },
+      safeMetadata: {
+        actionId: "patch-1",
+        approvalId: "approval-after-restart",
+        approvalGeneration: 1,
+      },
     });
     const projection = await instance.projectCurrentState(session.id);
     expect(projection.pendingAction?.approved).toBe(true);

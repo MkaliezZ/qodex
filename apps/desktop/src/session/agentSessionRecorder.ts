@@ -1,11 +1,23 @@
 import type {
+  AgentCommandLifecycleInput,
+  AgentCommandResultLifecycleInput,
   AgentLoopTask,
+  AgentPatchLifecycleInput,
   AgentPatchProposal,
+  AgentPatchResultLifecycleInput,
+  AgentSideEffectFailureInput,
+  AgentSideEffectLifecycle,
   AgentTimelineEntry,
   PendingCommandApproval,
   ProjectCommandResult,
 } from "@qodex/agent-runtime";
-import { SessionRecorder, type SafeJson, type SessionRuntime } from "@qodex/session-runtime";
+import {
+  inspectSensitiveText,
+  sanitizeSensitiveText,
+  SessionRecorder,
+  type SafeJson,
+  type SessionRuntime,
+} from "@qodex/session-runtime";
 
 export interface AgentSessionRecorderOptions {
   runtime: SessionRuntime;
@@ -13,7 +25,7 @@ export interface AgentSessionRecorderOptions {
   onRecorded?: () => void | Promise<void>;
 }
 
-export class AgentSessionLedgerRecorder {
+export class AgentSessionLedgerRecorder implements AgentSideEffectLifecycle {
   private readonly recorder: SessionRecorder;
   private readonly seenTimeline = new Set<string>();
   private lastStatus: string | null = null;
@@ -52,6 +64,124 @@ export class AgentSessionLedgerRecorder {
     return this.recorder.flush();
   }
 
+  async beforePatchApply(input: AgentPatchLifecycleInput): Promise<void> {
+    await this.recorder.recordDurably({
+      type: "PATCH_APPROVED",
+      payload: { actionId: input.proposal.id },
+      safeMetadata: {
+        recordKey: `patch-approved:${input.proposal.id}`,
+        taskId: input.taskId,
+        actionId: input.proposal.id,
+        approvalId: input.approvalId,
+        approvalGeneration: 0,
+      },
+    });
+    await this.recorder.recordDurably({
+      type: "PATCH_STARTED",
+      payload: { actionId: input.proposal.id },
+      safeMetadata: {
+        recordKey: `patch-started:${input.proposal.id}`,
+        taskId: input.taskId,
+        actionId: input.proposal.id,
+        approvalId: input.approvalId,
+        approvalGeneration: 0,
+        executionReceiptId: input.executionReceiptId,
+        executionStatus: "running",
+      },
+    });
+  }
+
+  async afterPatchApply(input: AgentPatchResultLifecycleInput): Promise<void> {
+    const success = input.results.length === input.proposal.files.length
+      && input.results.every((result) => result.success && result.readbackVerified === true);
+    await this.recorder.recordDurably({
+      type: success ? "PATCH_APPLIED" : "ACTION_FAILED",
+      payload: {
+        actionId: input.proposal.id,
+        status: success ? "success" : "failed",
+        results: input.results.map((result) => ({
+          path: result.path,
+          success: result.success,
+          readbackVerified: result.readbackVerified === true,
+          ...(result.code ? { code: result.code } : {}),
+        })),
+      },
+      safeMetadata: {
+        recordKey: `patch-settled:${input.proposal.id}`,
+        taskId: input.taskId,
+        actionId: input.proposal.id,
+        approvalId: input.approvalId,
+        approvalGeneration: 0,
+        executionReceiptId: input.executionReceiptId,
+        executionStatus: success ? "success" : "failed",
+      },
+    });
+  }
+
+  async beforeCommandStart(input: AgentCommandLifecycleInput): Promise<void> {
+    const actionId = input.pending.toolCall.id;
+    await this.recorder.recordDurably({
+      type: "COMMAND_APPROVED",
+      payload: { actionId },
+      safeMetadata: {
+        recordKey: `command-approved:${actionId}`,
+        taskId: input.taskId,
+        toolCallId: actionId,
+        actionId,
+        approvalId: input.approvalId,
+        approvalGeneration: 0,
+      },
+    });
+    await this.recorder.recordDurably({
+      type: "COMMAND_STARTED",
+      payload: { actionId, commandId: input.pending.command.id },
+      safeMetadata: {
+        recordKey: `command-started:${actionId}`,
+        taskId: input.taskId,
+        toolCallId: actionId,
+        actionId,
+        approvalId: input.approvalId,
+        approvalGeneration: 0,
+        executionReceiptId: input.executionReceiptId,
+        executionStatus: "running",
+      },
+    });
+  }
+
+  async afterCommandComplete(input: AgentCommandResultLifecycleInput): Promise<void> {
+    const actionId = input.pending.toolCall.id;
+    await this.recorder.recordDurably({
+      type: "COMMAND_COMPLETED",
+      payload: { actionId, ...safeRecoveredCommandResult(input.result) },
+      safeMetadata: {
+        recordKey: `command-completed:${actionId}`,
+        taskId: input.taskId,
+        toolCallId: actionId,
+        actionId,
+        approvalId: input.approvalId,
+        approvalGeneration: 0,
+        executionReceiptId: input.executionReceiptId,
+        executionStatus: input.result.cancelled ? "cancelled" : "completed",
+      },
+    });
+  }
+
+  async afterSideEffectFailure(input: AgentSideEffectFailureInput): Promise<void> {
+    await this.recorder.recordDurably({
+      type: "ACTION_FAILED",
+      payload: { actionId: input.actionId, reason: safeText(input.message) },
+      safeMetadata: {
+        recordKey: `${input.kind}-settled:${input.actionId}`,
+        taskId: input.taskId,
+        actionId: input.actionId,
+        approvalId: input.approvalId,
+        approvalGeneration: 0,
+        executionReceiptId: input.executionReceiptId,
+        executionStatus: "failed",
+      },
+    });
+  }
+
   private recordPendingActions(task: AgentLoopTask): void {
     if (task.pendingPatch) {
       const proposal = safePatch(task.pendingPatch);
@@ -64,6 +194,7 @@ export class AgentSessionLedgerRecorder {
           actionId: task.pendingPatch.id,
           runtimeStatus: task.status,
           recoverable: proposal.recoverable,
+          sensitiveContentRedacted: !proposal.recoverable,
         },
         createdAt: task.pendingPatch.createdAt,
       });
@@ -85,44 +216,6 @@ export class AgentSessionLedgerRecorder {
 
   private recordStateTransition(task: AgentLoopTask): void {
     this.stateSequence += 1;
-    if (task.status === "ApplyingPatch" && this.pendingPatch) {
-      this.recorder.record({
-        type: "PATCH_APPROVED",
-        payload: { actionId: this.pendingPatch.id },
-        safeMetadata: {
-          recordKey: `patch-approved:${this.pendingPatch.id}`,
-          taskId: task.id,
-          actionId: this.pendingPatch.id,
-          approvalId: crypto.randomUUID(),
-        },
-      });
-    }
-    if (task.status === "RunningCommand" && this.pendingCommand) {
-      const actionId = this.pendingCommand.toolCall.id;
-      this.recorder.record({
-        type: "COMMAND_APPROVED",
-        payload: { actionId },
-        safeMetadata: {
-          recordKey: `command-approved:${actionId}`,
-          taskId: task.id,
-          toolCallId: actionId,
-          actionId,
-          approvalId: crypto.randomUUID(),
-        },
-      });
-      this.recorder.record({
-        type: "COMMAND_STARTED",
-        payload: { actionId, commandId: this.pendingCommand.command.id },
-        safeMetadata: {
-          recordKey: `command-started:${actionId}`,
-          taskId: task.id,
-          toolCallId: actionId,
-          actionId,
-          executionReceiptId: crypto.randomUUID(),
-          executionStatus: "running",
-        },
-      });
-    }
     this.recorder.record({
       type: "AGENT_STATE_CHANGED",
       payload: {
@@ -186,7 +279,12 @@ export class AgentSessionLedgerRecorder {
           this.recorder.record({
             type: "PATCH_PROPOSED",
             payload: proposal.payload,
-            safeMetadata: { ...base, recordKey: `patch-proposed:${this.pendingPatch.id}`, recoverable: proposal.recoverable },
+            safeMetadata: {
+              ...base,
+              recordKey: `patch-proposed:${this.pendingPatch.id}`,
+              recoverable: proposal.recoverable,
+              sensitiveContentRedacted: !proposal.recoverable,
+            },
             createdAt: entry.timestamp,
           });
         }
@@ -245,7 +343,12 @@ export class AgentSessionLedgerRecorder {
       this.recorder.record({
         type: entry.status === "success" ? "PATCH_APPLIED" : "ACTION_FAILED",
         payload: { actionId, status: entry.status, summary: safeText(entry.summary) },
-        safeMetadata: { ...metadata, actionId, executionStatus: entry.status },
+        safeMetadata: {
+          ...metadata,
+          recordKey: `patch-settled:${actionId}`,
+          actionId,
+          executionStatus: entry.status,
+        },
         createdAt: entry.timestamp,
       });
       return;
@@ -297,19 +400,35 @@ export class AgentSessionLedgerRecorder {
     this.recorder.record({
       type: "COMMAND_COMPLETED",
       payload: commandResultPayload(actionId, entry),
-      safeMetadata: { ...metadata, actionId, executionStatus: entry.status },
+      safeMetadata: {
+        ...metadata,
+        recordKey: `command-completed:${actionId}`,
+        actionId,
+        executionStatus: entry.status,
+      },
       createdAt: entry.timestamp,
     });
   }
 }
 
 function safePatch(proposal: AgentPatchProposal): { payload: SafeJson; recoverable: boolean } {
-  let recoverable = true;
-  const files = proposal.files.map((file) => {
-    const oldContent = safeText(file.oldContent);
-    const newContent = safeText(file.newContent);
-    if (oldContent !== file.oldContent || newContent !== file.newContent) recoverable = false;
-    return { path: file.path, oldContent, newContent };
+  const recoverable = !proposal.files.some((file) => (
+    inspectSensitiveText(file.path).hasSensitiveText
+    || inspectSensitiveText(file.oldContent).hasSensitiveText
+    || inspectSensitiveText(file.newContent).hasSensitiveText
+  ));
+  const files: SafeJson[] = proposal.files.map((file): SafeJson => {
+    if (recoverable) {
+      return {
+        path: safeText(file.path),
+        oldContent: file.oldContent,
+        newContent: file.newContent,
+      };
+    }
+    return {
+      path: safeText(file.path),
+      contentRedacted: true,
+    };
   });
   return {
     recoverable,
@@ -329,10 +448,10 @@ function commandProposalPayload(pending: PendingCommandApproval): SafeJson {
     toolCallId: pending.toolCall.id,
     command: {
       id: pending.command.id,
-      label: pending.command.label,
-      executable: pending.command.executable,
-      args: [...pending.command.args],
-      cwd: pending.command.cwd,
+      label: safeText(pending.command.label),
+      executable: safeText(pending.command.executable),
+      args: pending.command.args.map(safeText),
+      cwd: safeText(pending.command.cwd),
       source: pending.command.source,
       category: pending.command.category,
       catalogDigest: pending.command.catalogDigest ?? "unavailable",
@@ -350,10 +469,7 @@ function commandResultPayload(actionId: string, entry: AgentTimelineEntry): Safe
 }
 
 function safeText(value: string): string {
-  return value
-    .replace(/Bearer\s+[A-Za-z0-9._~+\/-]{8,}/gi, "Bearer [redacted]")
-    .replace(/\bsk-[A-Za-z0-9_-]{12,}/gi, "[redacted-secret]")
-    .replace(/((?:api[_-]?key|authorization)\s*[:=]\s*)[^\s,;]{8,}/gi, "$1[x]");
+  return sanitizeSensitiveText(value);
 }
 
 function activeExecutionStatus(status: AgentLoopTask["status"]): string {

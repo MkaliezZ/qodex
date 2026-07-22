@@ -128,6 +128,11 @@ The Agent Loop emits facts through a narrow desktop adapter into Session
 Runtime. Exact provider tool-call IDs, safe tool results, proposals, decisions,
 execution receipts, and terminal states are recorded. React state remains a
 live presentation layer; the append-only ledger is the durable history source.
+For mutating Agent actions, the adapter is also an awaitable pre-dispatch
+barrier: a fresh approval and `PATCH_STARTED` or `COMMAND_STARTED` receipt must
+commit successfully before the Diff Engine writes or the native command runner
+starts. Persistence failure therefore blocks dispatch rather than leaving an
+unrecorded side effect.
 
 ### Session Runtime (`packages/session-runtime`)
 
@@ -157,10 +162,23 @@ Browser development uses an in-memory adapter and labels that limitation.
 
 Restart recovery reconstructs evidence, never live runtime objects. Completed,
 failed, cancelled, and limit-reached outcomes remain terminal. Pending patch or
-command decisions become `RecoveryRequired` and invalidate earlier approval.
-Provider/tool activity, patch application, command execution, and cancellation
-in progress become honestly `Interrupted` with an unknown outcome. Recovery
-never calls a provider, applies a patch, or starts a command automatically.
+command decisions become `RecoveryRequired`, increment an explicit approval
+generation, and invalidate earlier approval. The projector rejects approval,
+start, completion, duplicate, mismatched-ID, and post-terminal sequences that
+cannot form a valid action lifecycle. Any unmatched `ACTION_STARTED`,
+`PATCH_STARTED`, or `COMMAND_STARTED` receipt on the full active path becomes
+honestly `Interrupted` with an unknown outcome and is never reapprovable.
+Recovery never calls a provider, applies a patch, or starts a command
+automatically.
+
+All session titles, display metadata, entry payloads, and safe metadata pass
+through one bounded local scanner before persistence. It removes sensitive
+field names and redacts recognised credential and absolute-path patterns as a
+defense-in-depth measure. A patch containing recognised sensitive text is
+stored without old/new contents and marked non-recoverable. Export applies the
+same rules again to session metadata, project display names, entries, and patch
+summaries. This deterministic scanner intentionally does not claim to detect
+every possible secret or private identifier.
 
 ### 5. Diff Engine (`packages/diff-engine`)
 

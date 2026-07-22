@@ -32,6 +32,14 @@ accepted as session evidence. Universal action and artifact metadata reserve the
 identities needed for future managed-Python execution without requiring a schema
 rewrite; DHMS Python remains the canonical runtime.
 
+The recorder is an awaitable barrier for mutating Agent actions. A fresh
+approval generation and a durable `ACTION_STARTED`, `PATCH_STARTED`, or
+`COMMAND_STARTED` receipt must be committed before dispatch. Failure to persist
+the receipt blocks the filesystem write or process start. The deterministic
+projector rejects lifecycle evidence that lacks a proposal, approval, start,
+matching action/approval/receipt identity, or valid ordering, and also rejects
+duplicates and entries appended after a terminal outcome.
+
 Recovery replays evidence instead of deserializing providers, streams,
 promises, filesystem capabilities, operation locks, or process handles. Pending
 patches and commands require matching-project reauthorization, fresh validation,
@@ -40,12 +48,30 @@ execution. Any provider, tool, patch, command, return, or cancellation operation
 that was active at shutdown becomes `Interrupted` with
 `unknown_or_interrupted`; no side effect resumes automatically.
 
+Recovery scans the full active path for started-but-unsettled actions. Such an
+action is always `Interrupted` and cannot become reapprovable. Only proposed or
+approved-but-not-started actions can enter `RecoveryRequired`, which invalidates
+the old approval and increments an explicit approval generation.
+
+One bounded local sensitive-text scanner is applied before session persistence
+and again during export. It removes sensitive field names and redacts recognised
+credential and absolute-path patterns as defense in depth. Patches containing
+recognised sensitive text persist no old/new contents and are marked
+non-recoverable. The scanner is deterministic and intentionally limited; it is
+not a claim that every possible secret or private identifier can be detected by
+pattern matching.
+
 ## Consequences
 
 Completed and terminal sessions survive a desktop restart, and interrupted work
 is represented honestly. The Sessions UI can reconstruct the active ledger path,
 export deterministic redacted JSON, and delete one local session without
 touching project files, credentials, bindings, or unrelated sessions.
+
+The durable pre-dispatch receipt closes the unrecorded-side-effect window for
+normal and recovered patch/command execution. A crash after the started receipt
+but before a settled receipt is represented conservatively as an unknown
+interrupted outcome, so KerniQ will not offer the action for another execution.
 
 KerniQ does not provide live process recovery, automatic provider continuation,
 automatic patch or command approval, cloud backup, cross-device synchronization,

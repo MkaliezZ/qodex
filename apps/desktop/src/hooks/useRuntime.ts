@@ -362,14 +362,9 @@ export function useRuntime() {
         readFile: (path) => project.fileAccess.readFile(path),
         commandExecutionAvailable: commandRunnerRef.current !== null,
       };
-      const loop = new AgentLoopRuntime({
-        provider,
-        modelId,
-        project: projectAccess,
-        patchAdapter: createPatchAdapter(project),
-        ...(commandRunnerRef.current ? { commandRunner: commandRunnerRef.current } : {}),
-      });
-      if (loop.isSupported()) {
+      const agentSupported = provider.capabilities?.toolAgentLoop === true
+        && (provider.supportsAgentTools?.(modelId) ?? true);
+      if (agentSupported) {
         const binding = projectBindingRef.current;
         if (!binding) {
           setPatchErrors([{
@@ -390,6 +385,14 @@ export function useRuntime() {
           runtime: sessionRuntime,
           sessionId: taskId,
           onRecorded: refreshSessions,
+        });
+        const loop = new AgentLoopRuntime({
+          provider,
+          modelId,
+          project: projectAccess,
+          patchAdapter: createPatchAdapter(project),
+          sideEffectLifecycle: recorder,
+          ...(commandRunnerRef.current ? { commandRunner: commandRunnerRef.current } : {}),
         });
         agentSessionRecorderRef.current = recorder;
         recorder.recordUserMessage(prompt);

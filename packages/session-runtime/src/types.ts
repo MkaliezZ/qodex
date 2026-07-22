@@ -40,6 +40,7 @@ export type UniversalEventType = typeof UNIVERSAL_EVENT_TYPES[number];
 export type CodingEventType =
   | "PATCH_PROPOSED"
   | "PATCH_APPROVED"
+  | "PATCH_STARTED"
   | "PATCH_APPLIED"
   | "PATCH_REJECTED"
   | "COMMAND_PROPOSED"
@@ -64,9 +65,12 @@ export interface SafeMetadata {
   dependencyLockDigest?: string;
   actionId?: string;
   approvalId?: string;
+  approvalGeneration?: number;
   executionReceiptId?: string;
   artifactIds?: string[];
   executionStatus?: string;
+  recoverable?: boolean;
+  sensitiveContentRedacted?: boolean;
   [key: string]: SafeJson | undefined;
 }
 
@@ -156,6 +160,11 @@ export interface PendingActionProjection {
   proposalEntryId: string;
   payload: SafeJson;
   approved: boolean;
+  started: boolean;
+  settled: boolean;
+  approvalId: string | null;
+  approvalGeneration: number;
+  executionReceiptId: string | null;
   recoveryRequired: boolean;
   stale: boolean;
 }

@@ -127,6 +127,45 @@ export interface AgentPatchAdapter {
   rollback(proposal: AgentPatchProposal): Promise<AgentPatchResult[]>;
 }
 
+export interface AgentPatchLifecycleInput {
+  taskId: string;
+  proposal: AgentPatchProposal;
+  approvalId: string;
+  executionReceiptId: string;
+}
+
+export interface AgentPatchResultLifecycleInput extends AgentPatchLifecycleInput {
+  results: AgentPatchResult[];
+}
+
+export interface AgentCommandLifecycleInput {
+  taskId: string;
+  pending: PendingCommandApproval;
+  approvalId: string;
+  executionReceiptId: string;
+}
+
+export interface AgentCommandResultLifecycleInput extends AgentCommandLifecycleInput {
+  result: ProjectCommandResult;
+}
+
+export interface AgentSideEffectFailureInput {
+  taskId: string;
+  kind: "patch" | "command";
+  actionId: string;
+  approvalId: string;
+  executionReceiptId: string;
+  message: string;
+}
+
+export interface AgentSideEffectLifecycle {
+  beforePatchApply(input: AgentPatchLifecycleInput): Promise<void>;
+  afterPatchApply(input: AgentPatchResultLifecycleInput): Promise<void>;
+  beforeCommandStart(input: AgentCommandLifecycleInput): Promise<void>;
+  afterCommandComplete(input: AgentCommandResultLifecycleInput): Promise<void>;
+  afterSideEffectFailure(input: AgentSideEffectFailureInput): Promise<void>;
+}
+
 export type PendingPatchDisposition =
   | "user_rejected"
   | "task_cancelled"
@@ -176,6 +215,7 @@ export interface AgentLoopRuntimeOptions {
   project: AgentProjectAccess;
   patchAdapter: AgentPatchAdapter;
   commandRunner?: ProjectCommandRunner;
+  sideEffectLifecycle?: AgentSideEffectLifecycle;
   limits?: Partial<AgentLoopLimits>;
   systemPrompt?: string;
   now?: () => number;

@@ -15,7 +15,7 @@ v0.2.0-beta.1 may still reference the Qodex name.
 
 ![Beta](https://img.shields.io/badge/status-beta-blue)
 ![License](https://img.shields.io/badge/license-MIT-blue)
-![Tests](https://img.shields.io/badge/tests-1357%20passing-green)
+![Tests](https://img.shields.io/badge/tests-1390%20passing-green)
 ![Platform](https://img.shields.io/badge/platform-Desktop%20(Tauri)-purple)
 ![TypeScript](https://img.shields.io/badge/TypeScript-5.5-blue)
 [![CI](https://github.com/MkaliezZ/qodex/actions/workflows/ci.yml/badge.svg)](https://github.com/MkaliezZ/qodex/actions/workflows/ci.yml)
@@ -123,7 +123,7 @@ Full guide: [QUICK_START.md](docs/QUICK_START.md)
 pnpm -r test
 ```
 
-**1,357 tests** across 14 packages - all passing.
+**1,390 tests** across 15 tested workspace projects - all passing.
 
 ## Minimal Agent Loop v0.4
 
@@ -182,6 +182,22 @@ installer artifacts are not yet published.
 | [Product Roadmap](docs/development/PRODUCT_ROADMAP.md) | Authoritative product and distribution milestones |
 | [ADR Records](qodex-config/adr/) | Architecture Decision Records |
 | [Release Notes](docs/development/RELEASE_NOTES_v0.2.0-beta.2.md) | v0.2.0-beta.2 changelog |
+
+---
+
+## Session Restart Safety v0.5.1
+
+Mutating Agent actions use a durable pre-dispatch receipt: patch writes and
+cataloged commands start only after fresh approval evidence and a started event
+have committed to the local session ledger. A restart with started-but-unsettled
+evidence is shown as `Interrupted`; KerniQ does not replay it or offer another
+approval. Pending actions that never started require project reauthorization
+and a new approval generation.
+
+Session persistence and redacted export apply bounded local scanning for
+recognised credential and absolute-path patterns. Sensitive patch contents are
+not retained for recovery. This is defense in depth and does not claim to detect
+every possible secret.
 
 ---
 

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { AgentLoopTask } from "@qodex/agent-runtime";
+import type { AgentLoopTask, ProjectCommandResult } from "@qodex/agent-runtime";
 import { InMemorySessionStore, SessionRuntime } from "@qodex/session-runtime";
 import { AgentSessionLedgerRecorder } from "./agentSessionRecorder";
 
@@ -69,15 +69,39 @@ describe("AgentSessionLedgerRecorder", () => {
   });
 
   it("records a terminal command result without stdout, headers, environment, or private paths", async () => {
+    const sensitiveOutput = `github_pat_${"A1".repeat(15)}`;
     const runtime = new SessionRuntime(new InMemorySessionStore());
     await runtime.createSession({ id: "task-1", title: "Task" });
     const recorder = new AgentSessionLedgerRecorder({ runtime, sessionId: "task-1" });
-    recorder.recordTask(task());
-    recorder.recordTask(task({
-      status: "RunningCommand",
-      pendingCommand: null,
-      timeline: task().timeline,
-    }));
+    const waiting = task();
+    const pending = waiting.pendingCommand!;
+    recorder.recordTask(waiting);
+    await recorder.beforeCommandStart({
+      taskId: waiting.id,
+      pending,
+      approvalId: "approval-command-1",
+      executionReceiptId: "receipt-command-1",
+    });
+    const result: ProjectCommandResult = {
+      commandId: pending.command.id,
+      approved: true,
+      started: true,
+      exitCode: 0,
+      stdout: `private command output ${sensitiveOutput}`,
+      stderr: "",
+      timedOut: false,
+      cancelled: false,
+      stdoutTruncated: false,
+      stderrTruncated: false,
+      durationMs: 5,
+    };
+    await recorder.afterCommandComplete({
+      taskId: waiting.id,
+      pending,
+      approvalId: "approval-command-1",
+      executionReceiptId: "receipt-command-1",
+      result,
+    });
     recorder.recordTask(task({
       status: "Done",
       pendingCommand: null,
@@ -89,7 +113,7 @@ describe("AgentSessionLedgerRecorder", () => {
           title: "pnpm test",
           status: "success",
           summary: "Exit code 0 in 5 ms.",
-          detail: "private command output",
+          detail: `private command output ${sensitiveOutput}`,
           durationMs: 5,
           toolCallId: "provider-call-77",
           actionId: "provider-call-77",
@@ -109,7 +133,50 @@ describe("AgentSessionLedgerRecorder", () => {
     const serialized = JSON.stringify(await runtime.loadActivePath("task-1"));
     expect(serialized).toContain("provider-call-77");
     expect(serialized).not.toContain("private command output");
+    expect(serialized).not.toContain(sensitiveOutput);
     expect(serialized).not.toContain("environment");
     expect((await runtime.projectCurrentState("task-1")).status).toBe("Completed");
+  });
+
+  it("marks a patch containing recognised sensitive text as unrecoverable before persistence", async () => {
+    const sensitiveValue = `github_pat_${"A1".repeat(15)}`;
+    const runtime = new SessionRuntime(new InMemorySessionStore());
+    await runtime.createSession({ id: "task-1", title: "Privacy task" });
+    const recorder = new AgentSessionLedgerRecorder({ runtime, sessionId: "task-1" });
+    recorder.recordUserMessage(`Inspect /Users/example/Private/project using ${sensitiveValue}`);
+    recorder.recordTask(task({
+      status: "WaitingForPatchApproval",
+      pendingCommand: null,
+      pendingPatch: {
+        id: "patch-private",
+        taskId: "task-1",
+        summary: "Update config",
+        files: [{
+          path: "src/config.ts",
+          oldContent: "export const value = 'safe';",
+          newContent: `export const credential = '${sensitiveValue}';`,
+        }],
+        createdAt: "2026-01-01T00:00:04Z",
+      },
+      timeline: [{
+        id: "timeline-patch",
+        kind: "patch_proposal",
+        title: "Patch proposed",
+        status: "pending",
+        summary: "Update config",
+        actionId: "patch-private",
+        timestamp: "2026-01-01T00:00:04Z",
+      }],
+    }));
+    await recorder.flush();
+
+    const entries = await runtime.loadActivePath("task-1");
+    const patch = entries.find((entry) => entry.type === "PATCH_PROPOSED");
+    const serialized = JSON.stringify(entries);
+    expect(patch?.safeMetadata.recoverable).toBe(false);
+    expect(patch?.safeMetadata.sensitiveContentRedacted).toBe(true);
+    expect(serialized).not.toContain(sensitiveValue);
+    expect(serialized).not.toContain("/Users/example/Private/project");
+    expect(serialized).not.toContain("newContent");
   });
 });
