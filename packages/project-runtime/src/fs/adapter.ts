@@ -7,6 +7,7 @@
 
 import type { ProjectFile } from "../types/project.js";
 import { shouldIgnore, isBinaryFile, detectLanguage } from "../ignore/rules.js";
+import { assertSafeProjectRelativePath } from "./path.js";
 
 /**
  * Interface that must be implemented for each platform.
@@ -18,6 +19,8 @@ export interface FileSystemAdapter {
   readTextFile(filePath: string): Promise<string>;
   /** Read multiple files as UTF-8 text */
   readTextFiles(filePaths: string[]): Promise<Map<string, string>>;
+  /** Replace an existing UTF-8 text file */
+  writeTextFile(filePath: string, content: string): Promise<void>;
   /** Check if a path exists */
   exists(path: string): Promise<boolean>;
   /** Get project name from root path */
@@ -35,6 +38,7 @@ export class WebFileSystemAdapter implements FileSystemAdapter {
   }
 
   async listDirectory(dirPath: string): Promise<ProjectFile[]> {
+    if (dirPath) assertSafeProjectRelativePath(dirPath);
     const handle = dirPath === ""
       ? this.rootHandle!
       : (this.pathMap.get(dirPath) as FileSystemDirectoryHandle);
@@ -65,6 +69,7 @@ export class WebFileSystemAdapter implements FileSystemAdapter {
   }
 
   async readTextFile(filePath: string): Promise<string> {
+    assertSafeProjectRelativePath(filePath);
     const handle = this.pathMap.get(filePath) as FileSystemFileHandle;
     if (!handle || handle.kind !== "file") {
       throw new Error(`File not found: ${filePath}`);
@@ -76,6 +81,27 @@ export class WebFileSystemAdapter implements FileSystemAdapter {
 
     const file = await handle.getFile();
     return await file.text();
+  }
+
+  async writeTextFile(filePath: string, content: string): Promise<void> {
+    assertSafeProjectRelativePath(filePath);
+    if (isBinaryFile(filePath)) {
+      throw new Error(`Unsupported Binary File: ${filePath}`);
+    }
+
+    const handle = this.pathMap.get(filePath) as FileSystemFileHandle;
+    if (!handle || handle.kind !== "file") {
+      throw new Error(`File not found: ${filePath}`);
+    }
+
+    const writable = await handle.createWritable();
+    try {
+      await writable.write(content);
+      await writable.close();
+    } catch (error) {
+      await writable.abort().catch(() => undefined);
+      throw error;
+    }
   }
 
   async readTextFiles(filePaths: string[]): Promise<Map<string, string>> {
@@ -91,8 +117,9 @@ export class WebFileSystemAdapter implements FileSystemAdapter {
     return results;
   }
 
-  async exists(_path: string): Promise<boolean> {
-    return true; // Handles are only created from existing files
+  async exists(path: string): Promise<boolean> {
+    assertSafeProjectRelativePath(path);
+    return this.pathMap.has(path);
   }
 
   getProjectName(rootPath: string): string {

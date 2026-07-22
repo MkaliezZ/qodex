@@ -14,7 +14,7 @@ import { SettingsView } from "../views/SettingsView";
 import { MarketplaceView } from "../views/MarketplaceView";
 import type { ProjectTree, FileContent } from "@qodex/project-runtime";
 import type { ContextBundle } from "@qodex/context-engine";
-import type { PatchProposal } from "@qodex/diff-engine";
+import type { ApplyResult, PatchError, PatchProposal } from "@qodex/diff-engine";
 
 export type ActiveView = "agent" | "files" | "sessions" | "skills" | "git" | "settings" | "marketplace";
 
@@ -33,8 +33,14 @@ interface RuntimeContextValue {
   estimatedTokens: number;
   pendingProposal: PatchProposal | null;
   currentProposal: PatchProposal | null;
+  patchErrors: PatchError[];
+  applyResults: ApplyResult[];
+  rollbackResults: ApplyResult[];
+  isApplying: boolean;
+  isRollingBack: boolean;
   applyProposal: () => Promise<void>;
   rejectProposal: () => void;
+  rollbackProposal: () => Promise<void>;
   activeView: ActiveView;
   setActiveView: (view: ActiveView) => void;
 }

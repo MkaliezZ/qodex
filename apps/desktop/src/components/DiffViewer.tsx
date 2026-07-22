@@ -1,242 +1,215 @@
+import { DiffGenerator } from "@qodex/diff-engine";
+import type { PatchFile } from "@qodex/diff-engine";
 import { useRuntimeContext } from "./AppShell";
 
-export function DiffViewer() {
-  const { currentProposal, applyProposal, rejectProposal, pendingProposal } =
-    useRuntimeContext();
+const diffGenerator = new DiffGenerator();
 
-  if (!pendingProposal && !currentProposal) {
-    return (
-      <div className="glass-panel-subtle" style={{ padding: 12 }}>
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-            marginBottom: 8,
-          }}
-        >
-          <div
-            className="section-title"
-            style={{ padding: 0, border: "none", fontSize: 11 }}
-          >
-            Diff Preview
-          </div>
-        </div>
-        <div style={{
+function FileDiff({ file }: { file: PatchFile }) {
+  const stats = diffGenerator.generateDiff(file);
+  const unifiedDiff = diffGenerator.generateUnifiedDiff(file);
+
+  return (
+    <div data-testid="patch-file" style={{ marginBottom: 10 }}>
+      <div
+        className="text-code"
+        style={{
           display: "flex",
-          flexDirection: "column",
-          alignItems: "center",
-          justifyContent: "center",
-          padding: "40px 16px 32px",
-          textAlign: "center",
-        }}>
-          <div style={{
-            fontSize: 14,
-            fontWeight: 500,
-            color: "rgba(255,255,255,0.35)",
-            letterSpacing: "0.01em",
-          }}>
-            No changes to review.
-          </div>
-          <div style={{
-            fontSize: 12,
-            color: "rgba(255,255,255,0.18)",
-            marginTop: 4,
-          }}>
-            Diffs will appear here after agent actions.
-          </div>
-        </div>
+          justifyContent: "space-between",
+          gap: 12,
+          padding: "6px 8px",
+          background: "rgba(91, 140, 255, 0.06)",
+          borderRadius: 6,
+          marginBottom: 4,
+          color: "#7ba3ff",
+          fontSize: 11,
+          fontWeight: 600,
+        }}
+      >
+        <span>{file.path}</span>
+        <span style={{ fontWeight: 500 }}>
+          <span style={{ color: "#4DFF9D" }}>+{stats.additions}</span>{" "}
+          <span style={{ color: "#FF7892" }}>-{stats.deletions}</span>
+        </span>
       </div>
-    );
-  }
+      <div
+        className="text-code"
+        data-testid="patch-diff"
+        style={{
+          background: "rgba(0,0,0,0.2)",
+          border: "1px solid rgba(255,255,255,0.04)",
+          borderRadius: 6,
+          padding: "5px 0",
+          maxHeight: 240,
+          overflow: "auto",
+          fontSize: 11,
+          lineHeight: 1.5,
+        }}
+      >
+        {unifiedDiff.split("\n").map((line, index) => {
+          const kind = line.startsWith("+") && !line.startsWith("+++")
+            ? "add"
+            : line.startsWith("-") && !line.startsWith("---")
+              ? "delete"
+              : "context";
+          return (
+            <div
+              key={`${index}-${line}`}
+              style={{
+                minWidth: "max-content",
+                padding: "1px 8px",
+                whiteSpace: "pre",
+                background: kind === "add"
+                  ? "rgba(77, 255, 157, 0.07)"
+                  : kind === "delete"
+                    ? "rgba(255, 92, 122, 0.07)"
+                    : "transparent",
+                color: kind === "add"
+                  ? "#4DFF9D"
+                  : kind === "delete"
+                    ? "#FF7892"
+                    : "rgba(255,255,255,0.5)",
+              }}
+            >
+              {line || " "}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
 
-  const proposal = pendingProposal ?? currentProposal!;
+export function DiffViewer() {
+  const {
+    currentProposal,
+    applyProposal,
+    rejectProposal,
+    rollbackProposal,
+    pendingProposal,
+    patchErrors,
+    applyResults,
+    rollbackResults,
+    isApplying,
+    isRollingBack,
+  } = useRuntimeContext();
+
+  const proposal = pendingProposal ?? currentProposal;
+  const patchError = patchErrors[0] ?? null;
   const isPending = pendingProposal !== null;
+  const applySucceeded = applyResults.length > 0 && applyResults.every((result) => result.success);
+  const rollbackSucceeded = rollbackResults.length > 0 && rollbackResults.every((result) => result.success);
 
   return (
     <div className="glass-panel-subtle" style={{ padding: 12 }}>
-      {/* Header */}
       <div
         style={{
           display: "flex",
           alignItems: "center",
           justifyContent: "space-between",
-          marginBottom: 8,
+          gap: 12,
+          marginBottom: proposal || patchError ? 8 : 0,
         }}
       >
-        <div
-          className="section-title"
-          style={{ padding: 0, border: "none", fontSize: 11 }}
-        >
-          Diff Preview — {proposal.files.length} file
-          {proposal.files.length !== 1 ? "s" : ""}
+        <div className="section-title" style={{ padding: 0, border: "none", fontSize: 11 }}>
+          Diff Preview{proposal ? ` - ${proposal.files.length} file${proposal.files.length === 1 ? "" : "s"}` : ""}
         </div>
-        {isPending && (
-          <div style={{ display: "flex", gap: 4 }}>
+        {isPending ? (
+          <div style={{ display: "flex", gap: 5 }}>
             <button
               className="qodex-button qodex-button-secondary"
+              data-testid="reject-patch"
               onClick={rejectProposal}
-              style={{
-                height: 24,
-                padding: "0 10px",
-                fontSize: 11,
-                borderRadius: 6,
-                gap: 4,
-              }}
+              disabled={isApplying}
+              style={{ height: 26, padding: "0 10px", fontSize: 11, borderRadius: 6 }}
             >
-              ✕ Reject
+              Reject
             </button>
             <button
               className="qodex-button"
+              data-testid="apply-patch"
               onClick={applyProposal}
-              style={{
-                height: 24,
-                padding: "0 10px",
-                fontSize: 11,
-                borderRadius: 6,
-                gap: 4,
-              }}
+              disabled={isApplying}
+              style={{ height: 26, padding: "0 10px", fontSize: 11, borderRadius: 6 }}
             >
-              ✓ Apply
+              {isApplying ? "Applying..." : "Apply changes"}
             </button>
           </div>
-        )}
+        ) : currentProposal ? (
+          <button
+            className="qodex-button qodex-button-secondary"
+            data-testid="rollback-patch"
+            onClick={rollbackProposal}
+            disabled={isRollingBack}
+            style={{ height: 26, padding: "0 10px", fontSize: 11, borderRadius: 6 }}
+          >
+            {isRollingBack ? "Rolling back..." : "Rollback"}
+          </button>
+        ) : null}
       </div>
 
-      {/* Summary */}
-      <div
-        className="text-caption"
-        style={{
-          fontSize: 11,
-          marginBottom: 8,
-          padding: "6px 8px",
-          background: "rgba(255,255,255,0.03)",
-          borderRadius: 6,
-        }}
-      >
-        {proposal.summary}
-      </div>
+      {patchErrors.length > 0 ? (
+        <div data-testid="patch-error" style={{ display: "grid", gap: 5, marginBottom: proposal ? 8 : 0 }}>
+          {patchErrors.map((error, index) => (
+            <div
+              key={`${error.code}-${error.path ?? "proposal"}-${index}`}
+              style={{
+                padding: "8px 10px",
+                border: `1px solid ${error.code === "patch_not_present" ? "rgba(91,140,255,0.16)" : "rgba(255,92,122,0.22)"}`,
+                borderRadius: 7,
+                color: error.code === "patch_not_present" ? "rgba(180,199,255,0.78)" : "#ff91a6",
+                background: error.code === "patch_not_present" ? "rgba(91,140,255,0.06)" : "rgba(255,92,122,0.07)",
+                fontSize: 11,
+                lineHeight: 1.5,
+              }}
+            >
+              <strong style={{ marginRight: 6 }}>{error.code}</strong>
+              {error.path ? <span className="text-code" style={{ marginRight: 6 }}>{error.path}</span> : null}
+              {error.message}
+            </div>
+          ))}
+        </div>
+      ) : null}
 
-      {/* File diffs */}
-      {proposal.files.map((file) => (
-        <div key={file.path} style={{ marginBottom: 8 }}>
+      {!proposal && !patchError ? (
+        <div style={{ padding: "32px 16px 26px", textAlign: "center" }}>
+          <div style={{ color: "rgba(255,255,255,0.35)", fontSize: 13, fontWeight: 500 }}>
+            No changes to review.
+          </div>
+          <div style={{ marginTop: 4, color: "rgba(255,255,255,0.2)", fontSize: 11 }}>
+            Valid model patch proposals will appear here for approval.
+          </div>
+        </div>
+      ) : null}
+
+      {proposal ? (
+        <div data-testid="patch-proposal">
           <div
-            className="text-code"
+            className="text-caption"
+            data-testid="patch-summary"
             style={{
-              fontSize: 11,
-              padding: "4px 8px",
-              background: "rgba(91, 140, 255, 0.06)",
+              marginBottom: 9,
+              padding: "7px 9px",
               borderRadius: 6,
-              marginBottom: 4,
-              color: "#5B8CFF",
-              fontWeight: 600,
+              background: "rgba(255,255,255,0.03)",
+              fontSize: 11,
             }}
           >
-            {file.path}
+            {proposal.summary}
           </div>
-
-          {/* Diff lines */}
-          {(() => {
-            const oldLines = file.oldContent.split("\n");
-            const newLines = file.newContent.split("\n");
-            const maxLen = Math.max(oldLines.length, newLines.length);
-            const lines: { type: "same" | "add" | "del"; text: string }[] = [];
-
-            for (let i = 0; i < maxLen; i++) {
-              if (
-                i < oldLines.length &&
-                i < newLines.length &&
-                oldLines[i] === newLines[i]
-              ) {
-                lines.push({ type: "same", text: oldLines[i] });
-              } else {
-                if (i < oldLines.length)
-                  lines.push({ type: "del", text: oldLines[i] });
-                if (i < newLines.length)
-                  lines.push({ type: "add", text: newLines[i] });
-              }
-            }
-
-            const adds = lines.filter((l) => l.type === "add").length;
-            const dels = lines.filter((l) => l.type === "del").length;
-
-            return (
-              <>
-                <div
-                  className="text-caption"
-                  style={{ fontSize: 10, marginBottom: 4, display: "flex", gap: 12 }}
-                >
-                  <span style={{ color: "#4DFF9D" }}>+{adds}</span>
-                  <span style={{ color: "#FF5C7A" }}>-{dels}</span>
-                </div>
-                <div
-                  className="text-code"
-                  style={{
-                    background: "rgba(0,0,0,0.15)",
-                    borderRadius: 6,
-                    padding: "4px 0",
-                    maxHeight: 200,
-                    overflow: "auto",
-                    fontSize: 11,
-                    lineHeight: 1.5,
-                  }}
-                >
-                  {lines.slice(0, 50).map((l, idx) => (
-                    <div
-                      key={idx}
-                      style={{
-                        padding: "1px 8px",
-                        background:
-                          l.type === "add"
-                            ? "rgba(77, 255, 157, 0.06)"
-                            : l.type === "del"
-                              ? "rgba(255, 92, 122, 0.06)"
-                              : "transparent",
-                        color:
-                          l.type === "add"
-                            ? "#4DFF9D"
-                            : l.type === "del"
-                              ? "#FF5C7A"
-                              : "rgba(255,255,255,0.45)",
-                      }}
-                    >
-                      {l.type === "add" ? "+" : l.type === "del" ? "-" : " "}
-                      {l.text}
-                    </div>
-                  ))}
-                  {lines.length > 50 && (
-                    <div
-                      className="text-caption"
-                      style={{
-                        padding: "4px 8px",
-                        textAlign: "center",
-                        fontSize: 10,
-                      }}
-                    >
-                      ... {lines.length - 50} more lines
-                    </div>
-                  )}
-                </div>
-              </>
-            );
-          })()}
+          {proposal.files.map((file) => <FileDiff key={file.path} file={file} />)}
         </div>
-      ))}
+      ) : null}
 
-      {/* Applied status */}
-      {!isPending && currentProposal && (
-        <div
-          className="text-caption"
-          style={{
-            fontSize: 11,
-            textAlign: "center",
-            padding: 6,
-            color: "#4FFFC2",
-          }}
-        >
-          ✓ Applied
+      {applySucceeded && currentProposal ? (
+        <div data-testid="apply-status" style={{ color: "#4FFFC2", fontSize: 11, textAlign: "center" }}>
+          Applied and verified on disk. Rollback is available for this session.
         </div>
-      )}
+      ) : null}
+      {rollbackSucceeded && !currentProposal ? (
+        <div data-testid="rollback-status" style={{ color: "#4FFFC2", fontSize: 11, textAlign: "center" }}>
+          Original file contents restored and verified.
+        </div>
+      ) : null}
     </div>
   );
 }

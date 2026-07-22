@@ -105,11 +105,17 @@ You'll see the response stream live in the Agent Workspace.
 
 ## Step 6: Working with Patches
 
-After files are selected, KerniQ generates a patch proposal in the Diff Viewer.
+With a provider configured, ask KerniQ to modify one or more selected text files.
+When the model returns a valid `KERNIQ_PATCH_V1` proposal, KerniQ validates the
+current file contents and shows the exact unified diff in the Diff Viewer.
 
-- Click "Apply" to apply the changes
-- Click "Reject" to discard
-- Navigate to "Diff Preview" to review all changes
+- Review the summary, changed paths, additions, and removals
+- Click "Apply changes" to write and verify the approved replacements
+- Click "Reject" to discard the proposal without modifying files
+- Click "Rollback" after a successful apply to restore and verify the original contents
+
+Malformed, unsafe, stale, or unsupported proposals are shown as errors and do not
+write any files. Rollback data is kept only for the current application session.
 
 ---
 

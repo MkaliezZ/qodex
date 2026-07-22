@@ -34,7 +34,7 @@ describe("ApplyEngine", () => {
   });
 
   it("applies with target", async () => {
-    const written = new Map<string, string>();
+    const written = new Map<string, string>([["f.ts", "old"]]);
     const engine = new ApplyEngine({
       readFile: async (path) => written.get(path) ?? "",
       writeFile: async (path, content) => { written.set(path, content); },
@@ -65,7 +65,7 @@ describe("ApplyEngine", () => {
 
   it("handles apply errors gracefully", async () => {
     const engine = new ApplyEngine({
-      readFile: async () => "",
+      readFile: async () => "a",
       writeFile: async () => { throw new Error("Permission denied"); },
     });
 

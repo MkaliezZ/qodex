@@ -7,6 +7,7 @@
 import type { ProjectFile } from "../types/project.js";
 import { shouldIgnore, isBinaryFile, detectLanguage } from "../ignore/rules.js";
 import type { FileSystemAdapter } from "./adapter.js";
+import { assertSafeProjectRelativePath } from "./path.js";
 
 interface MockFileEntry {
   path: string;
@@ -33,6 +34,7 @@ export class MockFileSystemAdapter implements FileSystemAdapter {
   }
 
   async listDirectory(dirPath: string): Promise<ProjectFile[]> {
+    if (dirPath) assertSafeProjectRelativePath(dirPath);
     const children = this.findChildren(dirPath);
     const entries: ProjectFile[] = [];
 
@@ -56,6 +58,7 @@ export class MockFileSystemAdapter implements FileSystemAdapter {
   }
 
   async readTextFile(filePath: string): Promise<string> {
+    assertSafeProjectRelativePath(filePath);
     const entry = this.files.find(
       (f) => f.path === filePath && !f.isDir,
     );
@@ -64,6 +67,16 @@ export class MockFileSystemAdapter implements FileSystemAdapter {
       throw new Error(`Unsupported Binary File: ${filePath}`);
     }
     return entry.content;
+  }
+
+  async writeTextFile(filePath: string, content: string): Promise<void> {
+    assertSafeProjectRelativePath(filePath);
+    const entry = this.files.find((file) => file.path === filePath && !file.isDir);
+    if (!entry) throw new Error(`File not found: ${filePath}`);
+    if (isBinaryFile(filePath)) {
+      throw new Error(`Unsupported Binary File: ${filePath}`);
+    }
+    entry.content = content;
   }
 
   async readTextFiles(filePaths: string[]): Promise<Map<string, string>> {
@@ -78,8 +91,9 @@ export class MockFileSystemAdapter implements FileSystemAdapter {
     return results;
   }
 
-  async exists(_path: string): Promise<boolean> {
-    return true;
+  async exists(path: string): Promise<boolean> {
+    assertSafeProjectRelativePath(path);
+    return this.files.some((file) => file.path === path);
   }
 
   getProjectName(rootPath: string): string {

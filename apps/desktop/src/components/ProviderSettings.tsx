@@ -52,7 +52,7 @@ export function ProviderSettings() {
       <div className="field-group">
         <label>{isCustom ? "Base URL" : "API Key"}</label>
         {isCustom ? (
-          <input type="text" className="qodex-input" value={config.baseUrl} onChange={(e) => setBaseUrl(e.target.value)} placeholder="https://api.example.com/v1" />
+          <input type="text" className="qodex-input" data-testid="base-url-input" value={config.baseUrl} onChange={(e) => setBaseUrl(e.target.value)} placeholder="https://api.example.com/v1" />
         ) : (
           <>
             <div className="input-action-row">

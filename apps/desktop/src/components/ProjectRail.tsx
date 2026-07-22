@@ -7,6 +7,7 @@ export function ProjectRail() {
     useRuntimeContext();
 
   const navItems: { label: string; view: ActiveView; glyph: string }[] = [
+    { label: "Agent", view: "agent", glyph: "A" },
     { label: "Files", view: "files", glyph: "F" },
     { label: "Sessions", view: "sessions", glyph: "S" },
     { label: "Skills", view: "skills", glyph: "K" },

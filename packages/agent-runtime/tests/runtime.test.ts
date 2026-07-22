@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from "vitest";
 import { AgentRuntime } from "../src/runtime.js";
 import { TaskStatus } from "../src/types/task.js";
+import type { ModelProvider } from "@qodex/provider-sdk";
 
 describe("AgentRuntime", () => {
   it("creates a session", () => {
@@ -74,6 +75,33 @@ describe("AgentRuntime", () => {
     await runtime.runTask("nonexistent");
 
     expect(events.some((e) => e.type === "task.failed")).toBe(true);
+  });
+
+  it("turns provider error chunks into a failed task", async () => {
+    const provider: ModelProvider = {
+      id: "failing",
+      name: "Failing Provider",
+      protocol: "custom",
+      listModels: async () => [],
+      testConnection: async () => false,
+      async *stream() {
+        yield { type: "error", message: "provider unavailable" };
+      },
+    };
+    const runtime = new AgentRuntime({
+      providers: new Map([[provider.id, provider]]),
+      defaultProviderId: provider.id,
+    });
+    const session = runtime.createSession("Failure");
+    const task = runtime.createTask(session.id, "Try provider");
+    const events: string[] = [];
+    runtime.subscribe((event) => events.push(event.type));
+
+    await runtime.runTask(task.id);
+
+    expect(runtime.getTask(task.id)?.status).toBe(TaskStatus.Failed);
+    expect(events).toContain("task.failed");
+    expect(events).not.toContain("task.completed");
   });
 
   it("subscribes and unsubscribes", () => {

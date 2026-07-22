@@ -34,7 +34,9 @@ describe("Regression: No crash on edge inputs", () => {
   it("validate empty proposal", async () => {
     const p = engine.createProposal("t1", "empty", []);
     const c = await engine.validateProposal(p);
-    expect(c).toHaveLength(0);
+    expect(c).toEqual([
+      { path: "", type: "empty_patch", detail: "Patch proposal contains no files" },
+    ]);
   });
 
   it("parse empty diff", () => {

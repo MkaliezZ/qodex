@@ -43,7 +43,7 @@ describe("Rollback", () => {
     const proposal = mkProp([{ path: "new.ts", oldContent: "old", newContent: "new" }]);
     const results = await engine.rollback(proposal);
     expect(results[0].success).toBe(false);
-    expect(results[0].error).toContain("No rollback data");
+    expect(results[0].code).toBe("write_target_unavailable");
   });
 
   it("in-memory apply tracks for rollback", async () => {

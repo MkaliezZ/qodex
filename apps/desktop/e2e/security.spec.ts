@@ -14,7 +14,7 @@ test.describe("security", () => {
     await page.fill('[data-testid="api-key-input"]', "sk-test-key-12345");
     await page.click('[data-testid="api-key-toggle"]'); // hide
     // Go back to agent view
-    await page.click("text=Files");
+    await page.getByRole("button", { name: "A Agent" }).click();
     const switcher = page.locator('[data-testid="model-switcher"]');
     const text = await switcher.textContent();
     expect(text).not.toContain("sk-test-key-12345");

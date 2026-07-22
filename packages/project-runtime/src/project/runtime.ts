@@ -1,8 +1,7 @@
 /**
  * Qodex Project Runtime — Core Runtime
  *
- * Manages project lifecycle: open, close, browse, read.
- * Read-only — no file writing, no patch generation.
+ * Manages project lifecycle: open, close, browse, and selected-file access.
  */
 
 import type { Project, FileContent, ProjectTree, ProjectIndex } from "../types/project.js";
@@ -14,6 +13,11 @@ import { ProjectIndexer } from "../indexing/index.js";
 export interface ProjectRuntimeOptions {
   adapter: FileSystemAdapter;
   autoIndex?: boolean;
+}
+
+export interface ProjectFileAccess {
+  readFile(path: string): Promise<string>;
+  writeFile(path: string, content: string): Promise<void>;
 }
 
 export class ProjectRuntime {
@@ -125,6 +129,14 @@ export class ProjectRuntime {
 
   async readSelectedFilesAsContext(): Promise<string> {
     return this.fileReader.readFilesAsContext(this._selectedFilePaths);
+  }
+
+  /** Restricted file access used by the approved DiffEngine apply path. */
+  get fileAccess(): ProjectFileAccess {
+    return {
+      readFile: (path) => this.adapter.readTextFile(path),
+      writeFile: (path, content) => this.adapter.writeTextFile(path, content),
+    };
   }
 
   // ── Index ──────────────────────────────────────────

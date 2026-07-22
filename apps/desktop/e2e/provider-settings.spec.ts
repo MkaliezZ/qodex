@@ -25,9 +25,8 @@ test.describe("provider-settings", () => {
     await expect(input).toHaveAttribute("type", "password");
   });
 
-  test("12 - connection test without key shows error", async ({ page }) => {
-    await page.click('[data-testid="connection-test-button"]');
-    await expect(page.locator("text=Provider and API key required")).toBeVisible();
+  test("12 - connection test without key is disabled", async ({ page }) => {
+    await expect(page.locator('[data-testid="connection-test-button"]')).toBeDisabled();
   });
 
   test("13 - model selector not visible before connection", async ({ page }) => {
