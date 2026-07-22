@@ -39,6 +39,10 @@ export class DeepSeekProvider extends BaseOpenAICompatibleProvider {
     };
     super(opts);
   }
+
+  override supportsAgentTools(modelId: string): boolean {
+    return modelId !== "deepseek-reasoner";
+  }
 }
 
 /** Factory convenience */

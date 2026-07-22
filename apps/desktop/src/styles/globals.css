@@ -1456,3 +1456,238 @@ select.qodex-input {
     grid-template-columns: 1fr;
   }
 }
+
+/* Minimal Agent Loop */
+.agent-workspace {
+  gap: 10px;
+  padding: 12px 16px;
+}
+
+.agent-workspace-header,
+.agent-workspace-header > div,
+.agent-card-topline,
+.command-actions {
+  display: flex;
+  align-items: center;
+}
+
+.agent-workspace-header {
+  flex-shrink: 0;
+  justify-content: space-between;
+  padding-bottom: 8px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.agent-workspace-header > div {
+  gap: 8px;
+}
+
+.agent-workspace-header .panel-header {
+  padding: 0;
+  border: 0;
+}
+
+.agent-state,
+.agent-card-status,
+.agent-duration {
+  color: rgba(174, 195, 255, 0.56);
+  font-size: 9px;
+  font-weight: 650;
+  letter-spacing: 0.04em;
+}
+
+.agent-state {
+  padding: 2px 7px;
+  border: 1px solid rgba(91, 140, 255, 0.15);
+  border-radius: 999px;
+  background: rgba(91, 140, 255, 0.06);
+}
+
+.agent-stop {
+  min-height: 26px;
+  padding: 3px 10px;
+  color: #ff91a6;
+  font-size: 10px;
+}
+
+.agent-mode-notice {
+  flex-shrink: 0;
+  padding: 7px 9px;
+  border: 1px solid rgba(91, 140, 255, 0.14);
+  border-radius: 7px;
+  color: rgba(188, 204, 255, 0.68);
+  background: rgba(91, 140, 255, 0.05);
+  font-size: 10px;
+  line-height: 15px;
+}
+
+.agent-timeline-scroll {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  overflow: auto;
+  padding: 2px 2px 6px;
+}
+
+.agent-card {
+  position: relative;
+  padding: 10px 11px;
+  border: 1px solid rgba(255, 255, 255, 0.065);
+  border-radius: 9px;
+  background: linear-gradient(145deg, rgba(255, 255, 255, 0.042), rgba(255, 255, 255, 0.018));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.025);
+}
+
+.agent-card-tool_request,
+.agent-card-tool_result {
+  margin-left: 14px;
+  border-color: rgba(72, 214, 255, 0.1);
+  background: rgba(72, 214, 255, 0.025);
+}
+
+.agent-card-patch_proposal,
+.command-approval-card {
+  border-color: rgba(91, 140, 255, 0.2);
+  background: linear-gradient(145deg, rgba(91, 140, 255, 0.09), rgba(108, 92, 231, 0.045));
+}
+
+.agent-card-command_output {
+  border-color: rgba(77, 255, 157, 0.12);
+}
+
+.agent-card-failure,
+.agent-card-limit {
+  border-color: rgba(255, 92, 122, 0.18);
+  background: rgba(255, 92, 122, 0.045);
+}
+
+.agent-card-topline {
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.agent-card-topline strong {
+  color: rgba(239, 243, 255, 0.82);
+  font-size: 11px;
+  font-weight: 650;
+}
+
+.agent-card-status {
+  text-transform: uppercase;
+}
+
+.status-success { color: #72d7a5; }
+.status-error { color: #ff7892; }
+.status-denied { color: #f0b66f; }
+.status-running,
+.status-pending { color: #8eacff; }
+
+.agent-card p {
+  margin: 5px 0 0;
+  color: rgba(255, 255, 255, 0.48);
+  font-size: 10px;
+  line-height: 15px;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.agent-card details {
+  margin-top: 7px;
+}
+
+.agent-card summary {
+  color: rgba(166, 187, 255, 0.46);
+  font-size: 9px;
+  cursor: pointer;
+}
+
+.agent-card pre {
+  max-height: 220px;
+  overflow: auto;
+  margin: 7px 0 0;
+  padding: 8px;
+  border-radius: 6px;
+  color: rgba(221, 228, 255, 0.62);
+  background: rgba(0, 0, 0, 0.22);
+  font: 10px/1.5 "SFMono-Regular", Consolas, monospace;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.agent-duration {
+  display: block;
+  margin-top: 5px;
+  color: rgba(255, 255, 255, 0.2);
+}
+
+.command-preview {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin-top: 9px;
+}
+
+.command-preview code {
+  padding: 4px 6px;
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: 5px;
+  color: #b8caff;
+  background: rgba(0, 0, 0, 0.2);
+  font-size: 10px;
+}
+
+.command-metadata {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+  margin: 9px 0 0;
+}
+
+.command-metadata div {
+  min-width: 0;
+  padding: 6px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.025);
+}
+
+.command-metadata dt {
+  color: rgba(255, 255, 255, 0.24);
+  font-size: 8px;
+}
+
+.command-metadata dd {
+  overflow: hidden;
+  margin: 2px 0 0;
+  color: rgba(255, 255, 255, 0.62);
+  font-size: 9px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.command-actions {
+  justify-content: flex-end;
+  gap: 6px;
+  margin-top: 9px;
+}
+
+.command-actions .qodex-button {
+  min-height: 27px;
+  padding: 4px 9px;
+  font-size: 10px;
+}
+
+.agent-legacy-response {
+  padding: 8px 4px;
+  color: rgba(255, 255, 255, 0.8);
+  font-size: 13px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.agent-empty-state {
+  min-height: 190px;
+  padding: 32px 16px;
+}

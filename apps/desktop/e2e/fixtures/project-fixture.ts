@@ -5,10 +5,55 @@ interface ProjectFixtureState {
   writes: number;
 }
 
+interface AgentCommandFixtureState {
+  starts: number;
+  cancellations: number;
+}
+
 declare global {
   interface Window {
     __kerniqProjectFixture?: ProjectFixtureState;
+    __kerniqCommandFixture?: AgentCommandFixtureState;
   }
+}
+
+export async function installAgentCommandFixture(
+  page: Page,
+  passingFileContent: string,
+): Promise<void> {
+  await page.addInitScript((passingContent) => {
+    const commandState: AgentCommandFixtureState = { starts: 0, cancellations: 0 };
+    window.__kerniqCommandFixture = commandState;
+    window.__kerniqTestCommandRunner = {
+      run: async (command) => {
+        commandState.starts += 1;
+        const passed = window.__kerniqProjectFixture?.files["src/math.ts"] === passingContent;
+        return {
+          commandId: command.id,
+          approved: true,
+          started: true,
+          exitCode: passed ? 0 : 1,
+          stdout: passed ? "1 test passed" : "AssertionError: expected 12 to be 3",
+          stderr: "",
+          timedOut: false,
+          cancelled: false,
+          stdoutTruncated: false,
+          stderrTruncated: false,
+          durationMs: 5,
+        };
+      },
+      cancel: async () => {
+        commandState.cancellations += 1;
+      },
+    };
+  }, passingFileContent);
+}
+
+export async function readAgentCommandFixture(page: Page): Promise<AgentCommandFixtureState> {
+  return page.evaluate(() => ({
+    starts: window.__kerniqCommandFixture?.starts ?? 0,
+    cancellations: window.__kerniqCommandFixture?.cancellations ?? 0,
+  }));
 }
 
 export async function installProjectFixture(

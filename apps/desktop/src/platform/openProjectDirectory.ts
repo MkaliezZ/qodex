@@ -6,6 +6,7 @@ import {
 import { tauriProjectBridge, type TauriProjectBridge } from "./tauriBridge";
 import { TauriFileSystemAdapter } from "./tauriFileSystemAdapter";
 import { ProjectAccessError, type OpenedProjectDirectory } from "./types";
+import { createTauriProjectCommandRunner } from "./tauriProjectCommandRunner";
 
 export type ProjectEnvironment = "tauri" | "browser" | "unsupported";
 
@@ -33,7 +34,12 @@ export async function openProjectDirectory(
     const root = await bridge.pickDirectory();
     if (!root) return null;
     const adapter = await TauriFileSystemAdapter.create(root, bridge);
-    return { name: adapter.getProjectName(""), adapter, source: "tauri" };
+    return {
+      name: adapter.getProjectName(""),
+      adapter,
+      source: "tauri",
+      commandRunner: createTauriProjectCommandRunner(root),
+    };
   }
 
   if (environment === "browser") {

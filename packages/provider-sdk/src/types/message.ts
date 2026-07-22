@@ -6,12 +6,36 @@
  * beyond this boundary.
  */
 
-/** A single message in a conversation */
-export interface ModelMessage {
-  role: "system" | "user" | "assistant" | "tool";
+/** A completed provider-neutral tool request. */
+export interface ModelToolCall {
+  id: string;
+  name: string;
+  arguments: unknown;
+}
+
+export interface ModelTextMessage {
+  role: "system" | "user";
   content: string;
+}
+
+export interface ModelAssistantMessage {
+  role: "assistant";
+  content: string;
+  toolCalls?: ModelToolCall[];
+}
+
+export interface ModelToolResultMessage {
+  role: "tool";
+  content: string;
+  toolCallId: string;
   name?: string;
 }
+
+/** Canonical conversation history used by every provider adapter. */
+export type ModelMessage =
+  | ModelTextMessage
+  | ModelAssistantMessage
+  | ModelToolResultMessage;
 
 /** Tool definition passed alongside the message list */
 export interface ModelTool {

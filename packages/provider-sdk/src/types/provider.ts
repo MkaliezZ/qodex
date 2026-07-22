@@ -47,6 +47,11 @@ export interface ModelInfo {
   supportsReasoning?: boolean;
 }
 
+export interface ProviderCapabilities {
+  /** True only when the provider's native tool protocol is implemented and tested. */
+  toolAgentLoop: boolean;
+}
+
 /**
  * Core provider interface.
  *
@@ -61,6 +66,10 @@ export interface ModelProvider {
   name: string;
   /** Wire protocol used by this provider */
   protocol: ProviderProtocol;
+  /** Explicit feature support. Missing metadata is treated as unsupported. */
+  capabilities?: ProviderCapabilities;
+  /** Optional model-level refinement for providers with mixed tool support. */
+  supportsAgentTools?(modelId: string): boolean;
   /** Fetch available models (may return hardcoded defaults) */
   listModels(): Promise<ModelInfo[]>;
   /**

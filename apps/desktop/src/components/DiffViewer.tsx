@@ -86,16 +86,24 @@ export function DiffViewer() {
     rejectProposal,
     rollbackProposal,
     pendingProposal,
+    proposalNotice,
+    proposalActionsAvailable,
     patchErrors,
     applyResults,
     rollbackResults,
     isApplying,
     isRollingBack,
+    agentTask,
+    agentRollbackAvailable,
+    agentRollbackReason,
+    rollbackAllPatches,
   } = useRuntimeContext();
 
   const proposal = pendingProposal ?? currentProposal;
   const patchError = patchErrors[0] ?? null;
-  const isPending = pendingProposal !== null;
+  const isPending = pendingProposal !== null && proposalActionsAvailable;
+  const isAgentRollback = Boolean(agentTask && agentTask.patchHistory.length > 0);
+  const rollbackDisabled = isRollingBack || (isAgentRollback && !agentRollbackAvailable);
   const applySucceeded = applyResults.length > 0 && applyResults.every((result) => result.success);
   const rollbackSucceeded = rollbackResults.length > 0 && rollbackResults.every((result) => result.success);
 
@@ -135,17 +143,42 @@ export function DiffViewer() {
             </button>
           </div>
         ) : currentProposal ? (
-          <button
-            className="qodex-button qodex-button-secondary"
-            data-testid="rollback-patch"
-            onClick={rollbackProposal}
-            disabled={isRollingBack}
-            style={{ height: 26, padding: "0 10px", fontSize: 11, borderRadius: 6 }}
-          >
-            {isRollingBack ? "Rolling back..." : "Rollback"}
-          </button>
+          <div style={{ display: "flex", gap: 5 }}>
+            {agentTask && agentTask.patchHistory.length > 1 ? (
+              <button
+                className="qodex-button qodex-button-secondary"
+                data-testid="rollback-all-patches"
+                onClick={rollbackAllPatches}
+                disabled={rollbackDisabled}
+                style={{ height: 26, padding: "0 10px", fontSize: 11, borderRadius: 6 }}
+              >
+                Rollback all ({agentTask.patchHistory.length})
+              </button>
+            ) : null}
+            <button
+              className="qodex-button qodex-button-secondary"
+              data-testid="rollback-patch"
+              onClick={rollbackProposal}
+              disabled={rollbackDisabled}
+              style={{ height: 26, padding: "0 10px", fontSize: 11, borderRadius: 6 }}
+            >
+              {isRollingBack ? "Rolling back..." : "Rollback latest"}
+            </button>
+          </div>
         ) : null}
       </div>
+
+      {proposalNotice ? (
+        <div className="agent-mode-notice" data-testid="proposal-disposition" style={{ marginBottom: 8 }}>
+          {proposalNotice}
+        </div>
+      ) : null}
+
+      {currentProposal && isAgentRollback && !agentRollbackAvailable && agentRollbackReason ? (
+        <div className="text-caption" data-testid="rollback-unavailable" style={{ marginBottom: 8, textAlign: "right" }}>
+          {agentRollbackReason}
+        </div>
+      ) : null}
 
       {patchErrors.length > 0 ? (
         <div data-testid="patch-error" style={{ display: "grid", gap: 5, marginBottom: proposal ? 8 : 0 }}>

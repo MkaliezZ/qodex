@@ -67,6 +67,7 @@ export class MockStreamingProvider implements ModelProvider {
   readonly id = "mock";
   readonly name = "Mock Provider";
   readonly protocol = "openai-chat" as const;
+  readonly capabilities = { toolAgentLoop: false } as const;
 
   private chunks: string[];
   private chunkDelayMs: number;

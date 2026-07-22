@@ -1,5 +1,5 @@
 import { basename, join, normalize, sep } from "@tauri-apps/api/path";
-import { open as openDialog } from "@tauri-apps/plugin-dialog";
+import { invoke } from "@tauri-apps/api/core";
 import {
   exists,
   lstat,
@@ -35,15 +35,7 @@ export interface TauriProjectBridge {
 
 export const tauriProjectBridge: TauriProjectBridge = {
   pickDirectory: async () => {
-    const selected = await openDialog({
-      title: "Open KerniQ Project",
-      directory: true,
-      multiple: false,
-      recursive: true,
-      canCreateDirectories: false,
-      fileAccessMode: "scoped",
-    });
-    return typeof selected === "string" ? selected : null;
+    return invoke<string | null>("pick_project_directory");
   },
   separator: sep,
   basename,

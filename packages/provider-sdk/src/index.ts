@@ -13,10 +13,15 @@ export type {
   ProviderType,
   ModelInfo,
   ModelProvider,
+  ProviderCapabilities,
 } from "./types/provider.js";
 
 export type {
   ModelMessage,
+  ModelToolCall,
+  ModelTextMessage,
+  ModelAssistantMessage,
+  ModelToolResultMessage,
   ModelTool,
   ModelRequest,
 } from "./types/message.js";

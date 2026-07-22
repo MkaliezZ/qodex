@@ -86,7 +86,8 @@ The file tree will appear in the left panel.
 The selected directory is the project access boundary for the current session.
 KerniQ may require you to select it again after restarting. Only selected,
 existing text files can be replaced through explicit Diff Engine approval;
-terminal execution and published installer artifacts are not part of this build.
+arbitrary terminal execution and published installer artifacts are not part of
+this build.
 
 ---
 
@@ -124,6 +125,26 @@ current file contents and shows the exact unified diff in the Diff Viewer.
 
 Malformed, unsafe, stale, or unsupported proposals are shown as errors and do not
 write any files. Rollback data is kept only for the current application session.
+
+---
+
+## Step 7: Agent Mode
+
+With an opened project and a verified OpenAI-compatible provider/model, KerniQ
+can inspect the project across multiple bounded model turns. Read-only search and
+file reads appear in the Agent timeline and run without approval.
+
+Patches pause at the Diff Viewer. Applying a patch does not approve a command.
+When the model requests a trusted test, check, lint, typecheck, or build script,
+KerniQ displays the exact cataloged command and pauses again. Deny starts no
+process; Approve applies to that execution only. Command output and exit status
+are returned to the model so it can propose a corrective patch within hard
+iteration limits.
+
+Native command execution requires the Tauri desktop application. Browser mode
+supports inspection, approved existing-file patches, and rollback but reports
+commands as unavailable. Project scripts are not OS-sandboxed and may have side
+effects. KerniQ provides no arbitrary shell or "Always allow" option.
 
 ---
 
