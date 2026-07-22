@@ -28,6 +28,12 @@ import type { ModelProvider } from "@qodex/provider-sdk";
 import { useProviderContext } from "../components/ProviderContext";
 import { openProjectDirectory } from "../platform/openProjectDirectory";
 import { ProjectAccessError, type ProjectAccessSource } from "../platform/types";
+import {
+  discardedProposalNotice,
+  getAgentPendingProposal,
+  resolveProposalActionRoute,
+  type ProposalOrigin,
+} from "./proposalOwnership";
 
 const ACTIVE_AGENT_STATES = new Set([
   "Planning",
@@ -38,6 +44,7 @@ const ACTIVE_AGENT_STATES = new Set([
   "ApplyingPatch",
   "WaitingForCommandApproval",
   "RunningCommand",
+  "Cancelling",
   "ReturningToolResult",
 ]);
 
@@ -52,6 +59,8 @@ export function useRuntime() {
   const ctxRef = useRef(new ContextEngine());
   const diffRef = useRef(new DiffEngine());
   const rawResponseRef = useRef("");
+  const pendingProposalRef = useRef<PatchProposal | null>(null);
+  const proposalOriginRef = useRef<ProposalOrigin | null>(null);
 
   const [session, setSession] = useState<AgentSession | null>(null);
   const [currentTask, setCurrentTask] = useState<AgentTask | null>(null);
@@ -71,25 +80,56 @@ export function useRuntime() {
   const [estimatedTokens, setEstimatedTokens] = useState(0);
 
   const [pendingProposal, setPendingProposal] = useState<PatchProposal | null>(null);
+  const [proposalOrigin, setProposalOrigin] = useState<ProposalOrigin | null>(null);
+  const [proposalNotice, setProposalNotice] = useState<string | null>(null);
   const [currentProposal, setCurrentProposal] = useState<PatchProposal | null>(null);
   const [patchErrors, setPatchErrors] = useState<PatchError[]>([]);
   const [applyResults, setApplyResults] = useState<ApplyResult[]>([]);
   const [rollbackResults, setRollbackResults] = useState<ApplyResult[]>([]);
   const [isApplying, setIsApplying] = useState(false);
   const [isRollingBack, setIsRollingBack] = useState(false);
+  const [agentRollbackAvailable, setAgentRollbackAvailable] = useState(false);
+  const [agentRollbackReason, setAgentRollbackReason] = useState<string | null>(null);
+
+  const setProposalState = useCallback((proposal: PatchProposal | null, origin: ProposalOrigin | null) => {
+    pendingProposalRef.current = proposal;
+    proposalOriginRef.current = origin;
+    setPendingProposal(proposal);
+    setProposalOrigin(origin);
+  }, []);
 
   const syncAgentTask = useCallback((task: AgentLoopTask) => {
     setAgentTask(task);
     setIsRunning(ACTIVE_AGENT_STATES.has(task.status));
     setStreamedText(extractAssistantText(task.output));
-    setPendingProposal(task.pendingPatch as PatchProposal | null);
+    const synchronized = getAgentPendingProposal(task);
+    if (synchronized.proposal) {
+      setProposalState(synchronized.proposal, synchronized.origin);
+      setProposalNotice(null);
+    } else if (proposalOriginRef.current?.mode === "agent" && proposalOriginRef.current.taskId === task.id) {
+      const priorOrigin = proposalOriginRef.current;
+      const notice = discardedProposalNotice(task.status);
+      pendingProposalRef.current = null;
+      setPendingProposal(null);
+      if (task.status === "WaitingForPatchApproval") {
+        proposalOriginRef.current = priorOrigin;
+      } else {
+        proposalOriginRef.current = null;
+        setProposalOrigin(null);
+        if (notice) setProposalNotice(notice);
+      }
+    }
     setCurrentProposal((task.patchHistory.at(-1) as PatchProposal | undefined) ?? null);
+    const rollback = agentLoopRef.current?.canRollback(task.id)
+      ?? { allowed: false, reason: "Rollback becomes available after the Agent stops or finishes." };
+    setAgentRollbackAvailable(rollback.allowed);
+    setAgentRollbackReason(rollback.reason ?? null);
     if (task.error) {
       setPatchErrors((previous) => previous.length > 0
         ? previous
         : [{ code: "provider_failed", message: task.error! }]);
     }
-  }, []);
+  }, [setProposalState]);
 
   useEffect(() => {
     if (isRunning) return;
@@ -101,6 +141,9 @@ export function useRuntime() {
     agentUnsubscribeRef.current = null;
     agentLoopRef.current = null;
     setAgentTask(null);
+    if (proposalOriginRef.current?.mode === "agent") setProposalState(null, null);
+    setAgentRollbackAvailable(false);
+    setAgentRollbackReason(null);
     const modelId = getResolvedModel();
     const agentSupported = provider
       && modelId
@@ -111,7 +154,7 @@ export function useRuntime() {
       : null);
     // Provider callbacks intentionally follow the primitive config fields below.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [config.providerId, config.apiKey, config.modelId, config.manualModelId, config.baseUrl]);
+  }, [config.providerId, config.apiKey, config.modelId, config.manualModelId, config.baseUrl, setProposalState]);
 
   useEffect(() => {
     const unsubscribe = runtime.subscribe((event: AnyAgentEvent) => {
@@ -171,12 +214,15 @@ export function useRuntime() {
       setSelectedFileCount(0);
       setSelectedFileSize(0);
       setContextFiles([]);
-      setPendingProposal(null);
+      setProposalState(null, null);
+      setProposalNotice(null);
       setCurrentProposal(null);
       setPatchErrors([]);
       setApplyResults([]);
       setRollbackResults([]);
       setAgentTask(null);
+      setAgentRollbackAvailable(false);
+      setAgentRollbackReason(null);
       agentUnsubscribeRef.current?.();
       agentUnsubscribeRef.current = null;
       agentLoopRef.current = null;
@@ -189,7 +235,7 @@ export function useRuntime() {
           : "Unable to open the selected project.",
       }]);
     }
-  }, []);
+  }, [setProposalState]);
 
   const toggleFileSelection = useCallback(async (path: string) => {
     const project = projectRef.current;
@@ -247,7 +293,6 @@ export function useRuntime() {
       setApplyResults(results);
       if (results.every((result) => result.success)) {
         setCurrentProposal(proposal as PatchProposal);
-        setPendingProposal(null);
         await refreshSelectedFiles();
       } else {
         setPatchErrors(results.filter((result) => !result.success).map((result) => ({
@@ -260,7 +305,6 @@ export function useRuntime() {
     },
     reject: (proposal: AgentPatchProposal) => {
       diffRef.current.reject(proposal as PatchProposal);
-      setPendingProposal(null);
       setApplyResults([]);
     },
     rollback: async (proposal: AgentPatchProposal) => {
@@ -282,7 +326,8 @@ export function useRuntime() {
 
   const sendPrompt = useCallback(async (prompt: string) => {
     if (!session || !prompt.trim()) return;
-    setPendingProposal(null);
+    setProposalState(null, null);
+    setProposalNotice(null);
     setCurrentProposal(null);
     setPatchErrors([]);
     setApplyResults([]);
@@ -355,23 +400,32 @@ export function useRuntime() {
       return;
     }
     setPatchErrors([]);
-    setPendingProposal(parsed.proposal);
-  }, [contextFiles, createPatchAdapter, getProvider, getResolvedModel, projectSource, runtime, session, syncAgentTask]);
+    setProposalState(parsed.proposal, { mode: "single_turn", taskId: parsed.proposal.taskId });
+  }, [contextFiles, createPatchAdapter, getProvider, getResolvedModel, projectSource, runtime, session, setProposalState, syncAgentTask]);
 
   const applyProposal = useCallback(async () => {
     if (!pendingProposal || isApplying) return;
+    const route = resolveProposalActionRoute(pendingProposal, proposalOrigin, agentTask);
+    if (!route) {
+      if (proposalOrigin?.mode === "agent") {
+        setProposalState(null, null);
+        setProposalNotice("This Agent proposal is no longer actionable.");
+      }
+      return;
+    }
     setIsApplying(true);
     setPatchErrors([]);
     try {
-      if (agentTask?.status === "WaitingForPatchApproval" && agentLoopRef.current) {
-        syncAgentTask(await agentLoopRef.current.approvePatch(agentTask.id));
+      if (route === "agent" && agentLoopRef.current && proposalOrigin?.mode === "agent") {
+        syncAgentTask(await agentLoopRef.current.approvePatch(proposalOrigin.taskId));
         return;
       }
+      if (route !== "single_turn") return;
       const results = await diffRef.current.apply(pendingProposal);
       setApplyResults(results);
       if (results.length === pendingProposal.files.length && results.every((result) => result.success)) {
         setCurrentProposal(pendingProposal);
-        setPendingProposal(null);
+        setProposalState(null, null);
         await refreshSelectedFiles();
         return;
       }
@@ -383,19 +437,28 @@ export function useRuntime() {
     } finally {
       setIsApplying(false);
     }
-  }, [agentTask, isApplying, pendingProposal, refreshSelectedFiles, syncAgentTask]);
+  }, [agentTask, isApplying, pendingProposal, proposalOrigin, refreshSelectedFiles, setProposalState, syncAgentTask]);
 
   const rejectProposal = useCallback(async () => {
     if (!pendingProposal) return;
-    if (agentTask?.status === "WaitingForPatchApproval" && agentLoopRef.current) {
-      syncAgentTask(await agentLoopRef.current.rejectPatch(agentTask.id));
+    const route = resolveProposalActionRoute(pendingProposal, proposalOrigin, agentTask);
+    if (!route) {
+      if (proposalOrigin?.mode === "agent") {
+        setProposalState(null, null);
+        setProposalNotice("This Agent proposal is no longer actionable.");
+      }
       return;
     }
+    if (route === "agent" && agentLoopRef.current && proposalOrigin?.mode === "agent") {
+      syncAgentTask(await agentLoopRef.current.rejectPatch(proposalOrigin.taskId));
+      return;
+    }
+    if (route !== "single_turn") return;
     diffRef.current.reject(pendingProposal);
-    setPendingProposal(null);
+    setProposalState(null, null);
     setPatchErrors([]);
     setApplyResults([]);
-  }, [agentTask, pendingProposal, syncAgentTask]);
+  }, [agentTask, pendingProposal, proposalOrigin, setProposalState, syncAgentTask]);
 
   const approveCommand = useCallback(async () => {
     if (!agentTask || !agentLoopRef.current || agentTask.status !== "WaitingForCommandApproval") return;
@@ -409,6 +472,14 @@ export function useRuntime() {
 
   const rollbackProposal = useCallback(async () => {
     if (!currentProposal || isRollingBack) return;
+    if (agentTask && agentLoopRef.current && agentTask.patchHistory.length > 0) {
+      const rollback = agentLoopRef.current.canRollback(agentTask.id);
+      if (!rollback.allowed) {
+        setAgentRollbackAvailable(false);
+        setAgentRollbackReason(rollback.reason ?? "Rollback is not available yet.");
+        return;
+      }
+    }
     setIsRollingBack(true);
     setPatchErrors([]);
     try {
@@ -438,6 +509,12 @@ export function useRuntime() {
 
   const rollbackAllPatches = useCallback(async () => {
     if (!agentTask || !agentLoopRef.current || isRollingBack) return;
+    const rollback = agentLoopRef.current.canRollback(agentTask.id);
+    if (!rollback.allowed) {
+      setAgentRollbackAvailable(false);
+      setAgentRollbackReason(rollback.reason ?? "Rollback is not available yet.");
+      return;
+    }
     setIsRollingBack(true);
     try {
       await agentLoopRef.current.rollbackAll(agentTask.id);
@@ -458,6 +535,8 @@ export function useRuntime() {
     if (currentTask) runtime.cancelTask(currentTask.id);
   }, [agentTask, currentTask, runtime, syncAgentTask]);
 
+  const proposalActionsAvailable = resolveProposalActionRoute(pendingProposal, proposalOrigin, agentTask) !== null;
+
   return {
     isRunning,
     currentTask,
@@ -477,12 +556,17 @@ export function useRuntime() {
     lastBundle,
     estimatedTokens,
     pendingProposal,
+    proposalOrigin,
+    proposalNotice,
+    proposalActionsAvailable,
     currentProposal,
     patchErrors,
     applyResults,
     rollbackResults,
     isApplying,
     isRollingBack,
+    agentRollbackAvailable,
+    agentRollbackReason,
     applyProposal,
     rejectProposal,
     rollbackProposal,

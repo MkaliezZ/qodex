@@ -7,7 +7,9 @@ import type {
   AgentLoopStatus,
   AgentLoopTask,
   AgentTimelineEntry,
+  AgentRollbackAvailability,
   PendingCommandApproval,
+  PendingPatchDisposition,
   ProjectCommandResult,
 } from "./types.js";
 
@@ -28,13 +30,21 @@ export class AgentLoopRuntime {
   private readonly listeners = new Set<AgentLoopListener>();
   private readonly tools: AgentToolRegistry;
   private readonly limits: AgentLoopLimits;
+  private readonly now: () => number;
   private readonly queuedCalls = new Map<string, ModelToolCall[]>();
   private readonly activeCommandRuns = new Map<string, string>();
-  private runningTasks = new Set<string>();
+  private readonly activeApprovalActions = new Set<string>();
+  private readonly activePatchApplies = new Set<string>();
+  private readonly activeRollbacks = new Set<string>();
+  private readonly cancellationRequests = new Set<string>();
+  private readonly operationSettlements = new Map<string, Promise<void>>();
+  private readonly operationResolvers = new Map<string, () => void>();
+  private readonly runningTasks = new Set<string>();
 
   constructor(private readonly options: AgentLoopRuntimeOptions) {
     this.tools = new AgentToolRegistry(options.project);
     this.limits = normalizeLimits(options.limits);
+    this.now = options.now ?? Date.now;
   }
 
   isSupported(): boolean {
@@ -54,7 +64,7 @@ export class AgentLoopRuntime {
 
   async start(taskId: string, prompt: string): Promise<AgentLoopTask> {
     if (this.tasks.has(taskId)) throw new Error(`Agent task already exists: ${taskId}`);
-    const now = Date.now();
+    const now = this.now();
     const task: AgentLoopTask = {
       id: taskId,
       prompt,
@@ -92,75 +102,109 @@ export class AgentLoopRuntime {
   async approvePatch(taskId: string): Promise<AgentLoopTask> {
     const task = this.requireTask(taskId);
     const proposal = task.pendingPatch;
-    if (task.status !== "WaitingForPatchApproval" || !proposal) {
-      throw new Error("This task is not waiting for patch approval.");
-    }
-    this.setStatus(task, "ApplyingPatch");
-    const approvalEntry = this.addTimeline(task, {
-      kind: "patch_approval",
-      title: "Patch approved",
-      status: "running",
-      summary: proposal.summary,
-    });
-    const results = await this.options.patchAdapter.apply(proposal);
-    const success = results.length === proposal.files.length
-      && results.every((result) => result.success && result.readbackVerified === true);
-    approvalEntry.status = success ? "success" : "error";
-    this.updateLatestTimeline(task, (entry) => entry.kind === "patch_proposal" && entry.status === "pending", success ? "success" : "error");
+    if (!proposal || !this.claimApproval(task, "WaitingForPatchApproval")) return cloneTask(task);
+
+    this.activeApprovalActions.add(task.id);
     task.pendingPatch = null;
-    if (success) task.patchHistory.push(proposal);
-    task.conversation.push({
-      role: "user",
-      content: `KerniQ patch approval result: ${JSON.stringify({
-        approved: true,
-        applied: success,
-        proposalId: proposal.id,
-        files: results.map((result) => ({
-          path: result.path,
-          success: result.success,
-          readbackVerified: result.readbackVerified === true,
-          ...(result.code ? { code: result.code } : {}),
-        })),
-      })}`,
-    });
-    this.addTimeline(task, {
-      kind: "patch_approval",
-      title: success ? "Patch applied and verified" : "Patch apply failed",
-      status: success ? "success" : "error",
-      summary: success
-        ? `${results.length} file write${results.length === 1 ? "" : "s"} verified by readback.`
-        : "No unverified write was accepted.",
-      detail: JSON.stringify(results),
-    });
-    this.setStatus(task, "ReturningToolResult");
-    await this.continueLoop(task);
+    this.setStatus(task, "ApplyingPatch");
+    this.beginOperation(task.id);
+    let shouldContinue = false;
+    try {
+      if (!this.guardTaskAction(task, "ApplyingPatch")) return cloneTask(task);
+      const approvalEntry = this.addTimeline(task, {
+        kind: "patch_approval",
+        title: "Patch approved",
+        status: "running",
+        summary: proposal.summary,
+      });
+      this.activePatchApplies.add(task.id);
+      let results;
+      try {
+        results = await this.options.patchAdapter.apply(proposal);
+      } finally {
+        this.activePatchApplies.delete(task.id);
+      }
+      const success = results.length === proposal.files.length
+        && results.every((result) => result.success && result.readbackVerified === true);
+      approvalEntry.status = success ? "success" : "error";
+      this.updateLatestTimeline(
+        task,
+        (entry) => entry.kind === "patch_proposal" && entry.status === "pending",
+        success ? "success" : "error",
+      );
+      if (success) task.patchHistory.push(proposal);
+      this.addTimeline(task, {
+        kind: "patch_approval",
+        title: success ? "Patch applied and verified" : "Patch apply failed",
+        status: success ? "success" : "error",
+        summary: success
+          ? `${results.length} file write${results.length === 1 ? "" : "s"} verified by readback.`
+          : "No unverified write was accepted.",
+        detail: JSON.stringify(results),
+      });
+      if (this.cancellationRequests.has(task.id) || task.status === "Cancelling" || isTerminal(task.status)) {
+        if (!isTerminal(task.status)) {
+          this.terminateTask(task, "Cancelled", "Agent task cancelled after patch application settled.", "task_cancelled");
+        }
+        return cloneTask(task);
+      }
+      task.conversation.push({
+        role: "user",
+        content: `KerniQ patch approval result: ${JSON.stringify({
+          approved: true,
+          applied: success,
+          proposalId: proposal.id,
+          files: results.map((result) => ({
+            path: result.path,
+            success: result.success,
+            readbackVerified: result.readbackVerified === true,
+            ...(result.code ? { code: result.code } : {}),
+          })),
+        })}`,
+      });
+      this.setStatus(task, "ReturningToolResult");
+      shouldContinue = true;
+    } catch (error) {
+      if (!this.cancellationRequests.has(task.id)) {
+        this.fail(task, error instanceof Error ? error.message : "Patch application failed.");
+      }
+    } finally {
+      this.activePatchApplies.delete(task.id);
+      this.activeApprovalActions.delete(task.id);
+      this.endOperation(task.id);
+    }
+    if (shouldContinue) await this.continueLoop(task);
     return cloneTask(task);
   }
 
   async rejectPatch(taskId: string): Promise<AgentLoopTask> {
     const task = this.requireTask(taskId);
     const proposal = task.pendingPatch;
-    if (task.status !== "WaitingForPatchApproval" || !proposal) {
-      throw new Error("This task is not waiting for patch approval.");
+    if (!proposal || !this.claimApproval(task, "WaitingForPatchApproval")) return cloneTask(task);
+
+    this.activeApprovalActions.add(task.id);
+    try {
+      task.pendingPatch = null;
+      this.options.patchAdapter.reject(proposal);
+      this.updateLatestTimeline(task, (entry) => entry.kind === "patch_proposal" && entry.status === "pending", "denied");
+      task.conversation.push({
+        role: "user",
+        content: `KerniQ patch approval result: ${JSON.stringify({
+          approved: false,
+          applied: false,
+          proposalId: proposal.id,
+        })}`,
+      });
+      this.addTimeline(task, {
+        kind: "patch_approval",
+        title: "Patch rejected",
+        status: "denied",
+        summary: "No files were changed.",
+      });
+      this.setStatus(task, "ReturningToolResult");
+    } finally {
+      this.activeApprovalActions.delete(task.id);
     }
-    this.options.patchAdapter.reject(proposal);
-    this.updateLatestTimeline(task, (entry) => entry.kind === "patch_proposal" && entry.status === "pending", "denied");
-    task.pendingPatch = null;
-    task.conversation.push({
-      role: "user",
-      content: `KerniQ patch approval result: ${JSON.stringify({
-        approved: false,
-        applied: false,
-        proposalId: proposal.id,
-      })}`,
-    });
-    this.addTimeline(task, {
-      kind: "patch_approval",
-      title: "Patch rejected",
-      status: "denied",
-      summary: "No files were changed.",
-    });
-    this.setStatus(task, "ReturningToolResult");
     await this.continueLoop(task);
     return cloneTask(task);
   }
@@ -168,15 +212,15 @@ export class AgentLoopRuntime {
   async approveCommand(taskId: string): Promise<AgentLoopTask> {
     const task = this.requireTask(taskId);
     const pending = task.pendingCommand;
-    if (task.status !== "WaitingForCommandApproval" || !pending) {
-      throw new Error("This task is not waiting for command approval.");
-    }
+    if (!pending || !this.claimApproval(task, "WaitingForCommandApproval")) return cloneTask(task);
     const runner = this.options.commandRunner;
     if (!runner) throw new Error("No native project command runner is configured.");
+
+    this.activeApprovalActions.add(task.id);
     const runId = crypto.randomUUID();
     task.pendingCommand = null;
-    this.activeCommandRuns.set(task.id, runId);
     this.setStatus(task, "RunningCommand");
+    this.beginOperation(task.id);
     this.addTimeline(task, {
       kind: "command_approval",
       title: "Command approved",
@@ -185,27 +229,40 @@ export class AgentLoopRuntime {
     });
     let result: ProjectCommandResult;
     try {
-      result = await runner.run(pending.command, runId);
-    } catch (error) {
-      result = {
-        commandId: pending.command.id,
-        approved: true,
-        started: true,
-        exitCode: null,
-        stdout: "",
-        stderr: error instanceof Error ? error.message : "Native command execution failed.",
-        timedOut: false,
-        cancelled: false,
-        stdoutTruncated: false,
-        stderrTruncated: false,
-        durationMs: 0,
-      };
+      if (!this.guardTaskAction(task, "RunningCommand")) return cloneTask(task);
+      this.activeCommandRuns.set(task.id, runId);
+      try {
+        result = await runner.run(pending.command, runId);
+      } catch (error) {
+        result = {
+          commandId: pending.command.id,
+          approved: true,
+          started: true,
+          exitCode: null,
+          stdout: "",
+          stderr: error instanceof Error ? error.message : "Native command execution failed.",
+          timedOut: false,
+          cancelled: false,
+          stdoutTruncated: false,
+          stderrTruncated: false,
+          durationMs: 0,
+        };
+      } finally {
+        this.activeCommandRuns.delete(task.id);
+      }
+      if (this.cancellationRequests.has(task.id) || task.status === "Cancelling" || isTerminal(task.status)) {
+        if (!isTerminal(task.status)) {
+          this.terminateTask(task, "Cancelled", "Agent task cancelled after command execution settled.", "task_cancelled");
+        }
+        return cloneTask(task);
+      }
+      this.appendCommandResult(task, pending, result);
+      this.setStatus(task, "ReturningToolResult");
     } finally {
       this.activeCommandRuns.delete(task.id);
+      this.activeApprovalActions.delete(task.id);
+      this.endOperation(task.id);
     }
-    if (taskIsCancelled(task)) return cloneTask(task);
-    this.appendCommandResult(task, pending, result);
-    this.setStatus(task, "ReturningToolResult");
     if (await this.processQueuedCalls(task)) await this.continueLoop(task);
     return cloneTask(task);
   }
@@ -213,67 +270,119 @@ export class AgentLoopRuntime {
   async denyCommand(taskId: string): Promise<AgentLoopTask> {
     const task = this.requireTask(taskId);
     const pending = task.pendingCommand;
-    if (task.status !== "WaitingForCommandApproval" || !pending) {
-      throw new Error("This task is not waiting for command approval.");
+    if (!pending || !this.claimApproval(task, "WaitingForCommandApproval")) return cloneTask(task);
+
+    this.activeApprovalActions.add(task.id);
+    try {
+      task.pendingCommand = null;
+      const result: ProjectCommandResult = {
+        commandId: pending.command.id,
+        approved: false,
+        started: false,
+        exitCode: null,
+        stdout: "",
+        stderr: "",
+        timedOut: false,
+        cancelled: false,
+        stdoutTruncated: false,
+        stderrTruncated: false,
+        durationMs: 0,
+      };
+      this.appendCommandResult(task, pending, result);
+      this.addTimeline(task, {
+        kind: "command_approval",
+        title: "Command denied",
+        status: "denied",
+        summary: "No process was started.",
+      });
+      this.setStatus(task, "ReturningToolResult");
+    } finally {
+      this.activeApprovalActions.delete(task.id);
     }
-    task.pendingCommand = null;
-    const result: ProjectCommandResult = {
-      commandId: pending.command.id,
-      approved: false,
-      started: false,
-      exitCode: null,
-      stdout: "",
-      stderr: "",
-      timedOut: false,
-      cancelled: false,
-      stdoutTruncated: false,
-      stderrTruncated: false,
-      durationMs: 0,
-    };
-    this.appendCommandResult(task, pending, result);
-    this.addTimeline(task, {
-      kind: "command_approval",
-      title: "Command denied",
-      status: "denied",
-      summary: "No process was started.",
-    });
-    this.setStatus(task, "ReturningToolResult");
     if (await this.processQueuedCalls(task)) await this.continueLoop(task);
     return cloneTask(task);
   }
 
   async rollbackLatest(taskId: string): Promise<boolean> {
     const task = this.requireTask(taskId);
-    const proposal = task.patchHistory.at(-1);
-    if (!proposal) return false;
-    const results = await this.options.patchAdapter.rollback(proposal);
-    const success = results.length === proposal.files.length
-      && results.every((result) => result.success && result.readbackVerified === true);
-    if (success) task.patchHistory.pop();
-    this.addTimeline(task, {
-      kind: "patch_approval",
-      title: success ? "Latest task patch rolled back" : "Task patch rollback blocked",
-      status: success ? "success" : "error",
-      summary: success ? "Original contents restored and verified." : "Newer file contents were preserved.",
-      detail: JSON.stringify(results),
-    });
-    return success;
+    if (!this.canRollback(taskId).allowed || task.patchHistory.length === 0) return false;
+    this.activeRollbacks.add(task.id);
+    try {
+      return await this.rollbackOne(task);
+    } finally {
+      this.activeRollbacks.delete(task.id);
+      this.touch(task);
+    }
   }
 
   async rollbackAll(taskId: string): Promise<boolean> {
     const task = this.requireTask(taskId);
-    while (task.patchHistory.length > 0) {
-      if (!await this.rollbackLatest(taskId)) return false;
+    if (!this.canRollback(taskId).allowed || task.patchHistory.length === 0) return false;
+    this.activeRollbacks.add(task.id);
+    try {
+      while (task.patchHistory.length > 0) {
+        if (!await this.rollbackOne(task)) return false;
+      }
+      return true;
+    } finally {
+      this.activeRollbacks.delete(task.id);
+      this.touch(task);
     }
-    return true;
+  }
+
+  canRollback(taskId: string): AgentRollbackAvailability {
+    const task = this.tasks.get(taskId);
+    if (!task) return { allowed: false, reason: "Agent task not found." };
+    if (!isTerminal(task.status)) {
+      return { allowed: false, reason: "Rollback becomes available after the Agent stops or finishes." };
+    }
+    if (this.runningTasks.has(taskId)
+      || this.activeApprovalActions.has(taskId)
+      || this.activePatchApplies.has(taskId)
+      || this.activeCommandRuns.has(taskId)
+      || this.operationSettlements.has(taskId)
+      || this.activeRollbacks.has(taskId)
+      || this.cancellationRequests.has(taskId)
+      || (this.queuedCalls.get(taskId)?.length ?? 0) > 0) {
+      return { allowed: false, reason: "Rollback is blocked until active Agent work has settled." };
+    }
+    return { allowed: true };
   }
 
   async cancel(taskId: string): Promise<void> {
     const task = this.tasks.get(taskId);
     if (!task || isTerminal(task.status)) return;
-    this.setStatus(task, "Cancelled");
-    const runId = this.activeCommandRuns.get(taskId);
-    if (runId) await this.options.commandRunner?.cancel?.(runId);
+    if (this.cancellationRequests.has(taskId)) {
+      await this.operationSettlements.get(taskId);
+      return;
+    }
+
+    this.cancellationRequests.add(taskId);
+    try {
+      const settlement = this.operationSettlements.get(taskId);
+      if (!settlement) {
+        this.terminateTask(task, "Cancelled", "Agent task cancelled.", "task_cancelled");
+        return;
+      }
+
+      this.disposePendingState(task, "task_cancelled");
+      this.setStatus(task, "Cancelling");
+      const runId = this.activeCommandRuns.get(taskId);
+      if (runId) {
+        try {
+          await this.options.commandRunner?.cancel?.(runId);
+        } catch {
+          // The command future remains the source of truth for settlement.
+        }
+      }
+      await settlement;
+      if (!isTerminal(task.status)) {
+        this.terminateTask(task, "Cancelled", "Agent task cancelled after active work settled.", "task_cancelled");
+      }
+    } finally {
+      this.cancellationRequests.delete(taskId);
+      if (isTerminal(task.status)) this.touch(task);
+    }
   }
 
   private async continueLoop(task: AgentLoopTask): Promise<void> {
@@ -281,24 +390,26 @@ export class AgentLoopRuntime {
     this.runningTasks.add(task.id);
     try {
       while (!isTerminal(task.status) && !isWaiting(task.status)) {
-        if (!this.checkDuration(task)) return;
+        if (!this.guardTaskAction(task, ["Planning", "ReturningToolResult"])) return;
         if (task.modelTurns >= this.limits.maxModelTurns) {
           this.reachLimit(task, `Maximum model turns reached (${this.limits.maxModelTurns}).`);
           return;
         }
         this.setStatus(task, "CallingModel");
+        if (!this.guardTaskAction(task, "CallingModel")) return;
         task.modelTurns += 1;
         this.setStatus(task, "Streaming");
         const rawText: string[] = [];
         const calls: ModelToolCall[] = [];
         let streamFailure: string | null = null;
+        if (!this.guardTaskAction(task, "Streaming")) return;
         const stream = this.options.provider.stream({
           model: this.options.modelId,
           messages: task.conversation,
           tools: this.tools.definitions(),
         });
         for await (const chunk of stream) {
-          if (task.status === "Cancelled") return;
+          if (isTerminal(task.status) || task.status === "Cancelling" || this.cancellationRequests.has(task.id)) return;
           if (chunk.type === "text") {
             rawText.push(chunk.text);
             task.output += chunk.text;
@@ -311,6 +422,7 @@ export class AgentLoopRuntime {
             streamFailure = chunk.message;
           }
         }
+        if (!this.guardTaskAction(task, "Streaming")) return;
         if (streamFailure) {
           this.fail(task, streamFailure);
           return;
@@ -332,6 +444,7 @@ export class AgentLoopRuntime {
         }
 
         const parsed = await this.options.patchAdapter.prepare(response, task.id);
+        if (!this.guardTaskAction(task, "Streaming")) return;
         if (parsed.proposal) {
           if (task.patchProposals >= this.limits.maxPatchProposals) {
             this.reachLimit(task, `Maximum patch proposals reached (${this.limits.maxPatchProposals}).`);
@@ -365,15 +478,19 @@ export class AgentLoopRuntime {
         return;
       }
     } catch (error) {
-      this.fail(task, error instanceof Error ? error.message : "Agent loop failed.");
+      if (!this.cancellationRequests.has(task.id) && task.status !== "Cancelling" && !isTerminal(task.status)) {
+        this.fail(task, error instanceof Error ? error.message : "Agent loop failed.");
+      }
     } finally {
       this.runningTasks.delete(task.id);
+      if (isTerminal(task.status)) this.touch(task);
     }
   }
 
   private async processQueuedCalls(task: AgentLoopTask): Promise<boolean> {
     const queue = this.queuedCalls.get(task.id) ?? [];
     while (queue.length > 0) {
+      if (!this.guardTaskAction(task, ["Streaming", "ReturningToolResult"])) return false;
       if (!this.consumeToolBudget(task, queue[0])) return false;
       const call = queue.shift()!;
       this.addTimeline(task, {
@@ -384,8 +501,10 @@ export class AgentLoopRuntime {
       });
       if (call.name === "run_project_command") {
         const resolved = await this.tools.resolveCommand(call);
+        if (!this.guardTaskAction(task, ["Streaming", "ReturningToolResult"])) return false;
         if (resolved.result) {
           this.appendToolResult(task, call, resolved.result);
+          this.setStatus(task, "ReturningToolResult");
           continue;
         }
         task.pendingCommand = { toolCall: call, command: resolved.command! };
@@ -395,8 +514,8 @@ export class AgentLoopRuntime {
       }
       this.setStatus(task, "ExecutingReadTool");
       const result = await this.tools.executeReadTool(call);
+      if (!this.guardTaskAction(task, "ExecutingReadTool")) return false;
       this.appendToolResult(task, call, result);
-      if (task.status === "Cancelled") return false;
       this.setStatus(task, "ReturningToolResult");
     }
     this.queuedCalls.delete(task.id);
@@ -480,24 +599,139 @@ export class AgentLoopRuntime {
     return task;
   }
 
+  private claimApproval(task: AgentLoopTask, expectedStatus: AgentLoopStatus): boolean {
+    return !this.activeApprovalActions.has(task.id)
+      && !this.activeRollbacks.has(task.id)
+      && this.guardTaskAction(task, expectedStatus);
+  }
+
+  private guardTaskAction(
+    task: AgentLoopTask,
+    expectedStatus: AgentLoopStatus | AgentLoopStatus[],
+  ): boolean {
+    if (isTerminal(task.status) || task.status === "Cancelling" || this.cancellationRequests.has(task.id)) {
+      return false;
+    }
+    const expected = Array.isArray(expectedStatus) ? expectedStatus : [expectedStatus];
+    if (!expected.includes(task.status) || this.activeRollbacks.has(task.id)) return false;
+    return this.checkDuration(task);
+  }
+
   private checkDuration(task: AgentLoopTask): boolean {
-    if (Date.now() - task.startedAt <= this.limits.maxTaskDurationMs) return true;
+    if (this.now() - task.startedAt <= this.limits.maxTaskDurationMs) return true;
     this.reachLimit(task, "Maximum task duration reached.");
     return false;
   }
 
   private reachLimit(task: AgentLoopTask, reason: string): void {
     task.limitReason = reason;
-    task.pendingCommand = null;
-    this.setStatus(task, "LimitReached");
-    this.addTimeline(task, { kind: "limit", title: "Agent limit reached", status: "error", summary: reason });
+    this.terminateTask(task, "LimitReached", reason, "task_expired");
   }
 
   private fail(task: AgentLoopTask, message: string): void {
     task.error = message;
+    this.terminateTask(task, "Failed", message, "task_failed");
+  }
+
+  private terminateTask(
+    task: AgentLoopTask,
+    status: "Cancelled" | "LimitReached" | "Failed",
+    reason: string,
+    disposition: Exclude<PendingPatchDisposition, "user_rejected">,
+  ): void {
+    if (isTerminal(task.status)) return;
+    this.disposePendingState(task, disposition);
+    this.setStatus(task, status);
+    this.addTimeline(task, status === "LimitReached"
+      ? { kind: "limit", title: "Agent limit reached", status: "error", summary: reason }
+      : status === "Failed"
+        ? { kind: "failure", title: "Agent failed", status: "error", summary: reason }
+        : { kind: "failure", title: "Agent cancelled", status: "cancelled", summary: reason });
+  }
+
+  private disposePendingState(
+    task: AgentLoopTask,
+    disposition: Exclude<PendingPatchDisposition, "user_rejected">,
+  ): void {
+    const pendingPatch = task.pendingPatch;
+    task.pendingPatch = null;
+    if (pendingPatch) {
+      try {
+        this.options.patchAdapter.reject(pendingPatch);
+      } catch {
+        // Disposal remains final even if an adapter cannot update its transient view state.
+      }
+      const status = disposition === "task_cancelled" ? "cancelled" : disposition === "task_expired" ? "expired" : "error";
+      this.updateLatestTimeline(task, (entry) => entry.kind === "patch_proposal" && entry.status === "pending", status);
+      this.addTimeline(task, {
+        kind: "patch_approval",
+        title: disposition === "task_cancelled"
+          ? "Patch discarded after cancellation"
+          : disposition === "task_expired"
+            ? "Patch expired before approval"
+            : "Patch discarded after task failure",
+        status,
+        summary: "No files were changed.",
+      });
+    }
+
+    const pendingCommand = task.pendingCommand;
     task.pendingCommand = null;
-    this.setStatus(task, "Failed");
-    this.addTimeline(task, { kind: "failure", title: "Agent failed", status: "error", summary: message });
+    if (pendingCommand) {
+      const status = disposition === "task_cancelled" ? "cancelled" : disposition === "task_expired" ? "expired" : "error";
+      this.updateLatestTimeline(
+        task,
+        (entry) => entry.kind === "tool_request"
+          && entry.title === pendingCommand.toolCall.name
+          && entry.status === "pending",
+        status,
+      );
+      this.addTimeline(task, {
+        kind: "command_approval",
+        title: disposition === "task_cancelled"
+          ? "Command discarded after cancellation"
+          : disposition === "task_expired"
+            ? "Command expired before approval"
+            : "Command discarded after task failure",
+        status,
+        summary: "No process was started.",
+      });
+    }
+    this.queuedCalls.delete(task.id);
+  }
+
+  private beginOperation(taskId: string): void {
+    let resolve: () => void = () => {};
+    const settlement = new Promise<void>((settle) => {
+      resolve = settle;
+    });
+    this.operationSettlements.set(taskId, settlement);
+    this.operationResolvers.set(taskId, resolve);
+  }
+
+  private endOperation(taskId: string): void {
+    this.operationResolvers.get(taskId)?.();
+    this.operationResolvers.delete(taskId);
+    this.operationSettlements.delete(taskId);
+    const task = this.tasks.get(taskId);
+    if (task && isTerminal(task.status)) this.touch(task);
+  }
+
+  private async rollbackOne(task: AgentLoopTask): Promise<boolean> {
+    const proposal = task.patchHistory.at(-1);
+    if (!proposal) return false;
+    const results = await this.options.patchAdapter.rollback(proposal);
+    const success = results.length === proposal.files.length
+      && results.every((result) => result.success && result.readbackVerified === true);
+    if (success) task.patchHistory.pop();
+    this.addTimeline(task, {
+      kind: "patch_approval",
+      title: success ? "Latest task patch rolled back" : "Task patch rollback blocked",
+      status: success ? "success" : "error",
+      summary: success ? "Original contents restored and verified." : "Newer file contents were preserved.",
+      detail: JSON.stringify(results),
+    });
+    return success;
   }
 
   private setStatus(task: AgentLoopTask, status: AgentLoopStatus): void {
@@ -506,7 +740,7 @@ export class AgentLoopRuntime {
   }
 
   private addTimeline(task: AgentLoopTask, entry: Omit<AgentTimelineEntry, "id" | "timestamp">): AgentTimelineEntry {
-    const recorded = { ...entry, id: crypto.randomUUID(), timestamp: new Date().toISOString() };
+    const recorded = { ...entry, id: crypto.randomUUID(), timestamp: new Date(this.now()).toISOString() };
     task.timeline.push(recorded);
     this.touch(task);
     return recorded;
@@ -525,7 +759,7 @@ export class AgentLoopRuntime {
   }
 
   private touch(task: AgentLoopTask): void {
-    task.updatedAt = Date.now();
+    task.updatedAt = this.now();
     const snapshot = cloneTask(task);
     for (const listener of this.listeners) listener(snapshot);
   }
@@ -542,10 +776,6 @@ function normalizeLimits(overrides: Partial<AgentLoopLimits> | undefined): Agent
       ? Math.max(1, Math.min(Math.floor(requested), hardLimit))
       : hardLimit];
   })) as unknown as AgentLoopLimits;
-}
-
-function taskIsCancelled(task: AgentLoopTask): boolean {
-  return task.status === "Cancelled";
 }
 
 function isWaiting(status: AgentLoopStatus): boolean {

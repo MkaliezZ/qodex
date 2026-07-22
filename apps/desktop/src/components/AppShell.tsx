@@ -17,6 +17,7 @@ import type { ContextBundle } from "@qodex/context-engine";
 import type { ApplyResult, PatchError, PatchProposal } from "@qodex/diff-engine";
 import type { ProjectAccessSource } from "../platform/types";
 import type { AgentLoopTask } from "@qodex/agent-runtime";
+import type { ProposalOrigin } from "../hooks/proposalOwnership";
 
 export type ActiveView = "agent" | "files" | "sessions" | "skills" | "git" | "settings" | "marketplace";
 
@@ -38,12 +39,17 @@ interface RuntimeContextValue {
   lastBundle: ContextBundle | null;
   estimatedTokens: number;
   pendingProposal: PatchProposal | null;
+  proposalOrigin: ProposalOrigin | null;
+  proposalNotice: string | null;
+  proposalActionsAvailable: boolean;
   currentProposal: PatchProposal | null;
   patchErrors: PatchError[];
   applyResults: ApplyResult[];
   rollbackResults: ApplyResult[];
   isApplying: boolean;
   isRollingBack: boolean;
+  agentRollbackAvailable: boolean;
+  agentRollbackReason: string | null;
   applyProposal: () => Promise<void>;
   rejectProposal: () => Promise<void>;
   rollbackProposal: () => Promise<void>;

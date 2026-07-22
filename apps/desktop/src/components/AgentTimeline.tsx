@@ -13,7 +13,9 @@ export function AgentTimeline() {
     streamedText,
   } = useRuntimeContext();
   const hasContent = streamedText.length > 0 || Boolean(agentTask?.timeline.length);
-  const pendingCommand = agentTask?.pendingCommand;
+  const pendingCommand = agentTask?.status === "WaitingForCommandApproval"
+    ? agentTask.pendingCommand
+    : null;
 
   return (
     <div className="panel-inner agent-workspace" data-testid="agent-timeline">

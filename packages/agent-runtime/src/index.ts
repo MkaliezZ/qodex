@@ -67,9 +67,11 @@ export type {
   AgentPatchError,
   AgentPatchResult,
   AgentPatchAdapter,
+  PendingPatchDisposition,
   PendingCommandApproval,
   AgentLoopLimits,
   AgentLoopTask,
   AgentLoopRuntimeOptions,
+  AgentRollbackAvailability,
   AgentLoopListener,
 } from "./agent-loop/types.js";

@@ -571,3 +571,15 @@ structured unsupported result rather than simulating command success.
 Limitations remain explicit: project scripts are not an OS sandbox, commands may
 have side effects, every command needs approval, files cannot be created or
 deleted, task history is not persistent, and no automatic Git commit is made.
+
+### KerniQ Agent State Safety v0.4.1
+
+**Date:** 2026-07-22  |  **Status:** Implementation complete, final review pending
+
+Hardened the v0.4 approval and rollback state machine. Stop now disposes pending
+patch and command approvals, expired approvals cannot start writes or processes,
+and Agent-owned proposals cannot fall back to the single-turn apply path.
+Duplicate approvals and rollbacks are serialized, while rollback remains
+unavailable until active provider, patch, command, and cancellation work has
+settled. Native child cancellation remains best-effort and does not imply
+process-tree sandboxing.

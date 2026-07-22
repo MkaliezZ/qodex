@@ -43,3 +43,14 @@ Cataloged project scripts remain capable of side effects and are not an OS
 sandbox. Browser mode cannot execute native commands. Agent tasks and patch
 history remain in memory, and v0.4 does not add arbitrary terminal access, new
 files, deletes, automatic Git commits, MCP, or persistent authorization.
+
+## v0.4.1 State-Safety Amendment
+
+Terminalization now invalidates pending patch and command approvals and removes
+queued calls. Approval methods enforce exact task state, wall-clock expiration,
+and one in-flight action before a write or process may start. Agent-owned
+proposals cannot fall back to the single-turn Review Mode apply path. Rollback
+is available only after the task is terminal and provider, patch, command, and
+cancellation work has settled. Native child cancellation remains best-effort;
+KerniQ does not claim process-tree sandboxing or guaranteed descendant
+termination.

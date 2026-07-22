@@ -10,6 +10,7 @@ export type AgentLoopStatus =
   | "ApplyingPatch"
   | "WaitingForCommandApproval"
   | "RunningCommand"
+  | "Cancelling"
   | "ReturningToolResult"
   | "Done"
   | "Failed"
@@ -32,7 +33,7 @@ export interface AgentTimelineEntry {
   id: string;
   kind: AgentTimelineKind;
   title: string;
-  status: "pending" | "running" | "success" | "error" | "denied";
+  status: "pending" | "running" | "success" | "error" | "denied" | "cancelled" | "expired";
   summary: string;
   detail?: string;
   durationMs?: number;
@@ -122,6 +123,12 @@ export interface AgentPatchAdapter {
   rollback(proposal: AgentPatchProposal): Promise<AgentPatchResult[]>;
 }
 
+export type PendingPatchDisposition =
+  | "user_rejected"
+  | "task_cancelled"
+  | "task_expired"
+  | "task_failed";
+
 export interface PendingCommandApproval {
   toolCall: ModelToolCall;
   command: ProjectCommandDefinition;
@@ -167,6 +174,12 @@ export interface AgentLoopRuntimeOptions {
   commandRunner?: ProjectCommandRunner;
   limits?: Partial<AgentLoopLimits>;
   systemPrompt?: string;
+  now?: () => number;
+}
+
+export interface AgentRollbackAvailability {
+  allowed: boolean;
+  reason?: string;
 }
 
 export type AgentLoopListener = (task: AgentLoopTask) => void;

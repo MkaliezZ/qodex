@@ -178,6 +178,89 @@ test.describe("KerniQ Minimal Agent Loop v0.4", () => {
     await expect(page.locator('[data-testid="timeline-tool_result"]')).toHaveCount(0);
   });
 
+  test("Stop while waiting for patch approval discards every actionable path", async ({ page }) => {
+    await installProjectFixture(page, projectFiles);
+    await setupApp(page);
+    await configureDeterministicProvider(page, "unused");
+    let turns = 0;
+    await page.route("**/chat/completions", async (route) => {
+      turns += 1;
+      await fulfillSse(route, [textEvent(patch("Pending patch", originalMath, firstMath))]);
+    });
+    await openFixture(page);
+    await page.fill('[data-testid="prompt-input"]', "Propose a patch and wait.");
+    await page.click('[data-testid="send-button"]');
+    await expect(page.locator('[data-testid="agent-state"]')).toHaveText("WaitingForPatchApproval");
+    expect((await readProjectFixture(page)).writes).toBe(0);
+
+    await page.click('[data-testid="stop-agent"]');
+    await expect(page.locator('[data-testid="agent-state"]')).toHaveText("Cancelled");
+    await expect(page.locator('[data-testid="apply-patch"]')).toHaveCount(0);
+    await expect(page.locator('[data-testid="reject-patch"]')).toHaveCount(0);
+    await expect(page.locator('[data-testid="proposal-disposition"]')).toContainText("cancelled");
+    expect((await readProjectFixture(page)).writes).toBe(0);
+    expect(turns).toBe(1);
+  });
+
+  test("Stop while waiting for command approval starts no process", async ({ page }) => {
+    await installProjectFixture(page, projectFiles);
+    await installAgentCommandFixture(page, correctedMath);
+    await setupApp(page);
+    await configureDeterministicProvider(page, "unused");
+    let turns = 0;
+    await page.route("**/chat/completions", async (route) => {
+      turns += 1;
+      await fulfillSse(route, [
+        toolEvent("list-stop", "list_project_commands", {}, 0),
+        toolEvent("run-stop", "run_project_command", { commandId: "package-script:test" }, 1),
+      ]);
+    });
+    await openFixture(page);
+    await page.fill('[data-testid="prompt-input"]', "Ask before running tests.");
+    await page.click('[data-testid="send-button"]');
+    await expect(page.locator('[data-testid="agent-state"]')).toHaveText("WaitingForCommandApproval");
+    await expect(page.locator('[data-testid="command-approval"]')).toBeVisible();
+    expect((await readAgentCommandFixture(page)).starts).toBe(0);
+
+    await page.click('[data-testid="stop-agent"]');
+    await expect(page.locator('[data-testid="agent-state"]')).toHaveText("Cancelled");
+    await expect(page.locator('[data-testid="command-approval"]')).toHaveCount(0);
+    expect((await readAgentCommandFixture(page)).starts).toBe(0);
+    expect(turns).toBe(1);
+  });
+
+  test("rollback remains disabled until active Agent work settles", async ({ page }) => {
+    await installProjectFixture(page, projectFiles);
+    await setupApp(page);
+    await configureDeterministicProvider(page, "unused");
+    let turns = 0;
+    await page.route("**/chat/completions", async (route) => {
+      turns += 1;
+      if (turns === 1) {
+        await fulfillSse(route, [textEvent(patch("Apply before delayed completion", originalMath, firstMath))]);
+        return;
+      }
+      await new Promise((resolve) => setTimeout(resolve, 600));
+      await fulfillSse(route, [textEvent("Finished after observing the approved patch.")]);
+    });
+    await openFixture(page);
+    await page.fill('[data-testid="prompt-input"]', "Patch then finish slowly.");
+    await page.click('[data-testid="send-button"]');
+    await expect(page.locator('[data-testid="agent-state"]')).toHaveText("WaitingForPatchApproval");
+    await page.click('[data-testid="apply-patch"]');
+
+    await expect(page.locator('[data-testid="rollback-patch"]')).toBeVisible();
+    await expect(page.locator('[data-testid="rollback-patch"]')).toBeDisabled();
+    await expect(page.locator('[data-testid="rollback-unavailable"]')).toContainText("after the Agent");
+    expect((await readProjectFixture(page)).files["src/math.ts"]).toBe(firstMath);
+
+    await expect(page.locator('[data-testid="agent-state"]')).toHaveText("Done");
+    await expect(page.locator('[data-testid="rollback-patch"]')).toBeEnabled();
+    await page.click('[data-testid="rollback-patch"]');
+    await expect(page.locator('[data-testid="rollback-status"]')).toBeVisible();
+    expect((await readProjectFixture(page)).files["src/math.ts"]).toBe(originalMath);
+  });
+
   test("browser mode never claims native command execution", async ({ page }) => {
     await installProjectFixture(page, projectFiles);
     await setupApp(page);
