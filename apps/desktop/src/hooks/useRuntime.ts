@@ -9,13 +9,11 @@ import {
   parseModelPatchResponse,
 } from "@qodex/diff-engine";
 import type { ApplyResult, PatchError, PatchProposal } from "@qodex/diff-engine";
-import { ProjectRuntime, WebFileSystemAdapter } from "@qodex/project-runtime";
+import { ProjectRuntime } from "@qodex/project-runtime";
 import type { FileContent, ProjectTree } from "@qodex/project-runtime";
 import { useProviderContext } from "../components/ProviderContext";
-
-interface DirectoryPickerWindow extends Window {
-  showDirectoryPicker?: (options?: { mode?: "read" | "readwrite" }) => Promise<FileSystemDirectoryHandle>;
-}
+import { openProjectDirectory } from "../platform/openProjectDirectory";
+import { ProjectAccessError, type ProjectAccessSource } from "../platform/types";
 
 export function useRuntime() {
   const { config, getProvider, getResolvedModel } = useProviderContext();
@@ -43,6 +41,7 @@ export function useRuntime() {
   const [streamedText, setStreamedText] = useState("");
 
   const [projectName, setProjectName] = useState<string | null>(null);
+  const [projectSource, setProjectSource] = useState<ProjectAccessSource | null>(null);
   const [fileTree, setFileTree] = useState<ProjectTree | null>(null);
   const [selectedFileCount, setSelectedFileCount] = useState(0);
   const [selectedFileSize, setSelectedFileSize] = useState(0);
@@ -118,23 +117,16 @@ export function useRuntime() {
   }, []);
 
   const openProject = useCallback(async () => {
-    const picker = (window as DirectoryPickerWindow).showDirectoryPicker;
-    if (!picker) {
-      setPatchErrors([{
-        code: "write_target_unavailable",
-        message: "This environment does not provide local directory access.",
-      }]);
-      return;
-    }
-
     try {
-      const handle = await picker.call(window, { mode: "readwrite" });
-      const adapter = new WebFileSystemAdapter(handle);
-      const project = new ProjectRuntime({ adapter });
-      await project.openProject(handle.name);
+      const opened = await openProjectDirectory();
+      if (!opened) return;
+
+      const project = new ProjectRuntime({ adapter: opened.adapter });
+      await project.openProject(opened.name);
       projectRef.current = project;
       diffRef.current = new DiffEngine(project.fileAccess, project.fileAccess);
-      setProjectName(project.project?.name ?? handle.name);
+      setProjectName(project.project?.name ?? opened.name);
+      setProjectSource(opened.source);
       setFileTree(project.tree);
       setSelectedFileCount(0);
       setSelectedFileSize(0);
@@ -144,12 +136,13 @@ export function useRuntime() {
       setPatchErrors([]);
       setApplyResults([]);
       setRollbackResults([]);
-      if (project.index) ctxRef.current.setProjectInfo(project.project?.name ?? handle.name, project.index);
+      if (project.index) ctxRef.current.setProjectInfo(project.project?.name ?? opened.name, project.index);
     } catch (error) {
-      if (error instanceof DOMException && error.name === "AbortError") return;
       setPatchErrors([{
-        code: "file_not_found",
-        message: error instanceof Error ? error.message : "Unable to open the selected project.",
+        code: error instanceof ProjectAccessError ? error.code : "file_not_found",
+        message: error instanceof ProjectAccessError
+          ? error.message
+          : "Unable to open the selected project.",
       }]);
     }
   }, []);
@@ -280,6 +273,7 @@ export function useRuntime() {
     streamedText,
     sendPrompt,
     projectName,
+    projectSource,
     fileTree,
     openProject,
     toggleFileSelection,

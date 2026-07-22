@@ -134,6 +134,13 @@ rolled back to their exact original contents during the current app session.
 This flow is approval-driven, not autonomous. It does not create or delete files,
 execute terminal commands, or persist rollback data across app restarts.
 
+In Tauri desktop mode, KerniQ uses the native directory dialog and grants file
+access only to the project directory selected for that session. Browser
+development mode keeps the File System Access API fallback. Both modes replace
+only selected existing text files through the same Diff Engine approval flow.
+Project selection and rollback history are not persisted across restarts, and
+installer artifacts are not yet published.
+
 ---
 
 ## Documentation

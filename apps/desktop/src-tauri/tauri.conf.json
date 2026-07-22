@@ -10,7 +10,6 @@
     "frontendDist": "../dist"
   },
   "app": {
-    "title": "KerniQ",
     "windows": [
       {
         "title": "KerniQ",

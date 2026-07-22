@@ -50,6 +50,7 @@ Supports: OpenAI, DeepSeek, OpenRouter, Custom.
 ```
 FileSystemAdapter (interface)
     ├── WebFileSystemAdapter (browser)
+    ├── TauriFileSystemAdapter (desktop application platform layer)
     └── MockFileSystemAdapter (testing)
 
 ProjectRuntime → open / close / read / select / deselect
@@ -58,6 +59,12 @@ FileReader → readFile / readFiles / binary detection
 ProjectIndexer → lightweight file index
 IgnoreRules → .git, node_modules, dist, *.lock, *.db
 ```
+
+The desktop application prefers Tauri's native directory dialog and filesystem
+plugin when running in Tauri. The user-selected directory is added to the
+runtime filesystem scope for that session; no whole-home or whole-disk scope is
+configured. Browser development retains `showDirectoryPicker()` as a fallback.
+Both adapters expose project-relative paths to `ProjectRuntime` and the model.
 
 ### 3. Context Engine (`packages/context-engine`)
 

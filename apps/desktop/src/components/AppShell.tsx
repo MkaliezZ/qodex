@@ -15,6 +15,7 @@ import { MarketplaceView } from "../views/MarketplaceView";
 import type { ProjectTree, FileContent } from "@qodex/project-runtime";
 import type { ContextBundle } from "@qodex/context-engine";
 import type { ApplyResult, PatchError, PatchProposal } from "@qodex/diff-engine";
+import type { ProjectAccessSource } from "../platform/types";
 
 export type ActiveView = "agent" | "files" | "sessions" | "skills" | "git" | "settings" | "marketplace";
 
@@ -23,6 +24,7 @@ interface RuntimeContextValue {
   streamedText: string;
   sendPrompt: (prompt: string) => Promise<void>;
   projectName: string | null;
+  projectSource: ProjectAccessSource | null;
   fileTree: ProjectTree | null;
   openProject: () => Promise<void>;
   toggleFileSelection: (path: string) => Promise<void>;

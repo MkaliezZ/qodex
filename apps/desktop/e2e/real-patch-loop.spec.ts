@@ -37,6 +37,10 @@ function validModelResponse(): string {
 
 async function openAndSelectFixture(page: Parameters<typeof setupApp>[0]) {
   await page.getByRole("button", { name: "Open Project" }).click();
+  await expect(page.locator('[data-testid="project-access-source"]')).toHaveAttribute(
+    "data-project-source",
+    "browser",
+  );
   await page.getByText("math.ts", { exact: true }).click();
   await page.getByText("math.test.ts", { exact: true }).click();
 }

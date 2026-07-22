@@ -72,13 +72,21 @@ This runs all tests across all packages. Expected: 887+ tests passing.
 
 ---
 
-## Step 4: Open a Project (Browser)
+## Step 4: Open a Project
 
 Click "Open Project" in the left sidebar.
 
 Select any local directory from the file picker dialog.
 
 The file tree will appear in the left panel.
+
+- Tauri desktop mode uses the native directory picker and native file access.
+- Browser development mode uses the browser File System Access API.
+
+The selected directory is the project access boundary for the current session.
+KerniQ may require you to select it again after restarting. Only selected,
+existing text files can be replaced through explicit Diff Engine approval;
+terminal execution and published installer artifacts are not part of this build.
 
 ---
 
