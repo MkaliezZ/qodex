@@ -171,6 +171,8 @@ export class AgentRuntime {
             timestamp: new Date().toISOString(),
             payload: { text: chunk.text },
           });
+        } else if (chunk.type === "error") {
+          throw new Error(chunk.message);
         }
       }
 

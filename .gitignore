@@ -36,6 +36,7 @@ Thumbs.db
 # Tauri
 src-tauri/target/
 src-tauri/**/*.rs.bk
+apps/desktop/src-tauri/gen/
 
 # Rust
 target/

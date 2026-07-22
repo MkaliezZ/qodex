@@ -18,6 +18,7 @@ import { ProjectMetadataBuilder } from "../project/metadata.js";
 import { FileContextBuilder } from "../builders/files.js";
 import { TokenEstimator } from "../budget/estimator.js";
 import type { ProjectIndex } from "@qodex/project-runtime";
+import { PATCH_OUTPUT_INSTRUCTIONS } from "./patch-instructions.js";
 
 export interface ContextEngineOptions {
   rulesLoader?: RulesLoader;
@@ -102,6 +103,8 @@ export class ContextEngine {
     if (fileContext) {
       sections.push(`=== Selected Files ===\n${fileContext}`);
     }
+
+    sections.push(PATCH_OUTPUT_INSTRUCTIONS);
 
     // User prompt (always last)
     sections.push(`=== Task ===\n${request.prompt}`);

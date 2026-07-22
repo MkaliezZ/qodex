@@ -46,7 +46,7 @@ KerniQ is an AI coding agent that follows the Codex workflow philosophy while re
 | **Provider SDK** | Unified interface for OpenAI, DeepSeek, OpenRouter, and custom endpoints |
 | **Context Engine** | Structured prompt assembly: Rules → Memory → Skills → Metadata → Files → Task |
 | **Agent Runtime** | Task lifecycle with streaming, cancellation, and event bus |
-| **Diff Engine** | Safe patch-based editing — model never writes files directly |
+| **Diff Engine** | User-approved patches for selected local text files, with stale-content checks, verified writes, and session rollback |
 | **Git Runtime** | Checkpoints, commits, branches, restore — no Git knowledge required |
 | **Skill Runtime** | Domain-specific guidelines via markdown skills, keyword resolution |
 | **MCP Runtime** | External tool discovery with permission-gated execution |
@@ -122,6 +122,24 @@ pnpm -r test
 ```
 
 **1,210+ tests** across 14 packages — all passing.
+
+## Real Patch Loop
+
+KerniQ supports a first real model-to-file patch loop for selected existing local
+text files. A configured model may return a versioned `KERNIQ_PATCH_V1` proposal;
+KerniQ parses and validates it, shows the generated unified diff, and writes only
+after explicit approval. Applied changes are re-read for verification and can be
+rolled back to their exact original contents during the current app session.
+
+This flow is approval-driven, not autonomous. It does not create or delete files,
+execute terminal commands, or persist rollback data across app restarts.
+
+In Tauri desktop mode, KerniQ uses the native directory dialog and grants file
+access only to the project directory selected for that session. Browser
+development mode keeps the File System Access API fallback. Both modes replace
+only selected existing text files through the same Diff Engine approval flow.
+Project selection and rollback history are not persisted across restarts, and
+installer artifacts are not yet published.
 
 ---
 

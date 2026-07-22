@@ -5,13 +5,14 @@
  * Orchestrates generation, validation, application, and rejection.
  */
 
-import type { PatchProposal, PatchFile, PatchConflict } from "./models/patch.js";
+import type { ApplyResult, PatchProposal, PatchFile, PatchConflict } from "./models/patch.js";
 import { DiffGenerator } from "./diff/generator.js";
 import { PatchValidator } from "./validation/validator.js";
 import type { ContentProvider } from "./validation/validator.js";
 import { ApplyEngine } from "./apply/engine.js";
 import type { ApplyTarget } from "./apply/engine.js";
 import { PatchParser } from "./parser/parser.js";
+import { parseModelPatchResponse } from "./parser/model-output.js";
 
 export class DiffEngine {
   private generator: DiffGenerator;
@@ -32,6 +33,7 @@ export class DiffEngine {
     return {
       id: crypto.randomUUID(),
       taskId,
+      contractVersion: "1",
       summary,
       files,
       createdAt: new Date().toISOString(),
@@ -62,6 +64,10 @@ export class DiffEngine {
     return this.parser.serialize(proposal);
   }
 
+  parseModelResponse(response: string, taskId: string) {
+    return parseModelPatchResponse(response, taskId);
+  }
+
   // ── Validation ────────────────────────────────────
 
   async validateProposal(proposal: PatchProposal): Promise<PatchConflict[]> {
@@ -76,13 +82,14 @@ export class DiffEngine {
 
   // ── Apply / Reject / Rollback ────────────────────
 
-  async apply(proposal: PatchProposal) {
+  async apply(proposal: PatchProposal): Promise<ApplyResult[]> {
     // Validation first
     const conflicts = await this.validateProposal(proposal);
     if (conflicts.length > 0) {
       return conflicts.map((c) => ({
         success: false,
         path: c.path,
+        code: c.type === "line_mismatch" ? "content_mismatch" as const : c.type,
         error: `${c.type}: ${c.detail}`,
       }));
     }
@@ -93,7 +100,7 @@ export class DiffEngine {
     this.applier.reject(proposal);
   }
 
-  async rollback(proposal: PatchProposal) {
+  async rollback(proposal: PatchProposal): Promise<ApplyResult[]> {
     return this.applier.rollback(proposal);
   }
 

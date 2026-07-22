@@ -3,10 +3,11 @@ import type { ActiveView } from "./AppShell";
 import type { ProjectTreeNode } from "@qodex/project-runtime";
 
 export function ProjectRail() {
-  const { projectName, fileTree, openProject, toggleFileSelection, activeView, setActiveView } =
+  const { projectName, projectSource, fileTree, openProject, toggleFileSelection, activeView, setActiveView } =
     useRuntimeContext();
 
   const navItems: { label: string; view: ActiveView; glyph: string }[] = [
+    { label: "Agent", view: "agent", glyph: "A" },
     { label: "Files", view: "files", glyph: "F" },
     { label: "Sessions", view: "sessions", glyph: "S" },
     { label: "Skills", view: "skills", glyph: "K" },
@@ -68,6 +69,16 @@ export function ProjectRail() {
         <div style={{ flex: 1, minWidth: 0 }}>
           <div className="project-name">{projectName ?? "KerniQ"}</div>
           <div className="project-state">{projectName ? "Project opened" : "Local agent workbench"}</div>
+          {projectSource ? (
+            <div
+              className="project-state"
+              data-testid="project-access-source"
+              data-project-source={projectSource}
+              style={{ marginTop: 2, opacity: 0.58 }}
+            >
+              Project access: {projectSource === "tauri" ? "Native desktop" : "Browser"}
+            </div>
+          ) : null}
         </div>
       </div>
 

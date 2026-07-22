@@ -153,9 +153,9 @@ Ensure Rust toolchain is up to date:
 rustup update
 ```
 
-### showDirectoryPicker not working
+### Browser showDirectoryPicker not working
 
-This API requires a secure context:
+This browser-development API requires a secure context; the Tauri desktop app uses its native directory dialog instead:
 - Localhost works: http://localhost:1420
 - For remote access, HTTPS is required.
 

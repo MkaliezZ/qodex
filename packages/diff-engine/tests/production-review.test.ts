@@ -472,9 +472,7 @@ describe("Scenario 14 — Security Validation", () => {
   it("PASS: path traversal blocked (empty path)", async () => {
     const validator = new PatchValidator();
     const conflict = await validator.validateFile("../outside.txt", "a", "b");
-    // Validator checks path is non-empty; no special handling needed
-    expect(conflict).toBeNull(); // path not empty, so passes through
-    // The file_not_found check (if provider exists) would catch it
+    expect(conflict?.type).toBe("unsafe_path");
   });
 
   it("PASS: empty patch blocked", async () => {

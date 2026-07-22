@@ -12,6 +12,7 @@ export type {
 
 // ── Engine ───────────────────────────────────────────
 export { ContextEngine } from "./context/engine.js";
+export { PATCH_OUTPUT_INSTRUCTIONS } from "./context/patch-instructions.js";
 export type { ContextEngineOptions } from "./context/engine.js";
 
 // ── Budget ───────────────────────────────────────────
