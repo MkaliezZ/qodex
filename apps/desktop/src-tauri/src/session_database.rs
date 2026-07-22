@@ -733,10 +733,22 @@ mod tests {
     }
 
     fn test_root() -> PathBuf {
+        let thread_name = std::thread::current()
+            .name()
+            .unwrap_or("thread")
+            .chars()
+            .map(|character| {
+                if character.is_ascii_alphanumeric() || matches!(character, '-' | '_') {
+                    character
+                } else {
+                    '_'
+                }
+            })
+            .collect::<String>();
         let root = std::env::temp_dir().join(format!(
             "kerniq-session-db-test-{}-{}",
             std::process::id(),
-            std::thread::current().name().unwrap_or("thread")
+            thread_name
         ));
         let _ = fs::remove_dir_all(&root);
         fs::create_dir_all(&root).unwrap();
