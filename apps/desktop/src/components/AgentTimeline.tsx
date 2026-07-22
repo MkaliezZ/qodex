@@ -36,7 +36,7 @@ export function AgentTimeline() {
       ) : null}
 
       <div className="agent-timeline-scroll">
-        {agentTask?.timeline.map((entry) => <TimelineCard key={entry.id} entry={entry} />)}
+        <TimelineHistory entries={agentTask?.timeline ?? []} />
 
         {pendingCommand ? (
           <div className="agent-card command-approval-card" data-testid="command-approval">
@@ -79,7 +79,11 @@ export function AgentTimeline() {
   );
 }
 
-function TimelineCard({ entry }: { entry: AgentTimelineEntry }) {
+export function TimelineHistory({ entries }: { entries: AgentTimelineEntry[] }) {
+  return <>{entries.map((entry) => <TimelineCard key={entry.id} entry={entry} />)}</>;
+}
+
+export function TimelineCard({ entry }: { entry: AgentTimelineEntry }) {
   return (
     <article className={`agent-card agent-card-${entry.kind}`} data-testid={`timeline-${entry.kind}`}>
       <div className="agent-card-topline">

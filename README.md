@@ -15,7 +15,7 @@ v0.2.0-beta.1 may still reference the Qodex name.
 
 ![Beta](https://img.shields.io/badge/status-beta-blue)
 ![License](https://img.shields.io/badge/license-MIT-blue)
-![Tests](https://img.shields.io/badge/tests-1210%20passing-green)
+![Tests](https://img.shields.io/badge/tests-1357%20passing-green)
 ![Platform](https://img.shields.io/badge/platform-Desktop%20(Tauri)-purple)
 ![TypeScript](https://img.shields.io/badge/TypeScript-5.5-blue)
 [![CI](https://github.com/MkaliezZ/qodex/actions/workflows/ci.yml/badge.svg)](https://github.com/MkaliezZ/qodex/actions/workflows/ci.yml)
@@ -46,6 +46,7 @@ KerniQ is an AI coding agent that follows the Codex workflow philosophy while re
 | **Provider SDK** | Unified interface for OpenAI, DeepSeek, OpenRouter, and custom endpoints |
 | **Context Engine** | Structured prompt assembly: Rules → Memory → Skills → Metadata → Files → Task |
 | **Agent Runtime** | Task lifecycle with streaming, cancellation, and event bus |
+| **Session Runtime** | Append-only local session history, deterministic projection, and approval-safe restart recovery |
 | **Diff Engine** | User-approved patches for selected local text files, with stale-content checks, verified writes, and session rollback |
 | **Git Runtime** | Checkpoints, commits, branches, restore — no Git knowledge required |
 | **Skill Runtime** | Domain-specific guidelines via markdown skills, keyword resolution |
@@ -80,6 +81,7 @@ qodex/                  ← legacy repository name
 ├── packages/
 │   ├── provider-sdk/         ← Model provider abstraction (35 tests)
 │   ├── agent-runtime/        ← Task execution orchestration (50 tests)
+│   ├── session-runtime/      ← Universal session ledger and recovery
 │   ├── project-runtime/      ← File system access (41 tests)
 │   ├── context-engine/       ← Context assembly pipeline (57 tests)
 │   ├── diff-engine/          ← Patch generation & apply (95 tests)
@@ -121,7 +123,7 @@ Full guide: [QUICK_START.md](docs/QUICK_START.md)
 pnpm -r test
 ```
 
-**1,210+ tests** across 14 packages — all passing.
+**1,357 tests** across 14 packages - all passing.
 
 ## Minimal Agent Loop v0.4
 
@@ -177,6 +179,7 @@ installer artifacts are not yet published.
 | [Installation](docs/INSTALLATION.md) | Setup for macOS / Windows / Linux |
 | [Architecture](docs/ARCHITECTURE.md) | Deep dive into all 14 packages |
 | [Dev Log](docs/development/DEVLOG.md) | Complete development history |
+| [Product Roadmap](docs/development/PRODUCT_ROADMAP.md) | Authoritative product and distribution milestones |
 | [ADR Records](qodex-config/adr/) | Architecture Decision Records |
 | [Release Notes](docs/development/RELEASE_NOTES_v0.2.0-beta.2.md) | v0.2.0-beta.2 changelog |
 
@@ -184,15 +187,18 @@ installer artifacts are not yet published.
 
 ## Roadmap
 
-**Completed (M0–M15.2):**
-
-Provider SDK · Project Runtime · Context Engine · Agent Runtime · Diff Engine · Git Runtime · Skill Runtime · MCP Runtime · Multi-Agent Runtime · Planning Runtime · Execution Graph Runtime · i18n Runtime · Marketplace Runtime · Brand Migration · CI Pipeline
-
-**Next:** installer workflow, Stage 2 namespace cleanup, and v0.2.0-beta.3 / v0.3 planning.
+The authoritative roadmap is maintained in
+[PRODUCT_ROADMAP.md](docs/development/PRODUCT_ROADMAP.md). v0.4.1 is frozen;
+v0.5 adds the universal session ledger and restart recovery. Installer work is
+planned for v0.8, and the Stage 2 namespace-wide rename remains explicitly
+deferred.
 
 ---
 
-> **Status note:** KerniQ was formerly Qodex. Brand migration, logo/icon assets, TypeScript build fixes, and GitHub Actions CI are complete. Installer/release artifact workflow is not yet configured. Stage 2 internal namespace rename is not included in this release.
+> **Status note:** KerniQ was formerly Qodex. Brand migration, logo/icon assets,
+> TypeScript build fixes, and GitHub Actions CI are complete. Signed installer
+> and release artifact work is planned for v0.8. Stage 2 internal namespace
+> rename is deferred.
 
 ---
 

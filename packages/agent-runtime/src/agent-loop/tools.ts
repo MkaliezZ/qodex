@@ -268,6 +268,7 @@ export class AgentToolRegistry {
           for (const script of Object.keys(packageJson.scripts).sort()) {
             if (!safeScriptName(script) || typeof packageJson.scripts[script] !== "string") continue;
             const category = commandCategory(script);
+            const scriptSource = packageJson.scripts[script] as string;
             this.commandCatalog.set(`package-script:${script}`, {
               id: `package-script:${script}`,
               label: `pnpm ${script}`,
@@ -276,6 +277,7 @@ export class AgentToolRegistry {
               cwd: ".",
               source: "package.json",
               category,
+              catalogDigest: await catalogDigest(`package.json\0${script}\0${scriptSource}`),
             });
           }
         }
@@ -293,6 +295,7 @@ export class AgentToolRegistry {
           cwd: ".",
           source: "cargo",
           category: name,
+          catalogDigest: await catalogDigest(`cargo\0${name}`),
         });
       }
     }
@@ -378,4 +381,9 @@ function truncateUtf8(value: string, maxBytes: number): { value: string; truncat
   const encoded = new TextEncoder().encode(value);
   if (encoded.byteLength <= maxBytes) return { value, truncated: false };
   return { value: new TextDecoder().decode(encoded.slice(0, maxBytes)), truncated: true };
+}
+
+async function catalogDigest(value: string): Promise<string> {
+  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(value));
+  return `sha256:${[...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, "0")).join("")}`;
 }

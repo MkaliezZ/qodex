@@ -12,7 +12,8 @@ test.describe("navigation", () => {
   test("5 - Sessions nav renders SessionsView", async ({ page }) => {
     await setupApp(page);
     await page.click("text=Sessions");
-    await expect(page.locator("text=Session history coming soon")).toBeVisible();
+    await expect(page.locator('[data-testid="sessions-view"]')).toBeVisible();
+    await expect(page.locator('[data-testid="session-persistence-status"]')).toContainText("Browser memory only");
   });
 
   test("6 - Skills nav renders SkillsView", async ({ page }) => {

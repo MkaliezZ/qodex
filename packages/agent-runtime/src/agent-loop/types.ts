@@ -37,6 +37,8 @@ export interface AgentTimelineEntry {
   summary: string;
   detail?: string;
   durationMs?: number;
+  toolCallId?: string;
+  actionId?: string;
   timestamp: string;
 }
 
@@ -61,6 +63,8 @@ export interface ProjectCommandDefinition {
   cwd: string;
   source: "package.json" | "cargo";
   category: ProjectCommandCategory;
+  /** Digest of the exact catalog source used to resolve this command. */
+  catalogDigest?: string;
 }
 
 export interface ProjectCommandResult {

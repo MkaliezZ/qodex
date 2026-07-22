@@ -583,3 +583,27 @@ Duplicate approvals and rollbacks are serialized, while rollback remains
 unavailable until active provider, patch, command, and cancellation work has
 settled. Native child cancellation remains best-effort and does not imply
 process-tree sandboxing.
+
+### KerniQ Universal Session Ledger and Restart Recovery v0.5
+
+**Date:** 2026-07-23  |  **Status:** Implementation complete, final review pending
+
+Added a universal append-only session ledger with deterministic projection,
+redacted export, and evidence-only restart recovery. The pure TypeScript Session
+Runtime supports in-memory tests and future non-coding actions, including safe
+managed-Python metadata. Tauri persists sessions in a schema-versioned local
+SQLite database and keeps private project roots in a separate binding table.
+
+Agent Mode now records user/model messages, exact tool-call IDs, safe tool
+results, patch and command proposals, approvals, execution receipts, and
+terminal outcomes. Recovered pending actions require exact project
+reauthorization and a fresh explicit approval. Stale patch content and changed
+command catalog definitions are blocked. Work that was active during shutdown
+is marked `Interrupted`; KerniQ does not claim live process recovery or automatic
+continuation.
+
+The Sessions surface now provides status filtering, reconstructed active-path
+history, recovery guidance, redacted JSON export, and confirmation-gated local
+history deletion. Browser development truthfully reports its memory-only
+persistence limitation. Signed distribution, cloud sync, cross-device history,
+Git checkpoint recovery, and automatic approvals remain out of scope.

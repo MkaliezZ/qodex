@@ -38,6 +38,7 @@ export async function openProjectDirectory(
       name: adapter.getProjectName(""),
       adapter,
       source: "tauri",
+      privateRootPath: root,
       commandRunner: createTauriProjectCommandRunner(root),
     };
   }

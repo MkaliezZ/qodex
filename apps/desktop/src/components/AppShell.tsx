@@ -6,6 +6,7 @@ import { ContextPanel } from "./ContextPanel";
 import { useRuntime } from "../hooks/useRuntime";
 import { ProviderContextProvider } from "./ProviderContext";
 import { RegistryContextProvider } from "./RegistryContext";
+import { SessionContextProvider } from "./SessionContext";
 import { FilesView } from "../views/FilesView";
 import { SessionsView } from "../views/SessionsView";
 import { SkillsView } from "../views/SkillsView";
@@ -114,7 +115,9 @@ export function AppShell() {
   return (
     <ProviderContextProvider>
       <RegistryContextProvider>
-      <AppShellInner />
+        <SessionContextProvider>
+          <AppShellInner />
+        </SessionContextProvider>
       </RegistryContextProvider>
     </ProviderContextProvider>
   );

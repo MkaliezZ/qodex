@@ -19,6 +19,10 @@ User Input → ContextEngine → AgentLoopRuntime → Provider SDK
                          Native no-shell runner             ↓
                                   ↓                    Tool result
                             Provider next turn
+                                  ↓
+                         Session Recorder
+                                  ↓
+                 Append-only Ledger → Projector → Sessions UI
 ```
 
 ---
@@ -95,8 +99,8 @@ Assembly order:
 AgentRuntime
     ├── TaskStateMachine (7 states: Idle→Planning→...→Done)
     ├── EventBus (pub/sub for UI communication)
-    ├── SessionStore (in-memory)
-    └── TaskStore (in-memory)
+    ├── SessionStore (legacy single-turn, in-memory)
+    └── TaskStore (legacy single-turn, in-memory)
 
 Events: task.started, message.chunk, task.completed,
         patch.proposed, patch.applied, patch.rejected
@@ -119,6 +123,44 @@ project-relative. Source writes remain exclusively in the existing DiffEngine
 approval path. Native commands resolve a catalog ID again in Rust, require a
 session-authorized project root, run without a shell invocation, and have fixed
 environment, timeout, output, and cancellation limits.
+
+The Agent Loop emits facts through a narrow desktop adapter into Session
+Runtime. Exact provider tool-call IDs, safe tool results, proposals, decisions,
+execution receipts, and terminal states are recorded. React state remains a
+live presentation layer; the append-only ledger is the durable history source.
+
+### Session Runtime (`packages/session-runtime`)
+
+**Purpose:** Universal, provider-neutral task evidence and restart recovery.
+
+```
+SessionRuntime
+    ├── SessionStore (dependency-inverted persistence)
+    ├── SessionRecorder (ordered append queue)
+    ├── SessionProjector (deterministic active-path replay)
+    ├── SessionRecoveryService (evidence-only restart mapping)
+    └── SessionExportService (deterministic redacted JSON)
+```
+
+Session and entry records reserve `parentEntryId` and `activeLeafId` for future
+tree histories, while v0.5 presents only the active path. Universal action and
+artifact events can represent future managed-Python work through safe metadata
+without storing script source, environment values, credentials, or native
+handles.
+
+Tauri owns a local SQLite database in the application-data directory. Schema
+migrations are transactional and versioned; foreign keys, ordered retrieval,
+transactional append, and cascade-isolated session deletion are enforced. A
+separate project-binding table retains the private canonical root. Normal
+session reads and redacted exports expose only its display name and fingerprint.
+Browser development uses an in-memory adapter and labels that limitation.
+
+Restart recovery reconstructs evidence, never live runtime objects. Completed,
+failed, cancelled, and limit-reached outcomes remain terminal. Pending patch or
+command decisions become `RecoveryRequired` and invalidate earlier approval.
+Provider/tool activity, patch application, command execution, and cancellation
+in progress become honestly `Interrupted` with an unknown outcome. Recovery
+never calls a provider, applies a patch, or starts a command automatically.
 
 ### 5. Diff Engine (`packages/diff-engine`)
 
@@ -215,7 +257,7 @@ Browser production mode never emulates native command success.
 - Mock adapters for all external dependencies (providers, file system, git, MCP)
 - Cross-package integration tests validate contracts
 - Production reviews for each milestone
-- 887+ tests total
+- 1,350+ tests total
 
 ---
 

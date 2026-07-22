@@ -116,6 +116,7 @@ export class AgentLoopRuntime {
         title: "Patch approved",
         status: "running",
         summary: proposal.summary,
+        actionId: proposal.id,
       });
       this.activePatchApplies.add(task.id);
       let results;
@@ -141,6 +142,7 @@ export class AgentLoopRuntime {
           ? `${results.length} file write${results.length === 1 ? "" : "s"} verified by readback.`
           : "No unverified write was accepted.",
         detail: JSON.stringify(results),
+        actionId: proposal.id,
       });
       if (this.cancellationRequests.has(task.id) || task.status === "Cancelling" || isTerminal(task.status)) {
         if (!isTerminal(task.status)) {
@@ -200,6 +202,7 @@ export class AgentLoopRuntime {
         title: "Patch rejected",
         status: "denied",
         summary: "No files were changed.",
+        actionId: proposal.id,
       });
       this.setStatus(task, "ReturningToolResult");
     } finally {
@@ -226,6 +229,8 @@ export class AgentLoopRuntime {
       title: "Command approved",
       status: "success",
       summary: formatCommand(pending),
+      toolCallId: pending.toolCall.id,
+      actionId: pending.toolCall.id,
     });
     let result: ProjectCommandResult;
     try {
@@ -294,6 +299,8 @@ export class AgentLoopRuntime {
         title: "Command denied",
         status: "denied",
         summary: "No process was started.",
+        toolCallId: pending.toolCall.id,
+        actionId: pending.toolCall.id,
       });
       this.setStatus(task, "ReturningToolResult");
     } finally {
@@ -459,6 +466,7 @@ export class AgentLoopRuntime {
             status: "pending",
             summary: parsed.proposal.summary,
             detail: parsed.proposal.files.map((file) => file.path).join("\n"),
+            actionId: parsed.proposal.id,
           });
           this.setStatus(task, "WaitingForPatchApproval");
           return;
@@ -498,6 +506,8 @@ export class AgentLoopRuntime {
         title: call.name,
         status: call.name === "run_project_command" ? "pending" : "running",
         summary: safeArguments(call.arguments),
+        toolCallId: call.id,
+        actionId: call.name === "run_project_command" ? call.id : undefined,
       });
       if (call.name === "run_project_command") {
         const resolved = await this.tools.resolveCommand(call);
@@ -562,6 +572,7 @@ export class AgentLoopRuntime {
       summary: summarizeToolResult(result),
       detail: this.tools.serialize(result),
       durationMs: result.metadata.durationMs,
+      toolCallId: call.id,
     });
   }
 
@@ -590,6 +601,8 @@ export class AgentLoopRuntime {
         : `Exit code ${result.exitCode ?? "unavailable"} in ${result.durationMs} ms.`,
       detail: [result.stdout, result.stderr].filter(Boolean).join("\n"),
       durationMs: result.durationMs,
+      toolCallId: pending.toolCall.id,
+      actionId: pending.toolCall.id,
     });
   }
 
@@ -672,6 +685,7 @@ export class AgentLoopRuntime {
             : "Patch discarded after task failure",
         status,
         summary: "No files were changed.",
+        actionId: pendingPatch.id,
       });
     }
 
@@ -695,6 +709,8 @@ export class AgentLoopRuntime {
             : "Command discarded after task failure",
         status,
         summary: "No process was started.",
+        toolCallId: pendingCommand.toolCall.id,
+        actionId: pendingCommand.toolCall.id,
       });
     }
     this.queuedCalls.delete(task.id);
