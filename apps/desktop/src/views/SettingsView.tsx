@@ -1,5 +1,6 @@
 import { ProviderSettings } from "../components/ProviderSettings";
 import { RegistrySourceForm } from "../components/RegistrySourceForm";
+import { ManagedPythonSettings } from "../components/ManagedPythonSettings";
 import { Database, Settings } from "lucide-react";
 import { StatusIndicator, ViewTitle } from "../components/WorkbenchPrimitives";
 
@@ -34,6 +35,16 @@ export function SettingsView() {
             </div>
             <RegistrySourceForm />
           </section>
+
+          <section className="settings-section" aria-labelledby="settings-python-title">
+            <div className="settings-section-heading">
+              <div>
+                <h2 id="settings-python-title">Managed Python Runtime</h2>
+                <p>Provision and verify KerniQ's private canonical AgentFuse bridge.</p>
+              </div>
+            </div>
+            <ManagedPythonSettings />
+          </section>
         </div>
 
         <aside className="settings-aside" aria-label="Project and runtime settings">
@@ -45,7 +56,7 @@ export function SettingsView() {
             <span>Language</span><strong>English</strong>
           </div>
           <div className="data-row">
-            <span>Build</span><strong className="mono-value">v0.2.0-beta.2</strong>
+            <span>Build</span><strong className="mono-value">v0.6.0</strong>
           </div>
           <p className="settings-aside-note">System theme and additional languages are not available in this build.</p>
         </aside>

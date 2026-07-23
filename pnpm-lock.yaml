@@ -14,9 +14,15 @@ importers:
 
   apps/desktop:
     dependencies:
+      '@qodex/action-runtime':
+        specifier: workspace:*
+        version: link:../../packages/action-runtime
       '@qodex/agent-runtime':
         specifier: workspace:*
         version: link:../../packages/agent-runtime
+      '@qodex/agentfuse-adapter':
+        specifier: workspace:*
+        version: link:../../packages/agentfuse-adapter
       '@qodex/context-engine':
         specifier: workspace:*
         version: link:../../packages/context-engine
@@ -32,6 +38,9 @@ importers:
       '@qodex/provider-sdk':
         specifier: workspace:*
         version: link:../../packages/provider-sdk
+      '@qodex/python-runtime':
+        specifier: workspace:*
+        version: link:../../packages/python-runtime
       '@qodex/session-runtime':
         specifier: workspace:*
         version: link:../../packages/session-runtime

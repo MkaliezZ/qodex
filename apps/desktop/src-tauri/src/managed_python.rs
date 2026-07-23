@@ -1,4 +1,5 @@
 use flate2::read::GzDecoder;
+use fs2::FileExt;
 use reqwest::blocking::Client;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
@@ -139,6 +140,9 @@ struct InstalledRuntimeRecord {
     executable_sha256: String,
     agent_fuse_module_sha256: String,
     bridge_service_sha256: String,
+    distribution_tree_sha256: String,
+    agent_fuse_tree_sha256: String,
+    bridge_tree_sha256: String,
     installed_at: String,
     last_verified_at: String,
 }
@@ -194,7 +198,7 @@ pub(crate) async fn managed_python_verify(
     let guard = state.operation_guard()?;
     tauri::async_runtime::spawn_blocking(move || {
         let _guard = guard;
-        inspect_runtime(&app, true)
+        verify_runtime(&app)
     })
     .await
     .map_err(|_| "Managed Python verification worker failed.".to_string())?
@@ -351,6 +355,25 @@ fn inspect_runtime(
     }
 }
 
+fn verify_runtime(app: &tauri::AppHandle) -> Result<ManagedPythonRuntimeInfo, String> {
+    let manifest = trusted_manifest()?;
+    let profile = profile_path(app, &manifest)?;
+    let mut record = verify_profile(&profile, &manifest, true)?;
+    record.last_verified_at = timestamp();
+    write_json(
+        &profile.join("manifest").join("installed-runtime.json"),
+        &record,
+    )?;
+    Ok(runtime_info(
+        &manifest,
+        "Ready",
+        Some(manifest.python_version.clone()),
+        "verified",
+        Some(record.last_verified_at),
+        "Managed Python runtime integrity is verified.",
+    ))
+}
+
 fn runtime_info(
     manifest: &RuntimeManifest,
     state: &str,
@@ -448,6 +471,9 @@ fn provision_runtime(app: &tauri::AppHandle) -> Result<ManagedPythonRuntimeInfo,
             executable_sha256: sha256_file(&executable)?,
             agent_fuse_module_sha256: sha256_file(&agent_fuse_module)?,
             bridge_service_sha256: sha256_file(&bridge_service)?,
+            distribution_tree_sha256: sha256_tree(&temporary.join("distribution"))?,
+            agent_fuse_tree_sha256: sha256_tree(&temporary.join("agentfuse-source"))?,
+            bridge_tree_sha256: sha256_tree(&temporary.join("bridge"))?,
             installed_at: now.clone(),
             last_verified_at: now,
         };
@@ -525,7 +551,13 @@ fn download_verified(
     let client = Client::builder()
         .connect_timeout(Duration::from_secs(15))
         .timeout(Duration::from_secs(180))
-        .redirect(reqwest::redirect::Policy::limited(5))
+        .redirect(reqwest::redirect::Policy::custom(|attempt| {
+            if attempt.previous().len() >= 5 || attempt.url().scheme() != "https" {
+                attempt.stop()
+            } else {
+                attempt.follow()
+            }
+        }))
         .build()
         .map_err(|_| "Managed artifact downloader could not initialize.")?;
     let mut response = client
@@ -688,6 +720,9 @@ fn verify_profile(
         || record.executable_sha256 != sha256_file(&executable)?
         || record.agent_fuse_module_sha256 != sha256_file(&agent_fuse_module)?
         || record.bridge_service_sha256 != sha256_file(&bridge_service)?
+        || record.distribution_tree_sha256 != sha256_tree(&profile.join("distribution"))?
+        || record.agent_fuse_tree_sha256 != sha256_tree(&profile.join("agentfuse-source"))?
+        || record.bridge_tree_sha256 != sha256_tree(&profile.join("bridge"))?
     {
         return Err("Managed runtime integrity digest mismatch.".into());
     }
@@ -951,11 +986,14 @@ fn wait_for_child_output(child: &mut Child, timeout: Duration) -> Result<ChildOu
     let stdout_reader = thread::spawn(move || read_bounded(stdout, STDOUT_LIMIT));
     let stderr_reader = thread::spawn(move || read_bounded(stderr, STDERR_LIMIT));
     let started = Instant::now();
+    let mut timed_out = false;
     let status = loop {
         if started.elapsed() >= timeout {
+            timed_out = true;
             let _ = child.kill();
-            let _ = child.wait();
-            return Err("Managed AgentFuse bridge request timed out.".into());
+            break child
+                .wait()
+                .map_err(|_| "Timed out managed bridge could not be reaped.")?;
         }
         match child.try_wait() {
             Ok(Some(status)) => break status,
@@ -969,6 +1007,9 @@ fn wait_for_child_output(child: &mut Child, timeout: Duration) -> Result<ChildOu
     let stderr = stderr_reader
         .join()
         .map_err(|_| "Managed bridge stderr reader failed.")?;
+    if timed_out {
+        return Err("Managed AgentFuse bridge request timed out.".into());
+    }
     Ok(ChildOutput {
         status,
         stdout: stdout.bytes,
@@ -1123,6 +1164,60 @@ fn sha256_bytes(bytes: &[u8]) -> String {
     format!("{:x}", Sha256::digest(bytes))
 }
 
+fn sha256_tree(root: &Path) -> Result<String, String> {
+    if !root.is_dir() {
+        return Err("Managed runtime integrity tree is unavailable.".into());
+    }
+    let mut hasher = Sha256::new();
+    hash_tree_entries(root, root, &mut hasher)?;
+    Ok(format!("{:x}", hasher.finalize()))
+}
+
+fn hash_tree_entries(root: &Path, directory: &Path, hasher: &mut Sha256) -> Result<(), String> {
+    let mut entries = fs::read_dir(directory)
+        .map_err(|_| "Managed runtime integrity tree could not be read.")?
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|_| "Managed runtime integrity entry could not be read.")?;
+    entries.sort_by_key(|entry| entry.file_name());
+    for entry in entries {
+        let path = entry.path();
+        let relative = path
+            .strip_prefix(root)
+            .map_err(|_| "Managed runtime integrity path is invalid.")?;
+        let metadata = fs::symlink_metadata(&path)
+            .map_err(|_| "Managed runtime integrity metadata is unavailable.")?;
+        if metadata.file_type().is_symlink() {
+            return Err("Managed runtime integrity tree contains a link.".into());
+        }
+        let relative_bytes = relative.to_string_lossy();
+        if metadata.is_dir() {
+            hasher.update(b"directory\0");
+            hasher.update(relative_bytes.as_bytes());
+            hasher.update(b"\0");
+            hash_tree_entries(root, &path, hasher)?;
+        } else if metadata.is_file() {
+            hasher.update(b"file\0");
+            hasher.update(relative_bytes.as_bytes());
+            hasher.update(b"\0");
+            let mut file =
+                File::open(&path).map_err(|_| "Managed runtime integrity file is unavailable.")?;
+            let mut buffer = [0_u8; 64 * 1024];
+            loop {
+                let count = file
+                    .read(&mut buffer)
+                    .map_err(|_| "Managed runtime integrity file could not be read.")?;
+                if count == 0 {
+                    break;
+                }
+                hasher.update(&buffer[..count]);
+            }
+        } else {
+            return Err("Managed runtime integrity tree contains a special file.".into());
+        }
+    }
+    Ok(())
+}
+
 fn write_json(path: &Path, value: &impl Serialize) -> Result<(), String> {
     let bytes = serde_json::to_vec_pretty(value)
         .map_err(|_| "Managed runtime evidence could not be encoded.")?;
@@ -1150,23 +1245,32 @@ fn timestamp() -> String {
 }
 
 struct FileLock {
-    path: PathBuf,
+    file: File,
 }
 
 impl FileLock {
     fn acquire(path: PathBuf) -> Result<Self, String> {
-        OpenOptions::new()
-            .create_new(true)
+        let mut file = OpenOptions::new()
+            .create(true)
+            .read(true)
             .write(true)
             .open(&path)
             .map_err(|_| "Managed Python provisioning lock is already held.")?;
-        Ok(Self { path })
+        file.try_lock_exclusive()
+            .map_err(|_| "Managed Python provisioning lock is already held.")?;
+        file.set_len(0)
+            .map_err(|_| "Managed Python provisioning lock could not be recorded.")?;
+        write!(file, "pid={}", std::process::id())
+            .map_err(|_| "Managed Python provisioning lock could not be recorded.")?;
+        file.sync_all()
+            .map_err(|_| "Managed Python provisioning lock could not be synchronized.")?;
+        Ok(Self { file })
     }
 }
 
 impl Drop for FileLock {
     fn drop(&mut self) {
-        fs::remove_file(&self.path).ok();
+        let _ = self.file.unlock();
     }
 }
 
@@ -1290,6 +1394,94 @@ mod tests {
         assert!(FileLock::acquire(path.clone()).is_err());
         drop(lock);
         assert!(FileLock::acquire(path).is_ok());
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn integrity_tree_is_deterministic_and_detects_tampering() {
+        let root =
+            std::env::temp_dir().join(format!("kerniq-python-integrity-{}", operation_nonce()));
+        fs::create_dir_all(root.join("nested")).unwrap();
+        fs::write(root.join("nested").join("module.py"), "trusted").unwrap();
+        let first = sha256_tree(&root).unwrap();
+        assert_eq!(sha256_tree(&root).unwrap(), first);
+        fs::write(root.join("nested").join("module.py"), "tampered").unwrap();
+        assert_ne!(sha256_tree(&root).unwrap(), first);
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn integrity_tree_rejects_links() {
+        use std::os::unix::fs::symlink;
+
+        let root =
+            std::env::temp_dir().join(format!("kerniq-python-tree-link-{}", operation_nonce()));
+        fs::create_dir_all(&root).unwrap();
+        fs::write(root.join("target"), "trusted").unwrap();
+        symlink(root.join("target"), root.join("link")).unwrap();
+        assert!(sha256_tree(&root).is_err());
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn archive_extraction_rejects_symbolic_links() {
+        use flate2::{write::GzEncoder, Compression};
+
+        let root =
+            std::env::temp_dir().join(format!("kerniq-python-archive-{}", operation_nonce()));
+        fs::create_dir_all(&root).unwrap();
+        let archive_path = root.join("link.tar.gz");
+        let encoder = GzEncoder::new(File::create(&archive_path).unwrap(), Compression::default());
+        let mut archive = tar::Builder::new(encoder);
+        let mut header = tar::Header::new_gnu();
+        header.set_entry_type(tar::EntryType::Symlink);
+        header.set_size(0);
+        header.set_mode(0o777);
+        header.set_link_name("../escape").unwrap();
+        header.set_cksum();
+        archive
+            .append_data(&mut header, "root/link", std::io::empty())
+            .unwrap();
+        archive.into_inner().unwrap().finish().unwrap();
+        let destination = root.join("destination");
+        fs::create_dir_all(&destination).unwrap();
+        assert!(extract_tar_gz(&archive_path, &destination, true).is_err());
+        assert!(!destination.join("link").exists());
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn handshake_rejects_unexpected_agentfuse_revision() {
+        let manifest = trusted_manifest().unwrap();
+        let response = json!({
+            "protocolVersion": BRIDGE_PROTOCOL,
+            "messageId": "hello",
+            "messageType": "hello_ack",
+            "payload": {
+                "bridgeProtocolVersion": BRIDGE_PROTOCOL,
+                "pythonVersion": manifest.python_version,
+                "agentFusePackageVersion": "3.5.0",
+                "agentFuseSourceCommit": "0000000000000000000000000000000000000000",
+                "supportedDecisionSchema": manifest.decision_schema_version,
+                "processId": 1
+            }
+        });
+        assert!(validate_handshake(&response, &manifest).is_err());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn version_check_rejects_an_unexpected_interpreter() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let root =
+            std::env::temp_dir().join(format!("kerniq-python-version-{}", operation_nonce()));
+        fs::create_dir_all(&root).unwrap();
+        let executable = root.join("python3");
+        fs::write(&executable, "#!/bin/sh\necho 'Python 0.0.0'\n").unwrap();
+        fs::set_permissions(&executable, fs::Permissions::from_mode(0o700)).unwrap();
+        assert!(verify_python_version(&executable, "3.12.13").is_err());
         fs::remove_dir_all(root).unwrap();
     }
 
