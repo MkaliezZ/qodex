@@ -16,6 +16,13 @@ coverage/
 # TypeScript
 *.tsbuildinfo
 
+# Python
+__pycache__/
+.pytest_cache/
+*.py[cod]
+.venv/
+venv/
+
 # Environment
 .env
 .env.*

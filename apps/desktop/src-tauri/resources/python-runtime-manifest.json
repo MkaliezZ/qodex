@@ -1,0 +1,66 @@
+{
+  "manifestVersion": "kerniq.python-runtime-manifest.v1",
+  "runtimeVersion": "20260718-cpython-3.12.13-agentfuse-8c6ae987",
+  "pythonVersion": "3.12.13",
+  "distribution": {
+    "publisher": "astral-sh/python-build-standalone",
+    "release": "20260718",
+    "license": "MPL-2.0 build tooling; PSF-2.0 CPython distribution",
+    "artifacts": [
+      {
+        "platform": "macos",
+        "architecture": "x86_64",
+        "url": "https://github.com/astral-sh/python-build-standalone/releases/download/20260718/cpython-3.12.13%2B20260718-x86_64-apple-darwin-install_only.tar.gz",
+        "sha256": "10b47148de86f9d87ba6e96a3db606ced90a206a3454d7d6d8fa68536a05d81f",
+        "archiveFormat": "tar.gz",
+        "expectedExecutable": "python/bin/python3"
+      },
+      {
+        "platform": "macos",
+        "architecture": "aarch64",
+        "url": "https://github.com/astral-sh/python-build-standalone/releases/download/20260718/cpython-3.12.13%2B20260718-aarch64-apple-darwin-install_only.tar.gz",
+        "sha256": "62aeee6161d57303a71a138b75fd5cc6fb8c89c4b1d9c7f0a052d89fa0b6652b",
+        "archiveFormat": "tar.gz",
+        "expectedExecutable": "python/bin/python3"
+      },
+      {
+        "platform": "windows",
+        "architecture": "x86_64",
+        "url": "https://github.com/astral-sh/python-build-standalone/releases/download/20260718/cpython-3.12.13%2B20260718-x86_64-pc-windows-msvc-install_only.tar.gz",
+        "sha256": "56c9dd9681c4810cb8bfdec277ee2606d8ab17e678e5bc2bd138eb8098e330b6",
+        "archiveFormat": "tar.gz",
+        "expectedExecutable": "python/python.exe"
+      },
+      {
+        "platform": "linux",
+        "architecture": "x86_64",
+        "url": "https://github.com/astral-sh/python-build-standalone/releases/download/20260718/cpython-3.12.13%2B20260718-x86_64-unknown-linux-gnu-install_only.tar.gz",
+        "sha256": "7eea0959fa425c8aff3ea0a1352ee7d01d794b51439ed8f5fcfa017dbc0ec661",
+        "archiveFormat": "tar.gz",
+        "expectedExecutable": "python/bin/python3"
+      },
+      {
+        "platform": "linux",
+        "architecture": "aarch64",
+        "url": "https://github.com/astral-sh/python-build-standalone/releases/download/20260718/cpython-3.12.13%2B20260718-aarch64-unknown-linux-gnu-install_only.tar.gz",
+        "sha256": "53fb0a17442cd03bcfbc21df8d82e739b4901b87844934e36e54ab5122a55dfa",
+        "archiveFormat": "tar.gz",
+        "expectedExecutable": "python/bin/python3"
+      }
+    ]
+  },
+  "agentFuse": {
+    "repository": "MkaliezZ/dhms-engine",
+    "commit": "8c6ae9875b3618a529d5150c96385da7461099c2",
+    "url": "https://codeload.github.com/MkaliezZ/dhms-engine/tar.gz/8c6ae9875b3618a529d5150c96385da7461099c2",
+    "sha256": "38bc755eeb68c31637be39549e1f3fdac59c86acbd95537f6532580406a3f768",
+    "archiveFormat": "tar.gz",
+    "expectedModule": "dhms_agentfuse/runtime_guard.py"
+  },
+  "bridgeProtocolVersion": "kerniq.agentfuse.bridge.v1",
+  "decisionSchemaVersion": "agentfuse-evidence-schema-v0.1",
+  "installedPackageLock": {
+    "mode": "verified-source-no-site-packages",
+    "packages": []
+  }
+}

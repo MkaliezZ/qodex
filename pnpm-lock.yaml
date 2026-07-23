@@ -107,6 +107,19 @@ importers:
         specifier: ^2.0.0
         version: 2.1.9(@types/node@22.20.1)
 
+  packages/agentfuse-adapter:
+    dependencies:
+      '@qodex/action-runtime':
+        specifier: workspace:*
+        version: link:../action-runtime
+    devDependencies:
+      typescript:
+        specifier: ^5.5.0
+        version: 5.9.3
+      vitest:
+        specifier: ^2.1.9
+        version: 2.1.9(@types/node@22.20.1)
+
   packages/context-engine:
     dependencies:
       '@qodex/project-runtime':
@@ -208,6 +221,15 @@ importers:
         version: 2.1.9(@types/node@22.20.1)
 
   packages/provider-sdk:
+    devDependencies:
+      typescript:
+        specifier: ^5.5.0
+        version: 5.9.3
+      vitest:
+        specifier: ^2.1.9
+        version: 2.1.9(@types/node@22.20.1)
+
+  packages/python-runtime:
     devDependencies:
       typescript:
         specifier: ^5.5.0
