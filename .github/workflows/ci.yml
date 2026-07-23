@@ -38,8 +38,47 @@ jobs:
       - name: Test
         run: pnpm test
 
+      - name: Test managed action runtime foundations
+        run: |
+          pnpm --filter @qodex/action-runtime test
+          pnpm --filter @qodex/python-runtime test
+          pnpm --filter @qodex/agentfuse-adapter test
+
       - name: Check whitespace
         run: git diff --check
+
+  python-bridge:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Create controlled bridge test environment
+        run: |
+          python -m venv .ci-python
+          .ci-python/bin/python -m pip install pytest==8.3.5
+
+      - name: Fetch and verify canonical AgentFuse source
+        run: |
+          curl --fail --location --proto '=https' --tlsv1.2 \
+            --output /tmp/dhms-engine.tar.gz \
+            https://codeload.github.com/MkaliezZ/dhms-engine/tar.gz/8c6ae9875b3618a529d5150c96385da7461099c2
+          echo "38bc755eeb68c31637be39549e1f3fdac59c86acbd95537f6532580406a3f768  /tmp/dhms-engine.tar.gz" \
+            | sha256sum --check
+          mkdir .ci-agentfuse
+          tar -xzf /tmp/dhms-engine.tar.gz --strip-components=1 -C .ci-agentfuse
+
+      - name: Test canonical Python bridge
+        env:
+          KERNIQ_AGENTFUSE_SOURCE: ${{ github.workspace }}/.ci-agentfuse
+        run: |
+          .ci-python/bin/python -m pytest python/kerniq_agentfuse_bridge/tests
+          .ci-python/bin/python -m compileall -q python/kerniq_agentfuse_bridge
 
   desktop-e2e:
     runs-on: ubuntu-latest
