@@ -1,4 +1,11 @@
+mod session_database;
+
 use serde::{Deserialize, Serialize};
+use session_database::{
+    AppendEntryRequest, CreateSessionRequest, PersistenceInfo, ProjectBinding,
+    ProjectBindingCandidate, ProjectBindingInput, SessionDatabase, StoredEntry, StoredSession,
+};
+use sha2::{Digest, Sha256};
 use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::io::Read;
@@ -8,6 +15,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::{Duration, Instant};
+use tauri::Manager;
 use tauri_plugin_dialog::DialogExt;
 use tauri_plugin_fs::FsExt;
 
@@ -26,6 +34,7 @@ struct RunProjectCommandRequest {
     run_id: String,
     project_root: String,
     command_id: String,
+    catalog_digest: String,
 }
 
 #[derive(Debug, Clone)]
@@ -92,7 +101,7 @@ async fn run_project_command(
 
     let run_id = request.run_id.clone();
     let result = tauri::async_runtime::spawn_blocking(move || {
-        let definition = resolve_command(&root, &request.command_id)?;
+        let definition = resolve_command(&root, &request.command_id, &request.catalog_digest)?;
         execute_command(definition, cancellation, COMMAND_TIMEOUT, OUTPUT_LIMIT)
     })
     .await
@@ -157,16 +166,109 @@ fn cancel_project_command(
     Ok(false)
 }
 
+#[tauri::command]
+fn session_store_create(
+    request: CreateSessionRequest,
+    state: tauri::State<'_, SessionDatabase>,
+) -> Result<(), String> {
+    state.create_session(request)
+}
+
+#[tauri::command]
+fn session_store_append(
+    request: AppendEntryRequest,
+    state: tauri::State<'_, SessionDatabase>,
+) -> Result<(), String> {
+    state.append_entry(request)
+}
+
+#[tauri::command]
+fn session_store_get(
+    session_id: String,
+    state: tauri::State<'_, SessionDatabase>,
+) -> Result<Option<StoredSession>, String> {
+    state.get_session(&session_id)
+}
+
+#[tauri::command]
+fn session_store_list(
+    state: tauri::State<'_, SessionDatabase>,
+) -> Result<Vec<StoredSession>, String> {
+    state.list_sessions()
+}
+
+#[tauri::command]
+fn session_store_entries(
+    session_id: String,
+    state: tauri::State<'_, SessionDatabase>,
+) -> Result<Vec<StoredEntry>, String> {
+    state.list_entries(&session_id)
+}
+
+#[tauri::command]
+fn session_store_delete(
+    session_id: String,
+    state: tauri::State<'_, SessionDatabase>,
+) -> Result<bool, String> {
+    state.delete_session(&session_id)
+}
+
+#[tauri::command]
+fn session_binding_upsert(
+    binding: ProjectBindingInput,
+    state: tauri::State<'_, SessionDatabase>,
+) -> Result<ProjectBinding, String> {
+    state.upsert_binding(binding)
+}
+
+#[tauri::command]
+fn session_binding_get(
+    binding_id: String,
+    state: tauri::State<'_, SessionDatabase>,
+) -> Result<Option<ProjectBinding>, String> {
+    state.get_binding(&binding_id)
+}
+
+#[tauri::command]
+fn session_binding_verify(
+    binding_id: String,
+    candidate: ProjectBindingCandidate,
+    state: tauri::State<'_, SessionDatabase>,
+) -> Result<bool, String> {
+    state.verify_binding(&binding_id, candidate)
+}
+
+#[tauri::command]
+fn session_persistence_info(state: tauri::State<'_, SessionDatabase>) -> PersistenceInfo {
+    state.persistence_info()
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
         .manage(CommandRunState::default())
+        .setup(|app| {
+            let database = SessionDatabase::open(app.handle())
+                .map_err(|error| -> Box<dyn std::error::Error> { error.into() })?;
+            app.manage(database);
+            Ok(())
+        })
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_fs::init())
         .invoke_handler(tauri::generate_handler![
             pick_project_directory,
             run_project_command,
-            cancel_project_command
+            cancel_project_command,
+            session_store_create,
+            session_store_append,
+            session_store_get,
+            session_store_list,
+            session_store_entries,
+            session_store_delete,
+            session_binding_upsert,
+            session_binding_get,
+            session_binding_verify,
+            session_persistence_info
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
@@ -181,7 +283,11 @@ fn validate_project_root(root: &str) -> Result<PathBuf, String> {
     fs::canonicalize(root).map_err(|_| "The selected project root could not be normalized.".into())
 }
 
-fn resolve_command(root: &Path, command_id: &str) -> Result<CommandDefinition, String> {
+fn resolve_command(
+    root: &Path,
+    command_id: &str,
+    expected_catalog_digest: &str,
+) -> Result<CommandDefinition, String> {
     if let Some(script) = command_id.strip_prefix("package-script:") {
         if !is_safe_script_name(script) {
             return Err("Unknown project command ID.".into());
@@ -191,13 +297,18 @@ fn resolve_command(root: &Path, command_id: &str) -> Result<CommandDefinition, S
             .map_err(|_| "Project package metadata is unavailable.")?;
         let package: serde_json::Value =
             serde_json::from_str(&raw).map_err(|_| "Project package metadata is malformed.")?;
-        let script_exists = package
+        let script_source = package
             .get("scripts")
             .and_then(|value| value.as_object())
             .and_then(|scripts| scripts.get(script))
-            .is_some_and(|value| value.is_string());
-        if !script_exists {
+            .and_then(|value| value.as_str());
+        let Some(script_source) = script_source else {
             return Err("Unknown project command ID.".into());
+        };
+        if catalog_digest(&format!("package.json\0{script}\0{script_source}"))
+            != expected_catalog_digest
+        {
+            return Err("The cataloged project command changed after approval.".into());
         }
         return Ok(CommandDefinition {
             id: command_id.into(),
@@ -212,6 +323,9 @@ fn resolve_command(root: &Path, command_id: &str) -> Result<CommandDefinition, S
             return Err("Unknown project command ID.".into());
         }
         let action = command_id.strip_prefix("cargo:").unwrap_or_default();
+        if catalog_digest(&format!("cargo\0{action}")) != expected_catalog_digest {
+            return Err("The cataloged project command changed after approval.".into());
+        }
         return Ok(CommandDefinition {
             id: command_id.into(),
             executable: "cargo".into(),
@@ -221,6 +335,11 @@ fn resolve_command(root: &Path, command_id: &str) -> Result<CommandDefinition, S
     }
 
     Err("Unknown project command ID.".into())
+}
+
+fn catalog_digest(value: &str) -> String {
+    let digest = Sha256::digest(value.as_bytes());
+    format!("sha256:{digest:x}")
 }
 
 fn is_safe_script_name(name: &str) -> bool {
@@ -381,7 +500,8 @@ mod tests {
             let mut value = serde_json::json!({
                 "runId": "run-1",
                 "projectRoot": "/tmp/project",
-                "commandId": "cargo:test"
+                "commandId": "cargo:test",
+                "catalogDigest": "sha256:fixture"
             });
             value
                 .as_object_mut()
@@ -399,10 +519,12 @@ mod tests {
             r#"{"scripts":{"test":"node test.js","deploy":"curl example.test"}}"#,
         )
         .unwrap();
-        assert!(resolve_command(&root, "package-script:test").is_ok());
-        assert!(resolve_command(&root, "package-script:deploy").is_err());
-        assert!(resolve_command(&root, "package-script:test;rm").is_err());
-        assert!(resolve_command(&root, "raw:command").is_err());
+        let digest = catalog_digest("package.json\0test\0node test.js");
+        assert!(resolve_command(&root, "package-script:test", &digest).is_ok());
+        assert!(resolve_command(&root, "package-script:test", "sha256:changed").is_err());
+        assert!(resolve_command(&root, "package-script:deploy", "sha256:any").is_err());
+        assert!(resolve_command(&root, "package-script:test;rm", "sha256:any").is_err());
+        assert!(resolve_command(&root, "raw:command", "sha256:any").is_err());
         fs::remove_dir_all(root).unwrap();
     }
 

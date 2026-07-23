@@ -26,6 +26,7 @@ export async function openBrowserProjectDirectory(
       name: handle.name,
       adapter: new WebFileSystemAdapter(handle),
       source: "browser",
+      privateRootPath: `browser://${handle.name}`,
     };
   } catch (error) {
     if (isCancellation(error)) return null;

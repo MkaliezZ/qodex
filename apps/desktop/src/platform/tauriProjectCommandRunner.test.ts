@@ -13,6 +13,7 @@ describe("createTauriProjectCommandRunner", () => {
       cwd: ".",
       source: "package.json",
       category: "test",
+      catalogDigest: "sha256:fixture",
     }, "run-1");
 
     expect(invoke).toHaveBeenCalledWith("run_project_command", {
@@ -20,6 +21,7 @@ describe("createTauriProjectCommandRunner", () => {
         runId: "run-1",
         projectRoot: "/private/project",
         commandId: "package-script:test",
+        catalogDigest: "sha256:fixture",
       },
     });
     const serialized = JSON.stringify(invoke.mock.calls[0][1]);

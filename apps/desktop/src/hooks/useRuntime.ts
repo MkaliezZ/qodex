@@ -26,8 +26,11 @@ import { ProjectRuntime } from "@qodex/project-runtime";
 import type { FileContent, ProjectTree } from "@qodex/project-runtime";
 import type { ModelProvider } from "@qodex/provider-sdk";
 import { useProviderContext } from "../components/ProviderContext";
+import { useSessionContext } from "../components/SessionContext";
 import { openProjectDirectory } from "../platform/openProjectDirectory";
+import { projectBindingIdentity, type OpenProjectBindingIdentity } from "../platform/projectBinding";
 import { ProjectAccessError, type ProjectAccessSource } from "../platform/types";
+import { AgentSessionLedgerRecorder } from "../session/agentSessionRecorder";
 import {
   discardedProposalNotice,
   getAgentPendingProposal,
@@ -50,12 +53,15 @@ const ACTIVE_AGENT_STATES = new Set([
 
 export function useRuntime() {
   const { config, getProvider, getResolvedModel } = useProviderContext();
+  const { runtime: sessionRuntime, refreshSessions } = useSessionContext();
   const [runtime, setRuntime] = useState(() => createSingleTurnRuntime(getProvider(), config.modelId));
 
   const projectRef = useRef<ProjectRuntime | null>(null);
   const commandRunnerRef = useRef<ProjectCommandRunner | null>(null);
   const agentLoopRef = useRef<AgentLoopRuntime | null>(null);
   const agentUnsubscribeRef = useRef<(() => void) | null>(null);
+  const agentSessionRecorderRef = useRef<AgentSessionLedgerRecorder | null>(null);
+  const projectBindingRef = useRef<OpenProjectBindingIdentity | null>(null);
   const ctxRef = useRef(new ContextEngine());
   const diffRef = useRef(new DiffEngine());
   const rawResponseRef = useRef("");
@@ -99,6 +105,7 @@ export function useRuntime() {
   }, []);
 
   const syncAgentTask = useCallback((task: AgentLoopTask) => {
+    agentSessionRecorderRef.current?.recordTask(task);
     setAgentTask(task);
     setIsRunning(ACTIVE_AGENT_STATES.has(task.status));
     setStreamedText(extractAssistantText(task.output));
@@ -140,6 +147,7 @@ export function useRuntime() {
     agentUnsubscribeRef.current?.();
     agentUnsubscribeRef.current = null;
     agentLoopRef.current = null;
+    agentSessionRecorderRef.current = null;
     setAgentTask(null);
     if (proposalOriginRef.current?.mode === "agent") setProposalState(null, null);
     setAgentRollbackAvailable(false);
@@ -204,6 +212,12 @@ export function useRuntime() {
       if (!opened) return;
       const project = new ProjectRuntime({ adapter: opened.adapter });
       await project.openProject(opened.name);
+      const binding = await projectBindingIdentity(opened);
+      await sessionRuntime.upsertProjectBinding({
+        ...binding,
+        lastOpenedAt: new Date().toISOString(),
+      });
+      projectBindingRef.current = binding;
       projectRef.current = project;
       commandRunnerRef.current = opened.commandRunner
         ?? (import.meta.env.DEV ? window.__kerniqTestCommandRunner ?? null : null);
@@ -226,6 +240,7 @@ export function useRuntime() {
       agentUnsubscribeRef.current?.();
       agentUnsubscribeRef.current = null;
       agentLoopRef.current = null;
+      agentSessionRecorderRef.current = null;
       if (project.index) ctxRef.current.setProjectInfo(project.project?.name ?? opened.name, project.index);
     } catch (error) {
       setPatchErrors([{
@@ -235,7 +250,7 @@ export function useRuntime() {
           : "Unable to open the selected project.",
       }]);
     }
-  }, [setProposalState]);
+  }, [sessionRuntime, setProposalState]);
 
   const toggleFileSelection = useCallback(async (path: string) => {
     const project = projectRef.current;
@@ -347,22 +362,50 @@ export function useRuntime() {
         readFile: (path) => project.fileAccess.readFile(path),
         commandExecutionAvailable: commandRunnerRef.current !== null,
       };
-      const loop = new AgentLoopRuntime({
-        provider,
-        modelId,
-        project: projectAccess,
-        patchAdapter: createPatchAdapter(project),
-        ...(commandRunnerRef.current ? { commandRunner: commandRunnerRef.current } : {}),
-      });
-      if (loop.isSupported()) {
+      const agentSupported = provider.capabilities?.toolAgentLoop === true
+        && (provider.supportsAgentTools?.(modelId) ?? true);
+      if (agentSupported) {
+        const binding = projectBindingRef.current;
+        if (!binding) {
+          setPatchErrors([{
+            code: "write_target_unavailable",
+            message: "The opened project could not be bound to session history.",
+          }]);
+          return;
+        }
+        const taskId = crypto.randomUUID();
+        await sessionRuntime.createSession({
+          id: taskId,
+          title: sessionTitle(prompt),
+          projectBindingId: binding.bindingId,
+          providerId: provider.id,
+          modelId,
+        });
+        const recorder = new AgentSessionLedgerRecorder({
+          runtime: sessionRuntime,
+          sessionId: taskId,
+          onRecorded: refreshSessions,
+        });
+        const loop = new AgentLoopRuntime({
+          provider,
+          modelId,
+          project: projectAccess,
+          patchAdapter: createPatchAdapter(project),
+          sideEffectLifecycle: recorder,
+          ...(commandRunnerRef.current ? { commandRunner: commandRunnerRef.current } : {}),
+        });
+        agentSessionRecorderRef.current = recorder;
+        recorder.recordUserMessage(prompt);
+        await recorder.flush();
         agentLoopRef.current = loop;
         setAgentModeNotice(projectSource === "browser" && !commandRunnerRef.current
           ? "Agent Mode is active. Browser mode supports project inspection and approved patches, but native commands are unavailable."
           : null);
         agentUnsubscribeRef.current?.();
         agentUnsubscribeRef.current = loop.subscribe(syncAgentTask);
-        const task = await loop.start(crypto.randomUUID(), bundle.assembledPrompt);
+        const task = await loop.start(taskId, bundle.assembledPrompt);
         syncAgentTask(task);
+        await recorder.flush();
         return;
       }
       setAgentModeNotice("Agent Mode is unavailable for this provider or model. Normal single-turn mode remains available.");
@@ -401,7 +444,7 @@ export function useRuntime() {
     }
     setPatchErrors([]);
     setProposalState(parsed.proposal, { mode: "single_turn", taskId: parsed.proposal.taskId });
-  }, [contextFiles, createPatchAdapter, getProvider, getResolvedModel, projectSource, runtime, session, setProposalState, syncAgentTask]);
+  }, [contextFiles, createPatchAdapter, getProvider, getResolvedModel, projectSource, refreshSessions, runtime, session, sessionRuntime, setProposalState, syncAgentTask]);
 
   const applyProposal = useCallback(async () => {
     if (!pendingProposal || isApplying) return;
@@ -418,6 +461,7 @@ export function useRuntime() {
     try {
       if (route === "agent" && agentLoopRef.current && proposalOrigin?.mode === "agent") {
         syncAgentTask(await agentLoopRef.current.approvePatch(proposalOrigin.taskId));
+        await agentSessionRecorderRef.current?.flush();
         return;
       }
       if (route !== "single_turn") return;
@@ -451,6 +495,7 @@ export function useRuntime() {
     }
     if (route === "agent" && agentLoopRef.current && proposalOrigin?.mode === "agent") {
       syncAgentTask(await agentLoopRef.current.rejectPatch(proposalOrigin.taskId));
+      await agentSessionRecorderRef.current?.flush();
       return;
     }
     if (route !== "single_turn") return;
@@ -463,11 +508,13 @@ export function useRuntime() {
   const approveCommand = useCallback(async () => {
     if (!agentTask || !agentLoopRef.current || agentTask.status !== "WaitingForCommandApproval") return;
     syncAgentTask(await agentLoopRef.current.approveCommand(agentTask.id));
+    await agentSessionRecorderRef.current?.flush();
   }, [agentTask, syncAgentTask]);
 
   const denyCommand = useCallback(async () => {
     if (!agentTask || !agentLoopRef.current || agentTask.status !== "WaitingForCommandApproval") return;
     syncAgentTask(await agentLoopRef.current.denyCommand(agentTask.id));
+    await agentSessionRecorderRef.current?.flush();
   }, [agentTask, syncAgentTask]);
 
   const rollbackProposal = useCallback(async () => {
@@ -530,6 +577,7 @@ export function useRuntime() {
       await agentLoopRef.current.cancel(agentTask.id);
       const updated = agentLoopRef.current.getTask(agentTask.id);
       if (updated) syncAgentTask(updated);
+      await agentSessionRecorderRef.current?.flush();
       return;
     }
     if (currentTask) runtime.cancelTask(currentTask.id);
@@ -587,4 +635,9 @@ function createSingleTurnRuntime(
         defaultModelId: modelId ?? undefined,
       })
     : new AgentRuntime();
+}
+
+function sessionTitle(prompt: string): string {
+  const normalized = prompt.trim().replace(/\s+/g, " ");
+  return normalized.length <= 72 ? normalized : `${normalized.slice(0, 69)}...`;
 }

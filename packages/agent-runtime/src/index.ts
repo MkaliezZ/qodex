@@ -51,6 +51,11 @@ export type { MockProviderOptions } from "./providers/mock.js";
 // ── Bounded Agent Loop ───────────────────────────────
 export { AgentLoopRuntime } from "./agent-loop/runtime.js";
 export { AgentToolRegistry, AGENT_TOOLS } from "./agent-loop/tools.js";
+export {
+  isSettlementPersistenceError,
+  SETTLEMENT_PERSISTENCE_ERROR_MESSAGE,
+  SettlementPersistenceError,
+} from "./agent-loop/types.js";
 export type { AgentToolErrorCode, AgentToolResult } from "./agent-loop/tools.js";
 export type {
   AgentLoopStatus,
@@ -67,6 +72,13 @@ export type {
   AgentPatchError,
   AgentPatchResult,
   AgentPatchAdapter,
+  AgentPatchLifecycleInput,
+  AgentPatchResultLifecycleInput,
+  AgentCommandLifecycleInput,
+  AgentCommandResultLifecycleInput,
+  AgentSideEffectFailureInput,
+  AgentSideEffectKind,
+  AgentSideEffectLifecycle,
   PendingPatchDisposition,
   PendingCommandApproval,
   AgentLoopLimits,

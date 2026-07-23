@@ -15,11 +15,13 @@ export function createTauriProjectCommandRunner(
 ): ProjectCommandRunner {
   return {
     run: async (command: ProjectCommandDefinition, runId: string): Promise<ProjectCommandResult> => {
+      if (!command.catalogDigest) throw new Error("The cataloged command is missing its source digest.");
       return invokeCommand<ProjectCommandResult>("run_project_command", {
         request: {
           runId,
           projectRoot,
           commandId: command.id,
+          catalogDigest: command.catalogDigest,
         },
       });
     },

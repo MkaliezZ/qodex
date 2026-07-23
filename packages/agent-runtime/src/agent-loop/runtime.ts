@@ -1,5 +1,6 @@
 import type { ModelToolCall } from "@qodex/provider-sdk";
 import { AgentToolRegistry, type AgentToolResult } from "./tools.js";
+import { isSettlementPersistenceError } from "./types.js";
 import type {
   AgentLoopLimits,
   AgentLoopListener,
@@ -105,25 +106,46 @@ export class AgentLoopRuntime {
     if (!proposal || !this.claimApproval(task, "WaitingForPatchApproval")) return cloneTask(task);
 
     this.activeApprovalActions.add(task.id);
-    task.pendingPatch = null;
-    this.setStatus(task, "ApplyingPatch");
     this.beginOperation(task.id);
+    const approvalId = crypto.randomUUID();
+    const executionReceiptId = crypto.randomUUID();
+    let dispatched = false;
     let shouldContinue = false;
     try {
-      if (!this.guardTaskAction(task, "ApplyingPatch")) return cloneTask(task);
+      if (!this.guardTaskAction(task, "WaitingForPatchApproval")) return cloneTask(task);
+      if (this.options.sideEffectLifecycle) {
+        await this.options.sideEffectLifecycle.beforePatchApply({
+          taskId: task.id,
+          proposal,
+          approvalId,
+          executionReceiptId,
+        });
+      }
+      if (!this.guardTaskAction(task, "WaitingForPatchApproval")) return cloneTask(task);
+      task.pendingPatch = null;
+      this.setStatus(task, "ApplyingPatch");
       const approvalEntry = this.addTimeline(task, {
         kind: "patch_approval",
         title: "Patch approved",
         status: "running",
         summary: proposal.summary,
+        actionId: proposal.id,
       });
       this.activePatchApplies.add(task.id);
       let results;
       try {
+        dispatched = true;
         results = await this.options.patchAdapter.apply(proposal);
       } finally {
         this.activePatchApplies.delete(task.id);
       }
+      await this.options.sideEffectLifecycle?.afterPatchApply({
+        taskId: task.id,
+        proposal,
+        approvalId,
+        executionReceiptId,
+        results,
+      });
       const success = results.length === proposal.files.length
         && results.every((result) => result.success && result.readbackVerified === true);
       approvalEntry.status = success ? "success" : "error";
@@ -141,6 +163,7 @@ export class AgentLoopRuntime {
           ? `${results.length} file write${results.length === 1 ? "" : "s"} verified by readback.`
           : "No unverified write was accepted.",
         detail: JSON.stringify(results),
+        actionId: proposal.id,
       });
       if (this.cancellationRequests.has(task.id) || task.status === "Cancelling" || isTerminal(task.status)) {
         if (!isTerminal(task.status)) {
@@ -165,8 +188,23 @@ export class AgentLoopRuntime {
       this.setStatus(task, "ReturningToolResult");
       shouldContinue = true;
     } catch (error) {
+      let failure = error;
+      if (dispatched && !isSettlementPersistenceError(error)) {
+        try {
+          await this.options.sideEffectLifecycle?.afterSideEffectFailure({
+            taskId: task.id,
+            kind: "patch",
+            actionId: proposal.id,
+            approvalId,
+            executionReceiptId,
+            message: error instanceof Error ? error.message : "Patch application failed.",
+          });
+        } catch (settlementError) {
+          failure = settlementError;
+        }
+      }
       if (!this.cancellationRequests.has(task.id)) {
-        this.fail(task, error instanceof Error ? error.message : "Patch application failed.");
+        this.fail(task, failure instanceof Error ? failure.message : "Patch application failed.");
       }
     } finally {
       this.activePatchApplies.delete(task.id);
@@ -200,6 +238,7 @@ export class AgentLoopRuntime {
         title: "Patch rejected",
         status: "denied",
         summary: "No files were changed.",
+        actionId: proposal.id,
       });
       this.setStatus(task, "ReturningToolResult");
     } finally {
@@ -218,20 +257,35 @@ export class AgentLoopRuntime {
 
     this.activeApprovalActions.add(task.id);
     const runId = crypto.randomUUID();
-    task.pendingCommand = null;
-    this.setStatus(task, "RunningCommand");
     this.beginOperation(task.id);
-    this.addTimeline(task, {
-      kind: "command_approval",
-      title: "Command approved",
-      status: "success",
-      summary: formatCommand(pending),
-    });
-    let result: ProjectCommandResult;
+    const approvalId = crypto.randomUUID();
+    const executionReceiptId = crypto.randomUUID();
+    let dispatched = false;
     try {
-      if (!this.guardTaskAction(task, "RunningCommand")) return cloneTask(task);
+      if (!this.guardTaskAction(task, "WaitingForCommandApproval")) return cloneTask(task);
+      if (this.options.sideEffectLifecycle) {
+        await this.options.sideEffectLifecycle.beforeCommandStart({
+          taskId: task.id,
+          pending,
+          approvalId,
+          executionReceiptId,
+        });
+      }
+      if (!this.guardTaskAction(task, "WaitingForCommandApproval")) return cloneTask(task);
+      task.pendingCommand = null;
+      this.setStatus(task, "RunningCommand");
+      this.addTimeline(task, {
+        kind: "command_approval",
+        title: "Command approved",
+        status: "success",
+        summary: formatCommand(pending),
+        toolCallId: pending.toolCall.id,
+        actionId: pending.toolCall.id,
+      });
       this.activeCommandRuns.set(task.id, runId);
+      let result: ProjectCommandResult;
       try {
+        dispatched = true;
         result = await runner.run(pending.command, runId);
       } catch (error) {
         result = {
@@ -250,6 +304,13 @@ export class AgentLoopRuntime {
       } finally {
         this.activeCommandRuns.delete(task.id);
       }
+      await this.options.sideEffectLifecycle?.afterCommandComplete({
+        taskId: task.id,
+        pending,
+        approvalId,
+        executionReceiptId,
+        result,
+      });
       if (this.cancellationRequests.has(task.id) || task.status === "Cancelling" || isTerminal(task.status)) {
         if (!isTerminal(task.status)) {
           this.terminateTask(task, "Cancelled", "Agent task cancelled after command execution settled.", "task_cancelled");
@@ -258,6 +319,25 @@ export class AgentLoopRuntime {
       }
       this.appendCommandResult(task, pending, result);
       this.setStatus(task, "ReturningToolResult");
+    } catch (error) {
+      let failure = error;
+      if (dispatched && !isSettlementPersistenceError(error)) {
+        try {
+          await this.options.sideEffectLifecycle?.afterSideEffectFailure({
+            taskId: task.id,
+            kind: "command",
+            actionId: pending.toolCall.id,
+            approvalId,
+            executionReceiptId,
+            message: error instanceof Error ? error.message : "Command execution failed.",
+          });
+        } catch (settlementError) {
+          failure = settlementError;
+        }
+      }
+      if (!this.cancellationRequests.has(task.id)) {
+        this.fail(task, failure instanceof Error ? failure.message : "Command execution failed.");
+      }
     } finally {
       this.activeCommandRuns.delete(task.id);
       this.activeApprovalActions.delete(task.id);
@@ -294,6 +374,8 @@ export class AgentLoopRuntime {
         title: "Command denied",
         status: "denied",
         summary: "No process was started.",
+        toolCallId: pending.toolCall.id,
+        actionId: pending.toolCall.id,
       });
       this.setStatus(task, "ReturningToolResult");
     } finally {
@@ -459,6 +541,7 @@ export class AgentLoopRuntime {
             status: "pending",
             summary: parsed.proposal.summary,
             detail: parsed.proposal.files.map((file) => file.path).join("\n"),
+            actionId: parsed.proposal.id,
           });
           this.setStatus(task, "WaitingForPatchApproval");
           return;
@@ -498,6 +581,8 @@ export class AgentLoopRuntime {
         title: call.name,
         status: call.name === "run_project_command" ? "pending" : "running",
         summary: safeArguments(call.arguments),
+        toolCallId: call.id,
+        actionId: call.name === "run_project_command" ? call.id : undefined,
       });
       if (call.name === "run_project_command") {
         const resolved = await this.tools.resolveCommand(call);
@@ -562,6 +647,7 @@ export class AgentLoopRuntime {
       summary: summarizeToolResult(result),
       detail: this.tools.serialize(result),
       durationMs: result.metadata.durationMs,
+      toolCallId: call.id,
     });
   }
 
@@ -590,6 +676,8 @@ export class AgentLoopRuntime {
         : `Exit code ${result.exitCode ?? "unavailable"} in ${result.durationMs} ms.`,
       detail: [result.stdout, result.stderr].filter(Boolean).join("\n"),
       durationMs: result.durationMs,
+      toolCallId: pending.toolCall.id,
+      actionId: pending.toolCall.id,
     });
   }
 
@@ -672,6 +760,7 @@ export class AgentLoopRuntime {
             : "Patch discarded after task failure",
         status,
         summary: "No files were changed.",
+        actionId: pendingPatch.id,
       });
     }
 
@@ -695,6 +784,8 @@ export class AgentLoopRuntime {
             : "Command discarded after task failure",
         status,
         summary: "No process was started.",
+        toolCallId: pendingCommand.toolCall.id,
+        actionId: pendingCommand.toolCall.id,
       });
     }
     this.queuedCalls.delete(task.id);

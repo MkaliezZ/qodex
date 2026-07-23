@@ -43,6 +43,21 @@ Commands are limited to discovered project metadata, require approval each time,
 and run inside the explicitly selected project. Project scripts are not an OS
 sandbox and may have side effects.
 
+### Local Session Data
+
+The Tauri desktop application stores the v0.5 session ledger in
+`kerniq-sessions.sqlite3` inside the platform application-data directory for the
+existing `com.qodex.desktop` compatibility identifier. On macOS this is normally
+`~/Library/Application Support/com.qodex.desktop/`; Windows and Linux use their
+platform application-data location. The database is local-only and is not a
+cloud backup or cross-device synchronization mechanism.
+
+Private project roots are kept in a separate binding table and are excluded
+from redacted session exports. After restart, recovered project actions require
+the user to reopen the same project and explicitly approve the action again.
+The browser development server uses memory-only session storage, so browser
+sessions do not survive a page or process restart.
+
 ---
 
 ## Windows

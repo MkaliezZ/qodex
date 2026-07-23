@@ -37,6 +37,8 @@ export interface AgentTimelineEntry {
   summary: string;
   detail?: string;
   durationMs?: number;
+  toolCallId?: string;
+  actionId?: string;
   timestamp: string;
 }
 
@@ -61,6 +63,8 @@ export interface ProjectCommandDefinition {
   cwd: string;
   source: "package.json" | "cargo";
   category: ProjectCommandCategory;
+  /** Digest of the exact catalog source used to resolve this command. */
+  catalogDigest?: string;
 }
 
 export interface ProjectCommandResult {
@@ -123,6 +127,68 @@ export interface AgentPatchAdapter {
   rollback(proposal: AgentPatchProposal): Promise<AgentPatchResult[]>;
 }
 
+export interface AgentPatchLifecycleInput {
+  taskId: string;
+  proposal: AgentPatchProposal;
+  approvalId: string;
+  executionReceiptId: string;
+}
+
+export interface AgentPatchResultLifecycleInput extends AgentPatchLifecycleInput {
+  results: AgentPatchResult[];
+}
+
+export interface AgentCommandLifecycleInput {
+  taskId: string;
+  pending: PendingCommandApproval;
+  approvalId: string;
+  executionReceiptId: string;
+}
+
+export interface AgentCommandResultLifecycleInput extends AgentCommandLifecycleInput {
+  result: ProjectCommandResult;
+}
+
+export interface AgentSideEffectFailureInput {
+  taskId: string;
+  kind: "patch" | "command";
+  actionId: string;
+  approvalId: string;
+  executionReceiptId: string;
+  message: string;
+}
+
+export type AgentSideEffectKind = "patch" | "command" | "action";
+
+export const SETTLEMENT_PERSISTENCE_ERROR_MESSAGE =
+  "The action started, but KerniQ could not persist its final outcome. "
+  + "The physical result is unknown. The action will not be replayed.";
+
+export class SettlementPersistenceError extends Error {
+  readonly physicalOutcome = "unknown" as const;
+
+  constructor(
+    readonly actionId: string,
+    readonly actionKind: AgentSideEffectKind,
+    readonly executionReceiptId: string,
+  ) {
+    super(SETTLEMENT_PERSISTENCE_ERROR_MESSAGE);
+    this.name = "SettlementPersistenceError";
+  }
+}
+
+export function isSettlementPersistenceError(value: unknown): value is SettlementPersistenceError {
+  return value instanceof SettlementPersistenceError;
+}
+
+export interface AgentSideEffectLifecycle {
+  beforePatchApply(input: AgentPatchLifecycleInput): Promise<void>;
+  afterPatchApply(input: AgentPatchResultLifecycleInput): Promise<void>;
+  beforeCommandStart(input: AgentCommandLifecycleInput): Promise<void>;
+  afterCommandComplete(input: AgentCommandResultLifecycleInput): Promise<void>;
+  afterSideEffectFailure(input: AgentSideEffectFailureInput): Promise<void>;
+}
+
 export type PendingPatchDisposition =
   | "user_rejected"
   | "task_cancelled"
@@ -172,6 +238,7 @@ export interface AgentLoopRuntimeOptions {
   project: AgentProjectAccess;
   patchAdapter: AgentPatchAdapter;
   commandRunner?: ProjectCommandRunner;
+  sideEffectLifecycle?: AgentSideEffectLifecycle;
   limits?: Partial<AgentLoopLimits>;
   systemPrompt?: string;
   now?: () => number;

@@ -583,3 +583,75 @@ Duplicate approvals and rollbacks are serialized, while rollback remains
 unavailable until active provider, patch, command, and cancellation work has
 settled. Native child cancellation remains best-effort and does not imply
 process-tree sandboxing.
+
+### KerniQ Universal Session Ledger and Restart Recovery v0.5
+
+**Date:** 2026-07-23  |  **Status:** Implementation complete, final review pending
+
+Added a universal append-only session ledger with deterministic projection,
+redacted export, and evidence-only restart recovery. The pure TypeScript Session
+Runtime supports in-memory tests and future non-coding actions, including safe
+managed-Python metadata. Tauri persists sessions in a schema-versioned local
+SQLite database and keeps private project roots in a separate binding table.
+
+Agent Mode now records user/model messages, exact tool-call IDs, safe tool
+results, patch and command proposals, approvals, execution receipts, and
+terminal outcomes. Recovered pending actions require exact project
+reauthorization and a fresh explicit approval. Stale patch content and changed
+command catalog definitions are blocked. Work that was active during shutdown
+is marked `Interrupted`; KerniQ does not claim live process recovery or automatic
+continuation.
+
+The Sessions surface now provides status filtering, reconstructed active-path
+history, recovery guidance, redacted JSON export, and confirmation-gated local
+history deletion. Browser development truthfully reports its memory-only
+persistence limitation. Signed distribution, cloud sync, cross-device history,
+Git checkpoint recovery, and automatic approvals remain out of scope.
+
+### KerniQ Session Restart Safety, Ledger Integrity, and Privacy v0.5.1
+
+**Date:** 2026-07-23  |  **Status:** Correction implemented, final review pending
+
+Closed the v0.5 review findings around the crash window between approval and a
+mutating side effect. Normal Agent and recovered patch/command paths now await a
+durable started receipt before invoking the Diff Engine or command runner. If
+persistence fails, dispatch is blocked. A started receipt without a matching
+settled receipt recovers only as `Interrupted` and is never reapprovable.
+
+The session projector now enforces explicit approval generations and matching
+action, approval, and execution-receipt identities. It rejects missing
+proposals, start-before-approval, completion-before-start, duplicate lifecycle
+events, completion after denial, mismatches, and active-path appends after a
+terminal outcome.
+
+Session titles, messages, tool summaries, command evidence, metadata, and
+exports now share bounded local scanning for recognised credential and
+absolute-path patterns. Sensitive patch contents are omitted before persistence
+and the patch is marked non-recoverable. Export re-sanitizes session metadata,
+project display names, entries, and patch summaries as defense in depth. This
+pattern-based protection is intentionally bounded and does not claim to detect
+every possible secret.
+
+### KerniQ Settlement Evidence Honesty v0.5.2
+
+**Date:** 2026-07-23  |  **Status:** Correction implemented, final review pending
+
+Strengthened the Session projector so an ordinary completed, failed, cancelled,
+delivery-completed, or limit-reached event cannot hide a started action without
+matching settlement evidence. Unstarted pending actions retain their existing
+terminal-disposal semantics. Recovery now scans the full active path for
+unmatched started evidence before accepting projected or cached terminal state,
+including conservative repair of legacy malformed ledgers.
+
+Normal and recovered Patch and Command execution now distinguish pre-dispatch
+persistence failure from post-dispatch settlement persistence failure. The
+former remains fail-closed before a filesystem write or process start. The
+latter stops provider continuation and attempts `SESSION_INTERRUPTED` with an
+unknown physical outcome; if that write also fails, the ledger deliberately
+ends at the unmatched started receipt for restart recovery. Such actions are not
+replayed or offered for reapproval.
+
+This correction does not claim transactional atomicity between SQLite and an
+external filesystem operation or native process. KerniQ can prove that dispatch
+started, but it does not invent whether the physical operation completed when
+final evidence cannot be persisted.
