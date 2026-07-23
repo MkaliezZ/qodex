@@ -1,8 +1,11 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
+import { ChevronDown } from "lucide-react";
+import { AnchoredPopover } from "./AnchoredPopover";
 import { useProviderContext } from "./ProviderContext";
 
 export function ModelSwitcher() {
   const [open, setOpen] = useState(false);
+  const triggerRef = useRef<HTMLButtonElement>(null);
   const { config } = useProviderContext();
 
   const label = config.connected && config.modelId
@@ -14,20 +17,41 @@ export function ModelSwitcher() {
         : "Configure provider";
 
   return (
-    <div style={{ position: "relative" }}>
-      <div className="model-badge" data-testid="model-switcher" onClick={() => setOpen(!open)} style={{ cursor: "pointer", userSelect: "none" }}>
+    <div className="model-switcher">
+      <button
+        ref={triggerRef}
+        type="button"
+        className="model-badge"
+        data-testid="model-switcher"
+        onClick={() => setOpen(!open)}
+        aria-expanded={open}
+        aria-haspopup="dialog"
+        aria-controls={open ? "model-popover" : undefined}
+      >
         <span>{label}</span>
-        <span style={{ fontSize: 9, opacity: 0.5, marginLeft: 4 }}>▼</span>
-      </div>
-      {open && (
-        <div style={{ position: "absolute", top: "100%", left: 0, marginTop: 4, minWidth: 180,
-          background: "rgba(20,24,36,0.95)", backdropFilter: "blur(16px)", border: "1px solid rgba(255,255,255,0.10)", borderRadius: 10, padding: 4, zIndex: 100 }}
-          onClick={() => setOpen(false)}>
-          <div style={{ padding: "6px 10px", fontSize: 12, color: "rgba(255,255,255,0.30)", cursor: "default" }}>
-            {config.connected ? `Connected to ${config.providerId}` : "Configure provider in Settings"}
-          </div>
-        </div>
-      )}
+        <ChevronDown size={12} aria-hidden="true" />
+      </button>
+      <AnchoredPopover
+        ariaLabel="Model connection"
+        className="model-popover"
+        id="model-popover"
+        onClose={() => setOpen(false)}
+        open={open}
+        role="dialog"
+        triggerRef={triggerRef}
+        width={240}
+      >
+        <button
+          type="button"
+          className="model-popover-copy"
+          onClick={() => {
+            setOpen(false);
+            window.requestAnimationFrame(() => triggerRef.current?.focus());
+          }}
+        >
+          {config.connected ? `Connected to ${config.providerId}` : "Configure provider in Settings"}
+        </button>
+      </AnchoredPopover>
     </div>
   );
 }

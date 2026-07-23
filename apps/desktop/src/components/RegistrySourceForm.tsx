@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Database, Plus } from "lucide-react";
 import { useRegistryContext } from "./RegistryContext";
 
 export function RegistrySourceForm() {
@@ -20,13 +21,13 @@ export function RegistrySourceForm() {
       <div className="source-list">
         {sources.length === 0 && (
           <div className="inline-empty-state">
-            <div className="inline-empty-icon">+</div>
+            <div className="inline-empty-icon"><Plus size={15} aria-hidden="true" /></div>
             <div><strong>No registry sources yet</strong><span>Add a secure HTTPS source to begin discovering marketplace entries.</span></div>
           </div>
         )}
         {sources.map((s) => (
           <div key={s.id} className="source-row">
-            <div className="source-icon">R</div>
+            <div className="source-icon"><Database size={14} aria-hidden="true" /></div>
             <div className="source-meta">
               <strong>{s.name}</strong>
               <span>{s.url}</span>

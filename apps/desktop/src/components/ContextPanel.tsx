@@ -1,37 +1,10 @@
 import { useRuntimeContext } from "./AppShell";
-
-function SectionDivider() {
-  return (
-    <div style={{ height: 1, background: "rgba(255,255,255,0.05)", margin: "0 0 16px" }} />
-  );
-}
-
-function SectionLabel({ children }: { children: React.ReactNode }) {
-  return (
-    <div style={{ fontSize: 11, fontWeight: 500, color: "rgba(255,255,255,0.35)", marginBottom: 6 }}>
-      {children}
-    </div>
-  );
-}
-
-function SectionValue({ children }: { children: React.ReactNode }) {
-  return (
-    <div style={{ fontSize: 14, fontWeight: 500, color: "rgba(255,255,255,0.85)" }}>
-      {children}
-    </div>
-  );
-}
-
-function SectionValueMuted({ children }: { children: React.ReactNode }) {
-  return (
-    <div style={{ fontSize: 13, fontWeight: 400, color: "rgba(255,255,255,0.35)" }}>
-      {children}
-    </div>
-  );
-}
+import { useProviderContext } from "./ProviderContext";
+import { StatusIndicator } from "./WorkbenchPrimitives";
 
 export function ContextPanel() {
   const { selectedFileCount, selectedFileSize, projectName, lastBundle, estimatedTokens } = useRuntimeContext();
+  const { config } = useProviderContext();
 
   const formatSize = (bytes: number): string => {
     if (bytes < 1024) return `${bytes} B`;
@@ -49,97 +22,69 @@ export function ContextPanel() {
     : [];
 
   return (
-    <div style={{ padding: "14px", display: "flex", flexDirection: "column", gap: 0, overflow: "auto", flex: 1 }}>
-      {/* Model */}
-      <div>
-        <SectionLabel>Model</SectionLabel>
-        <SectionValue>DeepSeek V4 Pro</SectionValue>
-      </div>
+    <aside className="context-inspector" data-testid="context-inspector" aria-label="Context inspector">
+      <header className="inspector-header">
+        <h2>Inspector</h2>
+        <span>Current task context</span>
+      </header>
 
-      <SectionDivider />
-
-      {/* Context */}
-      <div>
-        <SectionLabel>Context Sources</SectionLabel>
+      <section className="inspector-section">
+        <h3>Selected context</h3>
+        <div className="inspector-row">
+          <span>Project</span>
+          <strong>{projectName ?? "Not opened"}</strong>
+        </div>
+        <div className="inspector-row">
+          <span>Files</span>
+          <strong>{selectedFileCount > 0
+            ? `${selectedFileCount} · ${formatSize(selectedFileSize)}`
+            : "None selected"}</strong>
+        </div>
         {sources.length > 0 ? (
-          <div style={{ display: "flex", flexDirection: "column", gap: 2, marginTop: 4 }}>
+          <div className="inspector-sources">
             {sources.map((s) => (
-              <div
-                key={s.name}
-                style={{
-                  fontSize: 13,
-                  color: s.active ? "rgba(255,255,255,0.65)" : "rgba(255,255,255,0.18)",
-                  fontWeight: s.active ? 500 : 400,
-                }}
-              >
-                {s.name}
-              </div>
+              <StatusIndicator key={s.name} label={s.name} tone={s.active ? "success" : "neutral"} />
             ))}
           </div>
         ) : (
-          <SectionValueMuted>
-            Run a prompt to generate context
-          </SectionValueMuted>
+          <p className="inspector-empty-copy">Run a prompt to assemble context sources.</p>
         )}
-      </div>
+      </section>
 
-      <SectionDivider />
-
-      {/* Selected Files */}
-      <div>
-        <SectionLabel>Selected Files</SectionLabel>
-        {selectedFileCount > 0 ? (
-          <SectionValue>
-            {selectedFileCount} file{selectedFileCount !== 1 ? "s" : ""}
-            <span style={{ color: "rgba(255,255,255,0.25)", fontWeight: 400, marginLeft: 8, fontSize: 12 }}>
-              {formatSize(selectedFileSize)}
-            </span>
-          </SectionValue>
-        ) : (
-          <SectionValueMuted>
-            {projectName ? "Select files from the project tree." : "No project opened."}
-          </SectionValueMuted>
-        )}
-      </div>
-
-      <SectionDivider />
-
-      {/* Tokens */}
-      <div>
-        <SectionLabel>Tokens</SectionLabel>
-        <SectionValueMuted>
-          {estimatedTokens > 0 ? `${estimatedTokens.toLocaleString()} / 128K` : "0 / 128K"}
-        </SectionValueMuted>
-        <div style={{ height: 2, background: "rgba(255,255,255,0.04)", borderRadius: 1, overflow: "hidden", marginTop: 6 }}>
-          <div style={{ width: estimatedTokens > 0 ? `${Math.min((estimatedTokens / 128000) * 100, 100)}%` : "0%", height: "100%", background: "#5B8CFF", borderRadius: 1, transition: "width 220ms ease" }} />
+      <section className="inspector-section">
+        <h3>Context budget</h3>
+        <div className="inspector-row">
+          <span>Estimated tokens</span>
+          <strong>{estimatedTokens > 0 ? estimatedTokens.toLocaleString() : "0"}</strong>
         </div>
-      </div>
-
-      <SectionDivider />
-
-      {/* Mode */}
-      <div>
-        <SectionLabel>Mode</SectionLabel>
-        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-          <span style={{ width: 5, height: 5, borderRadius: "50%", background: "#4FFFC2", flexShrink: 0 }} />
-          <SectionValue>Review Mode</SectionValue>
+        <div className="token-meter" aria-label={`${estimatedTokens} of 128000 estimated tokens`}>
+          <span style={{ width: `${Math.min((estimatedTokens / 128000) * 100, 100)}%` }} />
         </div>
-        <div style={{ fontSize: 12, color: "rgba(255,255,255,0.22)", marginTop: 2, paddingLeft: 11 }}>
-          Generate diff · User approves writes
-        </div>
-      </div>
+        <span className="inspector-limit">128K limit</span>
+      </section>
 
-      <SectionDivider />
-
-      {/* Git */}
-      <div>
-        <SectionLabel>Git</SectionLabel>
-        <div style={{ fontSize: 13, color: "rgba(255,255,255,0.40)", display: "flex", alignItems: "center", gap: 6 }}>
-          <span>main</span>
-          <span style={{ color: "rgba(255,255,255,0.10)" }}>·</span>
-          <span>0 changed</span>
+      <section className="inspector-section">
+        <h3>Runtime</h3>
+        <div className="inspector-row">
+          <span>Provider</span>
+          <strong>{config.providerId ?? "Not configured"}</strong>
         </div>
-      </div>
-    </div>
+        <div className="inspector-row">
+          <span>Model</span>
+          <strong>{config.modelId ?? config.manualModelId ?? "Not selected"}</strong>
+        </div>
+        <div className="inspector-row">
+          <span>Access</span>
+          <strong>{projectName ? "Project bound" : "No project"}</strong>
+        </div>
+        <StatusIndicator label="Review Mode · approval required" tone="accent" />
+      </section>
+
+      <section className="inspector-section">
+        <h3>Git</h3>
+        <div className="inspector-row"><span>Branch</span><strong className="mono-value">main</strong></div>
+        <div className="inspector-row"><span>Working tree</span><strong>0 changed</strong></div>
+      </section>
+    </aside>
   );
 }

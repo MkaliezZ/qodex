@@ -12,7 +12,7 @@ test.describe("env-real-provider", () => {
     await page.fill('[data-testid="api-key-input"]', key);
     await page.click('[data-testid="connection-test-button"]');
     await expect(page.locator('[data-testid="connection-status"]')).toBeVisible({ timeout: 15000 });
-    await page.getByRole("button", { name: "A Agent" }).click();
+    await page.getByRole("button", { name: "Agent" }).click();
     await page.fill('[data-testid="prompt-input"]', "Say hello in one word.");
     await page.click('[data-testid="send-button"]');
     await expect(page.locator('[data-testid="agent-timeline"]')).not.toBeEmpty({ timeout: 30000 });
@@ -28,7 +28,7 @@ test.describe("env-real-provider", () => {
     await page.fill('[data-testid="api-key-input"]', key);
     await page.click('[data-testid="connection-test-button"]');
     await expect(page.locator('[data-testid="connection-status"]')).toBeVisible({ timeout: 15000 });
-    await page.getByRole("button", { name: "A Agent" }).click();
+    await page.getByRole("button", { name: "Agent" }).click();
     await page.fill('[data-testid="prompt-input"]', "Say hello in one word.");
     await page.click('[data-testid="send-button"]');
     await expect(page.locator('[data-testid="agent-timeline"]')).not.toBeEmpty({ timeout: 30000 });
@@ -45,7 +45,7 @@ test.describe("env-real-provider", () => {
     await page.click('[data-testid="connection-test-button"]');
     // timeout generous — network may be slow
     await page.waitForTimeout(3000);
-    await page.getByRole("button", { name: "A Agent" }).click();
+    await page.getByRole("button", { name: "Agent" }).click();
     await page.fill('[data-testid="prompt-input"]', "Say hello.");
     await page.click('[data-testid="send-button"]');
     await expect(page.locator('[data-testid="agent-timeline"]')).not.toBeEmpty({ timeout: 30000 });
@@ -61,7 +61,7 @@ test.describe("env-real-provider", () => {
     await page.fill('[data-testid="api-key-input"]', key);
     await page.click('[data-testid="connection-test-button"]');
     await expect(page.locator('[data-testid="connection-status"]')).toBeVisible({ timeout: 15000 });
-    await page.getByRole("button", { name: "A Agent" }).click();
+    await page.getByRole("button", { name: "Agent" }).click();
     await page.fill('[data-testid="prompt-input"]', "Say hello");
     await page.click('[data-testid="send-button"]');
     const timeline = page.locator('[data-testid="agent-timeline"]');
@@ -78,7 +78,7 @@ test.describe("env-real-provider", () => {
     await page.fill('[data-testid="api-key-input"]', key);
     await page.click('[data-testid="connection-test-button"]');
     await expect(page.locator('[data-testid="connection-status"]')).toBeVisible({ timeout: 15000 });
-    await page.getByRole("button", { name: "A Agent" }).click();
+    await page.getByRole("button", { name: "Agent" }).click();
     await page.fill('[data-testid="prompt-input"]', "Say hello in one word.");
     await page.click('[data-testid="send-button"]');
     await expect(page.locator('[data-testid="agent-timeline"]')).not.toBeEmpty({ timeout: 30000 });

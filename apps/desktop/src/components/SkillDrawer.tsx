@@ -1,90 +1,61 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
+import { Check, ChevronRight, Command, Minus } from "lucide-react";
+import { AnchoredPopover } from "./AnchoredPopover";
 import { useRuntimeContext } from "./AppShell";
 
 export function SkillDrawer() {
   const [open, setOpen] = useState(false);
+  const triggerRef = useRef<HTMLButtonElement>(null);
   const { setActiveView } = useRuntimeContext();
 
   return (
-    <div style={{ position: "relative" }}>
+    <div className="skill-drawer">
       <button
+        ref={triggerRef}
+        type="button"
         className="qodex-button qodex-button-secondary"
+        data-testid="skill-drawer-trigger"
         onClick={() => setOpen(!open)}
-        style={{
-          height: 26,
-          padding: "0 8px",
-          borderRadius: 6,
-          fontSize: 11,
-          gap: 3,
-          color: "rgba(255,255,255,0.40)",
-          border: "1px solid rgba(255,255,255,0.06)",
-          background: "transparent",
-          cursor: "pointer",
-        }}
         title="Insert skill"
+        aria-expanded={open}
+        aria-haspopup="menu"
+        aria-controls={open ? "skill-popover" : undefined}
       >
-        <span style={{ fontSize: 12, opacity: 0.6 }}>/</span>
+        <Command size={12} aria-hidden="true" />
         <span>skill</span>
       </button>
-      {open && (
-        <>
-          <div
-            style={{
-              position: "fixed",
-              inset: 0,
-              zIndex: 99,
-            }}
-            onClick={() => setOpen(false)}
-          />
-          <div
-            style={{
-              position: "absolute",
-              top: "100%",
-              left: 0,
-              marginTop: 4,
-              minWidth: 200,
-              background: "rgba(20, 24, 36, 0.95)",
-              backdropFilter: "blur(16px)",
-              border: "1px solid rgba(255,255,255,0.10)",
-              borderRadius: 10,
-              padding: 4,
-              zIndex: 100,
-            }}
-          >
-            <div style={{ padding: "6px 10px", fontSize: 11, fontWeight: 600, color: "rgba(255,255,255,0.25)", cursor: "default" }}>
-              Loaded Skills
-            </div>
-            <div style={{ padding: "6px 10px", fontSize: 12, color: "rgba(255,255,255,0.50)", cursor: "default", display: "flex", alignItems: "center", gap: 6 }}>
-              <span style={{ width: 5, height: 5, borderRadius: "50%", background: "#4DFF9D", flexShrink: 0 }} />
-              General
-            </div>
-            <div style={{ padding: "6px 10px", fontSize: 12, color: "rgba(255,255,255,0.50)", cursor: "default", display: "flex", alignItems: "center", gap: 6 }}>
-              <span style={{ width: 5, height: 5, borderRadius: "50%", background: "#4DFF9D", flexShrink: 0 }} />
-              TypeScript
-            </div>
-            <div style={{ padding: "6px 10px", fontSize: 12, color: "rgba(255,255,255,0.25)", cursor: "default", display: "flex", alignItems: "center", gap: 6 }}>
-              <span style={{ width: 5, height: 5, borderRadius: "50%", background: "rgba(255,255,255,0.10)", flexShrink: 0 }} />
-              React
-            </div>
-            <div
-              onClick={() => {
-                setOpen(false);
-                setActiveView("skills");
-              }}
-              style={{
-                padding: "6px 10px",
-                fontSize: 11,
-                color: "#5B8CFF",
-                cursor: "pointer",
-                borderTop: "1px solid rgba(255,255,255,0.06)",
-                marginTop: 4,
-              }}
-            >
-              Manage skills →
-            </div>
-          </div>
-        </>
-      )}
+      <AnchoredPopover
+        ariaLabel="Loaded skills"
+        className="skill-popover"
+        id="skill-popover"
+        onClose={() => setOpen(false)}
+        open={open}
+        role="menu"
+        triggerRef={triggerRef}
+        width={220}
+      >
+        <div className="popover-label">Loaded skills</div>
+        <div className="skill-popover-row" role="menuitemcheckbox" aria-checked="true" aria-disabled="true">
+          <Check size={12} aria-hidden="true" />General
+        </div>
+        <div className="skill-popover-row" role="menuitemcheckbox" aria-checked="true" aria-disabled="true">
+          <Check size={12} aria-hidden="true" />TypeScript
+        </div>
+        <div className="skill-popover-row is-disabled" role="menuitemcheckbox" aria-checked="false" aria-disabled="true">
+          <Minus size={12} aria-hidden="true" />React
+        </div>
+        <button
+          type="button"
+          role="menuitem"
+          className="skill-manage-action"
+          onClick={() => {
+            setOpen(false);
+            setActiveView("skills");
+          }}
+        >
+          Manage skills <ChevronRight size={12} aria-hidden="true" />
+        </button>
+      </AnchoredPopover>
     </div>
   );
 }

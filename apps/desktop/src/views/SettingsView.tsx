@@ -1,55 +1,54 @@
 import { ProviderSettings } from "../components/ProviderSettings";
 import { RegistrySourceForm } from "../components/RegistrySourceForm";
+import { Database, Settings } from "lucide-react";
+import { StatusIndicator, ViewTitle } from "../components/WorkbenchPrimitives";
 
 export function SettingsView() {
   return (
-    <div className="view-page settings-view">
-      <header className="view-header">
-        <div>
-          <div className="view-eyebrow">Workbench configuration</div>
-          <h1>Settings</h1>
-          <p>Manage the local providers and registries that power your agent workspace.</p>
+    <div className="workbench-view settings-view">
+      <ViewTitle
+        title="Settings"
+        description="Configure local model access and trusted registry sources."
+        icon={Settings}
+        aside={<StatusIndicator label="Local-first" tone="success" />}
+      />
+
+      <div className="settings-layout">
+        <div className="settings-main">
+          <section className="settings-section" aria-labelledby="settings-provider-title">
+            <div className="settings-section-heading">
+              <div>
+                <h2 id="settings-provider-title">Providers and models</h2>
+                <p>Connect the endpoint used by the local agent runtime.</p>
+              </div>
+            </div>
+            <ProviderSettings />
+          </section>
+
+          <section className="settings-section" aria-labelledby="settings-registry-title">
+            <div className="settings-section-heading">
+              <div>
+                <h2 id="settings-registry-title">Registry sources</h2>
+                <p>Manage trusted HTTPS sources used to discover skills and tools.</p>
+              </div>
+            </div>
+            <RegistrySourceForm />
+          </section>
         </div>
-        <div className="local-first-chip"><span className="status-dot status-dot-active" /> Local-first</div>
-      </header>
 
-      <div className="settings-grid">
-        <section className="surface-card settings-card settings-card-provider">
-          <div className="card-heading">
-            <div className="card-heading-icon">P</div>
-            <div>
-              <h2>Provider</h2>
-              <p>Connect the model endpoint used by your local agent runtime.</p>
-            </div>
+        <aside className="settings-aside" aria-label="Project and runtime settings">
+          <div className="settings-aside-heading"><Database size={15} aria-hidden="true" /> Project and runtime</div>
+          <div className="data-row">
+            <span>Appearance</span><strong>Dark graphite</strong>
           </div>
-          <ProviderSettings />
-        </section>
-
-        <section className="surface-card settings-card">
-          <div className="card-heading">
-            <div className="card-heading-icon card-heading-icon-violet">R</div>
-            <div>
-              <h2>Registry Sources</h2>
-              <p>Control the trusted sources used to discover skills and tools.</p>
-            </div>
+          <div className="data-row">
+            <span>Language</span><strong>English</strong>
           </div>
-          <RegistrySourceForm />
-        </section>
-
-        <section className="surface-card settings-card settings-card-compact">
-          <div className="setting-summary">
-            <div><span className="setting-summary-label">Appearance</span><strong>Dark glass</strong></div>
-            <span className="setting-summary-note">System theme support planned</span>
+          <div className="data-row">
+            <span>Build</span><strong className="mono-value">v0.2.0-beta.2</strong>
           </div>
-          <div className="setting-summary">
-            <div><span className="setting-summary-label">Language</span><strong>English</strong></div>
-            <span className="setting-summary-note">Internationalization in progress</span>
-          </div>
-          <div className="setting-summary">
-            <div><span className="setting-summary-label">Build</span><strong className="version-chip">v0.2.0-beta.2</strong></div>
-            <span className="setting-summary-note">Beta release</span>
-          </div>
-        </section>
+          <p className="settings-aside-note">System theme and additional languages are not available in this build.</p>
+        </aside>
       </div>
     </div>
   );
