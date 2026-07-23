@@ -5,13 +5,21 @@ import {
   Circle,
   FileDiff,
   Info,
+  PanelRightOpen,
   Terminal,
   Wrench,
 } from "lucide-react";
+import type { RefObject } from "react";
 import { DiffViewer } from "./DiffViewer";
 import { useRuntimeContext } from "./AppShell";
 
-export function AgentTimeline() {
+export function AgentTimeline({
+  inspectorTriggerRef,
+  onOpenInspector,
+}: {
+  inspectorTriggerRef: RefObject<HTMLButtonElement>;
+  onOpenInspector: () => void;
+}) {
   const {
     agentModeNotice,
     agentTask,
@@ -32,11 +40,24 @@ export function AgentTimeline() {
           <span className="panel-header">Agent activity</span>
           {agentTask ? <span className="agent-state" data-testid="agent-state">{agentTask.status}</span> : null}
         </div>
-        {isRunning ? (
-          <button className="qodex-button qodex-button-secondary agent-stop" data-testid="stop-agent" onClick={stopTask}>
-            Stop
+        <div className="agent-header-actions">
+          <button
+            ref={inspectorTriggerRef}
+            type="button"
+            className="compact-inspector-trigger"
+            data-testid="open-context-inspector"
+            aria-label="Open context inspector"
+            onClick={onOpenInspector}
+          >
+            <PanelRightOpen size={14} aria-hidden="true" />
+            Inspector
           </button>
-        ) : null}
+          {isRunning ? (
+            <button className="qodex-button qodex-button-secondary agent-stop" data-testid="stop-agent" onClick={stopTask}>
+              Stop
+            </button>
+          ) : null}
+        </div>
       </div>
 
       {agentModeNotice ? (

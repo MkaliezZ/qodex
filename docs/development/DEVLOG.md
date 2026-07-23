@@ -658,7 +658,7 @@ final evidence cannot be persisted.
 
 ### KerniQ Desktop UI Product Polish v0.5.3
 
-**Date:** 2026-07-23  |  **Status:** Implementation complete, UI review pending
+**Date:** 2026-07-23  |  **Status:** v0.5.3.1 correction complete, validation passed
 
 Reframed the Desktop application as a restrained, high-density local workbench.
 The shell now uses continuous graphite surfaces and dividers instead of animated
@@ -676,7 +676,26 @@ approval controls, test IDs, and runtime behavior are preserved.
 The application root is viewport-bound so large native project trees use their
 own scroll region instead of moving the workspace, inspector, or composer.
 
-Visual review covered Agent empty/active states, Patch and Command approval,
-Files, Sessions, Skills, Git, Settings, Registry Sources, and Marketplace at
-1440x900, 1280x800, and 1024x768. Screenshots remain temporary under
-`/tmp/kerniq-ui-v0-5-3/` and are not repository assets.
+The v0.5.3.1 correction removes the legacy Dark Fluid Glass stylesheet from
+production and replaces it with a small `base.css` foundation. Content is
+selectable by default, while only the decorative project-tree chevron disables
+selection. Directory expansion is view-only local state initialized from the
+runtime tree; mouse, Enter, and Space toggles do not rescan or alter selected
+files.
+
+Model and Skill composer popovers now render through a viewport-clamped fixed
+portal above their triggers. Below 1180px, the existing Context Inspector is
+available through an accessible right-side dialog with close, backdrop,
+Escape, focus-entry, and focus-return behavior. The wide fixed inspector is
+unchanged.
+
+Visual review covers Agent empty state, Command approval, Sessions, Settings,
+project-tree expansion, the model popover, and the compact Inspector at
+1440x900, 1280x800, and 1024x768. Durable evidence is stored under
+`docs/assets/ui-review/v0.5.3.1/`.
+
+Validation passed for the frozen install, full workspace build and tests,
+Desktop unit tests (48), Desktop E2E (56 passed with four credential-gated
+real-provider scenarios skipped), Rust formatting/check/tests (14 native
+tests), debug Tauri build, fresh-browser console smoke, real macOS window smoke,
+and `git diff --check`.

@@ -7,6 +7,14 @@
     display: none;
   }
 
+  .compact-inspector-trigger {
+    display: inline-flex;
+  }
+
+  .compact-inspector-layer {
+    display: block;
+  }
+
   .settings-layout {
     grid-template-columns: 1fr;
   }

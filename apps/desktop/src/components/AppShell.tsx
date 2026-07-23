@@ -1,8 +1,9 @@
-import { createContext, useContext, useState } from "react";
+import { createContext, useContext, useEffect, useRef, useState } from "react";
 import { ProjectRail } from "./ProjectRail";
 import { AgentTimeline } from "./AgentTimeline";
 import { PromptBar } from "./PromptBar";
 import { ContextPanel } from "./ContextPanel";
+import { CompactInspectorDrawer } from "./CompactInspectorDrawer";
 import { useRuntime } from "../hooks/useRuntime";
 import { ProviderContextProvider } from "./ProviderContext";
 import { RegistryContextProvider } from "./RegistryContext";
@@ -64,7 +65,15 @@ interface RuntimeContextValue {
 const RuntimeContext = createContext<RuntimeContextValue>({} as RuntimeContextValue);
 export function useRuntimeContext() { return useContext(RuntimeContext); }
 
-function CenterContent({ activeView }: { activeView: ActiveView }) {
+function CenterContent({
+  activeView,
+  inspectorTriggerRef,
+  onOpenInspector,
+}: {
+  activeView: ActiveView;
+  inspectorTriggerRef: React.RefObject<HTMLButtonElement>;
+  onOpenInspector: () => void;
+}) {
   switch (activeView) {
     case "files": return <FilesView />;
     case "sessions": return <SessionsView />;
@@ -77,7 +86,10 @@ function CenterContent({ activeView }: { activeView: ActiveView }) {
       return (
         <div className="agent-view">
           <div className="workspace-panel">
-            <AgentTimeline />
+            <AgentTimeline
+              inspectorTriggerRef={inspectorTriggerRef}
+              onOpenInspector={onOpenInspector}
+            />
           </div>
           <div className="prompt-panel">
             <PromptBar />
@@ -91,19 +103,41 @@ function CenterContent({ activeView }: { activeView: ActiveView }) {
 function AppShellInner() {
   const runtime = useRuntime();
   const [activeView, setActiveView] = useState<ActiveView>("agent");
+  const [compactInspectorOpen, setCompactInspectorOpen] = useState(false);
+  const inspectorTriggerRef = useRef<HTMLButtonElement>(null);
 
   const enhancedRuntime = { ...runtime, activeView, setActiveView };
+
+  useEffect(() => {
+    const media = window.matchMedia("(min-width: 1181px)");
+    const closeAtWideWidth = (event: MediaQueryListEvent) => {
+      if (event.matches) setCompactInspectorOpen(false);
+    };
+    media.addEventListener("change", closeAtWideWidth);
+    return () => media.removeEventListener("change", closeAtWideWidth);
+  }, []);
 
   return (
     <RuntimeContext.Provider value={enhancedRuntime}>
       <div className="qodex-layout" data-testid="app-shell">
         <div className="qodex-left-rail"><ProjectRail /></div>
-        <div className="qodex-center"><CenterContent activeView={activeView} /></div>
+        <div className="qodex-center">
+          <CenterContent
+            activeView={activeView}
+            inspectorTriggerRef={inspectorTriggerRef}
+            onOpenInspector={() => setCompactInspectorOpen(true)}
+          />
+        </div>
         <div className="qodex-right-panel">
           <div className="context-panel-shell">
             <ContextPanel />
           </div>
         </div>
+        <CompactInspectorDrawer
+          open={compactInspectorOpen}
+          onClose={() => setCompactInspectorOpen(false)}
+          triggerRef={inspectorTriggerRef}
+        />
       </div>
     </RuntimeContext.Provider>
   );
