@@ -1,4 +1,5 @@
 import type { RegistryEntry } from "@qodex/marketplace-runtime";
+import { Package, X } from "lucide-react";
 import { TrustBadge } from "./TrustBadge";
 
 export function RegistryEntryCard({ entry, onClick }: { entry: RegistryEntry; onClick: () => void }) {
@@ -6,7 +7,7 @@ export function RegistryEntryCard({ entry, onClick }: { entry: RegistryEntry; on
   return (
     <button onClick={onClick} className={`registry-entry-card${blocked ? " registry-entry-blocked" : ""}`}>
       <div className="registry-entry-topline">
-        <div className="registry-entry-mark">{entry.name.slice(0, 1).toUpperCase()}</div>
+        <div className="registry-entry-mark"><Package size={15} aria-hidden="true" /></div>
         <TrustBadge level={entry.trust?.level ?? "community"} warnings={entry.trust?.warnings} />
       </div>
       <div className="registry-entry-copy">
@@ -29,12 +30,12 @@ export function RegistryEntryDetail({ entry, onClose }: { entry: RegistryEntry; 
   return (
     <div className={`registry-entry-detail${blocked ? " registry-entry-detail-blocked" : ""}`}>
       <div className="registry-detail-header">
-        <div className="registry-entry-mark registry-detail-mark">{entry.name.slice(0, 1).toUpperCase()}</div>
+        <div className="registry-entry-mark registry-detail-mark"><Package size={18} aria-hidden="true" /></div>
         <div>
           <div className="view-eyebrow">Registry entry</div>
           <h2>{entry.name}</h2>
         </div>
-        <button onClick={onClose} className="detail-close" aria-label="Close detail">×</button>
+        <button onClick={onClose} className="detail-close" aria-label="Close detail"><X size={14} aria-hidden="true" /></button>
       </div>
       <p className="registry-detail-description">{entry.description}</p>
       <TrustBadge level={entry.trust?.level ?? "community"} warnings={entry.trust?.warnings} />

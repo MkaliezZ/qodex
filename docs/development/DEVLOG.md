@@ -655,3 +655,28 @@ This correction does not claim transactional atomicity between SQLite and an
 external filesystem operation or native process. KerniQ can prove that dispatch
 started, but it does not invent whether the physical operation completed when
 final evidence cannot be persisted.
+
+### KerniQ Desktop UI Product Polish v0.5.3
+
+**Date:** 2026-07-23  |  **Status:** Implementation complete, UI review pending
+
+Reframed the Desktop application as a restrained, high-density local workbench.
+The shell now uses continuous graphite surfaces and dividers instead of animated
+gradients, glass blur, radial glows, and floating panels. Navigation uses one
+accessible icon system, the Agent timeline distinguishes ordinary activity from
+high-risk decisions, the composer is integrated, and the context region reads
+as a subordinate inspector.
+
+Files, Skills, Git, Settings, Marketplace, Diff review, and Sessions were
+refined into desktop list, form, inspector, and split-pane patterns. Command
+approval is prioritized above history at compact widths so decision actions and
+the prompt composer remain reachable. Existing safety copy, recovery states,
+approval controls, test IDs, and runtime behavior are preserved.
+
+The application root is viewport-bound so large native project trees use their
+own scroll region instead of moving the workspace, inspector, or composer.
+
+Visual review covered Agent empty/active states, Patch and Command approval,
+Files, Sessions, Skills, Git, Settings, Registry Sources, and Marketplace at
+1440x900, 1280x800, and 1024x768. Screenshots remain temporary under
+`/tmp/kerniq-ui-v0-5-3/` and are not repository assets.

@@ -1,0 +1,62 @@
+@media (max-width: 1180px) {
+  .qodex-layout {
+    grid-template-columns: 216px minmax(0, 1fr);
+  }
+
+  .qodex-right-panel {
+    display: none;
+  }
+
+  .settings-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .settings-aside {
+    padding: 16px 0 0;
+    border-top: 1px solid var(--border-subtle);
+    border-left: 0;
+  }
+}
+
+@media (max-width: 900px) {
+  .qodex-layout {
+    grid-template-columns: 188px minmax(0, 1fr);
+  }
+
+  .workbench-view,
+  .view-page,
+  .sessions-surface {
+    padding-right: 14px;
+    padding-left: 14px;
+  }
+
+  .command-metadata {
+    grid-template-columns: 1fr;
+  }
+
+  .sessions-layout {
+    grid-template-columns: 1fr;
+    overflow: auto;
+  }
+
+  .session-list {
+    max-height: 300px;
+    border-right: 0;
+    border-bottom: 1px solid var(--border-subtle);
+  }
+
+  .registry-card-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

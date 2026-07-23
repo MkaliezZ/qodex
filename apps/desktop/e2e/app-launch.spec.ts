@@ -9,7 +9,7 @@ test.describe("app-launch", () => {
 
   test("2 - agent workspace header visible", async ({ page }) => {
     await setupApp(page);
-    await expect(page.locator("text=Agent Workspace")).toBeVisible();
+    await expect(page.getByText("Agent activity")).toBeVisible();
   });
 
   test("3 - prompt input and send button visible", async ({ page }) => {

@@ -75,14 +75,14 @@ function CenterContent({ activeView }: { activeView: ActiveView }) {
     case "agent":
     default:
       return (
-        <>
-          <div className="glass-panel workspace-panel" style={{ flex: 1, overflow: "hidden", display: "flex", flexDirection: "column" }}>
+        <div className="agent-view">
+          <div className="workspace-panel">
             <AgentTimeline />
           </div>
-          <div className="glass-panel-subtle prompt-panel" style={{ flexShrink: 0 }}>
+          <div className="prompt-panel">
             <PromptBar />
           </div>
-        </>
+        </div>
       );
   }
 }
@@ -96,12 +96,11 @@ function AppShellInner() {
 
   return (
     <RuntimeContext.Provider value={enhancedRuntime}>
-      <div className="qodex-bg" />
       <div className="qodex-layout" data-testid="app-shell">
         <div className="qodex-left-rail"><ProjectRail /></div>
         <div className="qodex-center"><CenterContent activeView={activeView} /></div>
         <div className="qodex-right-panel">
-          <div className="glass-panel context-panel-shell" style={{ flex: 1, overflow: "hidden" }}>
+          <div className="context-panel-shell">
             <ContextPanel />
           </div>
         </div>

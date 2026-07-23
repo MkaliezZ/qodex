@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { ChevronDown } from "lucide-react";
 import { useProviderContext } from "./ProviderContext";
 
 export function ModelSwitcher() {
@@ -14,16 +15,21 @@ export function ModelSwitcher() {
         : "Configure provider";
 
   return (
-    <div style={{ position: "relative" }}>
-      <div className="model-badge" data-testid="model-switcher" onClick={() => setOpen(!open)} style={{ cursor: "pointer", userSelect: "none" }}>
+    <div className="model-switcher">
+      <button
+        type="button"
+        className="model-badge"
+        data-testid="model-switcher"
+        onClick={() => setOpen(!open)}
+        aria-expanded={open}
+      >
         <span>{label}</span>
-        <span style={{ fontSize: 9, opacity: 0.5, marginLeft: 4 }}>▼</span>
-      </div>
+        <ChevronDown size={12} aria-hidden="true" />
+      </button>
       {open && (
-        <div style={{ position: "absolute", top: "100%", left: 0, marginTop: 4, minWidth: 180,
-          background: "rgba(20,24,36,0.95)", backdropFilter: "blur(16px)", border: "1px solid rgba(255,255,255,0.10)", borderRadius: 10, padding: 4, zIndex: 100 }}
+        <div className="model-popover"
           onClick={() => setOpen(false)}>
-          <div style={{ padding: "6px 10px", fontSize: 12, color: "rgba(255,255,255,0.30)", cursor: "default" }}>
+          <div className="model-popover-copy">
             {config.connected ? `Connected to ${config.providerId}` : "Configure provider in Settings"}
           </div>
         </div>

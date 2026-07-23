@@ -97,6 +97,10 @@ test.describe("KerniQ Minimal Agent Loop v0.4", () => {
     await expect(page.locator('[data-testid="command-approval"]')).toBeVisible();
     await expect(page.locator('[data-testid="command-executable"]')).toHaveText("pnpm");
     await expect(page.locator('[data-testid="command-args"]')).toHaveText("run test");
+    await page.setViewportSize({ width: 1024, height: 768 });
+    await expect(page.locator('[data-testid="deny-command"]')).toBeInViewport();
+    await expect(page.locator('[data-testid="approve-command"]')).toBeInViewport();
+    await expect(page.locator('[data-testid="prompt-input"]')).toBeInViewport();
     expect((await readAgentCommandFixture(page)).starts).toBe(0);
 
     await page.click('[data-testid="approve-command"]');
