@@ -1,6 +1,10 @@
 import { describe, expect, it, vi } from "vitest";
 import type { ModelChunk, ModelProvider, ModelRequest } from "@qodex/provider-sdk";
 import { AgentLoopRuntime } from "../src/agent-loop/runtime.js";
+import {
+  SETTLEMENT_PERSISTENCE_ERROR_MESSAGE,
+  SettlementPersistenceError,
+} from "../src/agent-loop/types.js";
 import type {
   AgentPatchAdapter,
   AgentPatchProposal,
@@ -214,6 +218,60 @@ describe("AgentLoopRuntime v0.4.1 state safety", () => {
       .toBeLessThan(run.mock.invocationCallOrder[0]);
     expect(run.mock.invocationCallOrder[0])
       .toBeLessThan(vi.mocked(commandLifecycle.afterCommandComplete).mock.invocationCallOrder[0]);
+  });
+
+  it("stops provider continuation when Patch settlement evidence cannot persist after dispatch", async () => {
+    const sequence = patchThenDoneProvider();
+    const patch = patchAdapter();
+    const afterSideEffectFailure = vi.fn(async () => {});
+    const runtime = new AgentLoopRuntime({
+      provider: sequence,
+      modelId: "model",
+      project,
+      patchAdapter: patch.adapter,
+      sideEffectLifecycle: lifecycle({
+        afterPatchApply: vi.fn(async (input) => {
+          throw new SettlementPersistenceError(input.proposal.id, "patch", input.executionReceiptId);
+        }),
+        afterSideEffectFailure,
+      }),
+    });
+
+    const waiting = await runtime.start("patch-settlement-failure", "Propose a patch.");
+    const failed = await runtime.approvePatch(waiting.id);
+    expect(failed.status).toBe("Failed");
+    expect(failed.error).toBe(SETTLEMENT_PERSISTENCE_ERROR_MESSAGE);
+    expect(patch.apply).toHaveBeenCalledOnce();
+    expect(patch.getContent()).toBe(changed);
+    expect(afterSideEffectFailure).not.toHaveBeenCalled();
+    expect(sequence.turns).toBe(1);
+  });
+
+  it("stops provider continuation when Command settlement evidence cannot persist after dispatch", async () => {
+    const sequence = commandThenDoneProvider();
+    const run = vi.fn(async () => passingResult());
+    const afterSideEffectFailure = vi.fn(async () => {});
+    const runtime = new AgentLoopRuntime({
+      provider: sequence,
+      modelId: "model",
+      project,
+      patchAdapter: patchAdapter().adapter,
+      commandRunner: { run },
+      sideEffectLifecycle: lifecycle({
+        afterCommandComplete: vi.fn(async (input) => {
+          throw new SettlementPersistenceError(input.pending.toolCall.id, "command", input.executionReceiptId);
+        }),
+        afterSideEffectFailure,
+      }),
+    });
+
+    const waiting = await runtime.start("command-settlement-failure", "Run tests.");
+    const failed = await runtime.approveCommand(waiting.id);
+    expect(failed.status).toBe("Failed");
+    expect(failed.error).toBe(SETTLEMENT_PERSISTENCE_ERROR_MESSAGE);
+    expect(run).toHaveBeenCalledOnce();
+    expect(afterSideEffectFailure).not.toHaveBeenCalled();
+    expect(sequence.turns).toBe(1);
   });
 
   it("disposes a pending patch on Stop and makes late approval actions inert", async () => {

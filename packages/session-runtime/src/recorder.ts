@@ -4,6 +4,7 @@ import type { AppendEntryInput } from "./types.js";
 export class SessionRecorder {
   private readonly recordKeys = new Set<string>();
   private queue: Promise<void> = Promise.resolve();
+  private backgroundFailure: unknown = null;
   private initialized = false;
 
   constructor(
@@ -13,29 +14,42 @@ export class SessionRecorder {
   ) {}
 
   record(entry: AppendEntryInput): void {
-    void this.enqueue(entry).catch(() => {
-      // Durable barriers and flush surface the queued persistence failure.
-    });
+    void this.enqueue(entry, true).catch(() => {});
   }
 
   recordDurably(entry: AppendEntryInput): Promise<void> {
-    return this.enqueue(entry);
+    return this.enqueue(entry, false);
   }
 
-  private enqueue(entry: AppendEntryInput): Promise<void> {
+  private enqueue(entry: AppendEntryInput, surfaceOnFlush: boolean): Promise<void> {
     const recordKey = entry.safeMetadata?.recordKey;
-    this.queue = this.queue.then(async () => {
+    const operation = this.queue.then(async () => {
       await this.initialize();
       if (recordKey && this.recordKeys.has(recordKey)) return;
       await this.runtime.appendEntry(this.sessionId, entry);
       if (recordKey) this.recordKeys.add(recordKey);
-      await this.onRecorded?.();
+      try {
+        await this.onRecorded?.();
+      } catch {
+        // UI refresh failures do not change whether the ledger commit succeeded.
+      }
     });
-    return this.queue;
+    this.queue = operation.then(
+      () => undefined,
+      (error) => {
+        if (surfaceOnFlush && this.backgroundFailure === null) this.backgroundFailure = error;
+      },
+    );
+    return operation;
   }
 
   async flush(): Promise<void> {
     await this.queue;
+    if (this.backgroundFailure !== null) {
+      const failure = this.backgroundFailure;
+      this.backgroundFailure = null;
+      throw failure;
+    }
   }
 
   private async initialize(): Promise<void> {

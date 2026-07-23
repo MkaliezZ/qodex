@@ -19,24 +19,51 @@ const TERMINAL_RUNTIME_EVENTS = {
   LimitReached: "SESSION_LIMIT_REACHED",
 } as const;
 
+const STARTED_EVENTS = new Set(["PATCH_STARTED", "COMMAND_STARTED", "ACTION_STARTED"]);
+const SETTLED_EVENTS = new Set(["PATCH_APPLIED", "COMMAND_COMPLETED", "ACTION_COMPLETED", "ACTION_FAILED"]);
+const MASKING_TERMINAL_EVENTS = new Set([
+  "SESSION_COMPLETED",
+  "DELIVERY_COMPLETED",
+  "SESSION_FAILED",
+  "SESSION_CANCELLED",
+  "SESSION_LIMIT_REACHED",
+]);
+
+interface UnmatchedStartedAction {
+  actionId: string;
+  maskingTerminalParentEntryId: string | null;
+  alreadyInterrupted: boolean;
+}
+
 export class SessionRecoveryService {
   constructor(private readonly runtime: SessionRuntime) {}
 
   async recover(
     session: SessionRecord,
-    projection: ProjectedSessionState,
     activePath: SessionEntry[],
   ): Promise<ProjectedSessionState> {
-    if (["Completed", "Failed", "Cancelled", "LimitReached", "RecoveryRequired", "Interrupted"].includes(projection.status)) {
-      return projection;
-    }
-    if (projection.pendingAction?.started || hasUnmatchedStartedAction(activePath)) {
+    const unmatchedStarted = findUnmatchedStartedAction(activePath);
+    if (unmatchedStarted) {
+      if (!unmatchedStarted.maskingTerminalParentEntryId && unmatchedStarted.alreadyInterrupted) {
+        return this.runtime.projector.project(activePath);
+      }
       await this.runtime.appendEntry(session.id, {
+        ...(unmatchedStarted.maskingTerminalParentEntryId
+          ? { parentEntryId: unmatchedStarted.maskingTerminalParentEntryId }
+          : {}),
         type: "SESSION_INTERRUPTED",
-        payload: { reason: "Application stopped after a mutating action started but before it settled." },
-        safeMetadata: { executionStatus: "unknown_or_interrupted" },
+        payload: { reason: "unmatched_started_action_after_restart" },
+        safeMetadata: {
+          actionId: unmatchedStarted.actionId,
+          executionStatus: "unknown_or_interrupted",
+        },
       });
       return this.runtime.projectCurrentState(session.id);
+    }
+
+    const projection = this.runtime.projector.project(activePath);
+    if (["Completed", "Failed", "Cancelled", "LimitReached", "RecoveryRequired", "Interrupted"].includes(projection.status)) {
+      return projection;
     }
     const runtimeStatus = projection.lastEntry.safeMetadata.runtimeStatus;
     if (runtimeStatus && runtimeStatus in TERMINAL_RUNTIME_EVENTS) {
@@ -85,23 +112,35 @@ export class SessionRecoveryService {
   }
 }
 
-function hasUnmatchedStartedAction(entries: SessionEntry[]): boolean {
-  const started = new Set<string>();
-  for (const entry of entries) {
+function findUnmatchedStartedAction(entries: SessionEntry[]): UnmatchedStartedAction | null {
+  const started = new Map<string, UnmatchedStartedAction>();
+  for (let index = 0; index < entries.length; index += 1) {
+    const entry = entries[index];
     const actionId = actionIdOf(entry);
-    if (["PATCH_STARTED", "COMMAND_STARTED", "ACTION_STARTED"].includes(entry.type) && actionId) {
-      started.add(actionId);
+    if (STARTED_EVENTS.has(entry.type) && actionId) {
+      started.set(actionId, {
+        actionId,
+        maskingTerminalParentEntryId: null,
+        alreadyInterrupted: false,
+      });
       continue;
     }
-    if (["PATCH_APPLIED", "COMMAND_COMPLETED", "ACTION_COMPLETED", "ACTION_FAILED"].includes(entry.type) && actionId) {
+    if (SETTLED_EVENTS.has(entry.type) && actionId) {
       started.delete(actionId);
       continue;
     }
-    if (["SESSION_COMPLETED", "SESSION_FAILED", "SESSION_CANCELLED", "SESSION_LIMIT_REACHED"].includes(entry.type)) {
-      started.clear();
+    if (entry.type === "SESSION_INTERRUPTED") {
+      for (const evidence of started.values()) evidence.alreadyInterrupted = true;
+      continue;
+    }
+    if (MASKING_TERMINAL_EVENTS.has(entry.type)) {
+      const repairParentEntryId = entries[index - 1]?.id ?? null;
+      for (const evidence of started.values()) {
+        evidence.maskingTerminalParentEntryId ??= repairParentEntryId;
+      }
     }
   }
-  return started.size > 0;
+  return started.values().next().value ?? null;
 }
 
 function actionIdOf(entry: SessionEntry): string | null {

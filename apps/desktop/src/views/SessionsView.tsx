@@ -1,5 +1,7 @@
 import {
   AgentToolRegistry,
+  isSettlementPersistenceError,
+  SettlementPersistenceError,
   type AgentPatchProposal,
   type AgentPatchResult,
   type ProjectCommandDefinition,
@@ -8,7 +10,14 @@ import {
 } from "@qodex/agent-runtime";
 import { DiffEngine } from "@qodex/diff-engine";
 import { ProjectRuntime } from "@qodex/project-runtime";
-import type { ProjectedSessionState, SessionEntry, SessionStatus, SessionSummary } from "@qodex/session-runtime";
+import type {
+  AppendEntryInput,
+  ProjectedSessionState,
+  SessionEntry,
+  SessionRuntime,
+  SessionStatus,
+  SessionSummary,
+} from "@qodex/session-runtime";
 import { useEffect, useMemo, useState } from "react";
 import { TimelineHistory } from "../components/AgentTimeline";
 import { useSessionContext } from "../components/SessionContext";
@@ -196,7 +205,7 @@ export function SessionsView() {
         try {
           results = await recovery.diff.apply(recovery.patch);
         } catch (cause) {
-          await runtime.appendEntry(selected.id, {
+          await appendRecoveredSettlement(runtime, selected.id, "patch", pending.actionId, executionReceiptId, {
             type: "ACTION_FAILED",
             payload: {
               actionId: pending.actionId,
@@ -214,7 +223,7 @@ export function SessionsView() {
         }
         const success = results.length === recovery.patch.files.length
           && results.every((result) => result.success && result.readbackVerified === true);
-        await runtime.appendEntry(selected.id, {
+        await appendRecoveredSettlement(runtime, selected.id, "patch", pending.actionId, executionReceiptId, {
           type: success ? "PATCH_APPLIED" : "ACTION_FAILED",
           payload: {
             actionId: pending.actionId,
@@ -262,7 +271,7 @@ export function SessionsView() {
         try {
           result = await recovery.runner.run(recovery.command, crypto.randomUUID());
         } catch (cause) {
-          await runtime.appendEntry(selected.id, {
+          await appendRecoveredSettlement(runtime, selected.id, "command", pending.actionId, executionReceiptId, {
             type: "ACTION_FAILED",
             payload: {
               actionId: pending.actionId,
@@ -279,7 +288,7 @@ export function SessionsView() {
           });
           throw cause;
         }
-        await runtime.appendEntry(selected.id, {
+        await appendRecoveredSettlement(runtime, selected.id, "command", pending.actionId, executionReceiptId, {
           type: "COMMAND_COMPLETED",
           payload: { actionId: pending.actionId, ...safeRecoveredCommandResult(result) },
           safeMetadata: {
@@ -305,13 +314,15 @@ export function SessionsView() {
     } catch (cause) {
       const message = cause instanceof Error ? cause.message : "Recovered action failed.";
       setNotice(message);
-      try {
-        const current = await runtime.projectCurrentState(selected.id);
-        if (!["Completed", "Failed", "Cancelled", "LimitReached"].includes(current.status)) {
-          await runtime.appendEntry(selected.id, { type: "SESSION_FAILED", payload: { reason: message } });
+      if (!isSettlementPersistenceError(cause)) {
+        try {
+          const current = await runtime.projectCurrentState(selected.id);
+          if (!["Completed", "Failed", "Cancelled", "LimitReached"].includes(current.status)) {
+            await runtime.appendEntry(selected.id, { type: "SESSION_FAILED", payload: { reason: message } });
+          }
+        } catch {
+          // Preserve the original recovery error if the persistence layer is also unavailable.
         }
-      } catch {
-        // Preserve the original recovery error if the persistence layer is also unavailable.
       }
       await refreshSessions();
     } finally {
@@ -431,9 +442,11 @@ export function SessionsView() {
                         {recovery.patch ? "Review and apply patch" : "Review and run command"}
                       </button>
                     ) : null}
-                    <button className="qodex-button qodex-button-secondary" data-testid="abandon-session" disabled={busy} onClick={() => void abandon()}>
-                      Mark task abandoned
-                    </button>
+                    {!detail.projection.pendingAction?.started ? (
+                      <button className="qodex-button qodex-button-secondary" data-testid="abandon-session" disabled={busy} onClick={() => void abandon()}>
+                        Mark task abandoned
+                      </button>
+                    ) : null}
                   </div>
                 </div>
               ) : null}
@@ -481,9 +494,37 @@ function recoveryTitle(projection: ProjectedSessionState): string {
 function recoveryInstruction(projection: ProjectedSessionState): string {
   if (projection.recoveryRequirement?.reason === "patch_reapproval") return "Reopen the matching project, reread target files, then review the patch again.";
   if (projection.recoveryRequirement?.reason === "command_reapproval") return "Reopen the matching project, rediscover the command catalog, then review the command again.";
-  return "No provider, patch, or command was restarted. Review the evidence or mark the task abandoned.";
+  return "The action started but did not retain matching settlement evidence. Its physical outcome is unknown, so it cannot be replayed, reapproved, or replaced with an ordinary terminal result.";
 }
 
 function emptyRecovery(availability: RecoveryAvailability, message: string): RecoveryTarget {
   return { availability, patch: null, command: null, diff: null, runner: null, message };
+}
+
+async function appendRecoveredSettlement(
+  runtime: SessionRuntime,
+  sessionId: string,
+  kind: "patch" | "command",
+  actionId: string,
+  executionReceiptId: string,
+  entry: AppendEntryInput,
+): Promise<void> {
+  try {
+    await runtime.appendEntry(sessionId, entry);
+  } catch {
+    try {
+      await runtime.appendEntry(sessionId, {
+        type: "SESSION_INTERRUPTED",
+        payload: { reason: "settlement_evidence_persistence_failed" },
+        safeMetadata: {
+          actionId,
+          executionReceiptId,
+          executionStatus: "unknown_or_interrupted",
+        },
+      });
+    } catch {
+      // Restart recovery will derive Interrupted from the unmatched started receipt.
+    }
+    throw new SettlementPersistenceError(actionId, kind, executionReceiptId);
+  }
 }

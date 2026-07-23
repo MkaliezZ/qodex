@@ -1,5 +1,6 @@
 import type { ModelToolCall } from "@qodex/provider-sdk";
 import { AgentToolRegistry, type AgentToolResult } from "./tools.js";
+import { isSettlementPersistenceError } from "./types.js";
 import type {
   AgentLoopLimits,
   AgentLoopListener,
@@ -187,7 +188,8 @@ export class AgentLoopRuntime {
       this.setStatus(task, "ReturningToolResult");
       shouldContinue = true;
     } catch (error) {
-      if (dispatched) {
+      let failure = error;
+      if (dispatched && !isSettlementPersistenceError(error)) {
         try {
           await this.options.sideEffectLifecycle?.afterSideEffectFailure({
             taskId: task.id,
@@ -197,12 +199,12 @@ export class AgentLoopRuntime {
             executionReceiptId,
             message: error instanceof Error ? error.message : "Patch application failed.",
           });
-        } catch {
-          // Started evidence remains deliberately unsettled when persistence is unavailable.
+        } catch (settlementError) {
+          failure = settlementError;
         }
       }
       if (!this.cancellationRequests.has(task.id)) {
-        this.fail(task, error instanceof Error ? error.message : "Patch application failed.");
+        this.fail(task, failure instanceof Error ? failure.message : "Patch application failed.");
       }
     } finally {
       this.activePatchApplies.delete(task.id);
@@ -318,7 +320,8 @@ export class AgentLoopRuntime {
       this.appendCommandResult(task, pending, result);
       this.setStatus(task, "ReturningToolResult");
     } catch (error) {
-      if (dispatched) {
+      let failure = error;
+      if (dispatched && !isSettlementPersistenceError(error)) {
         try {
           await this.options.sideEffectLifecycle?.afterSideEffectFailure({
             taskId: task.id,
@@ -328,12 +331,12 @@ export class AgentLoopRuntime {
             executionReceiptId,
             message: error instanceof Error ? error.message : "Command execution failed.",
           });
-        } catch {
-          // Started evidence remains deliberately unsettled when persistence is unavailable.
+        } catch (settlementError) {
+          failure = settlementError;
         }
       }
       if (!this.cancellationRequests.has(task.id)) {
-        this.fail(task, error instanceof Error ? error.message : "Command execution failed.");
+        this.fail(task, failure instanceof Error ? failure.message : "Command execution failed.");
       }
     } finally {
       this.activeCommandRuns.delete(task.id);

@@ -9,6 +9,7 @@ import {
   installProjectFixture,
   readAgentCommandFixture,
   readProjectFixture,
+  readSessionEntryTypes,
 } from "./fixtures/project-fixture";
 
 const original = "export const value = 1;\n";
@@ -252,6 +253,97 @@ test.describe("KerniQ Universal Session and Recovery v0.5", () => {
     for await (const chunk of stream) exported += chunk.toString();
     expect(exported).not.toContain(privatePath);
     expect(exported).not.toContain(githubFixture);
+  });
+
+  test("recovered Patch settlement persistence failure remains Interrupted without replay", async ({ page }) => {
+    await installPersistentSessionStore(page, { failOnceOn: ["PATCH_APPLIED"] });
+    await installProjectFixture(page, files, { persistent: true });
+    await setupApp(page);
+    await configureDeterministicProvider(page, "unused");
+    let providerCalls = 0;
+    await page.route("**/chat/completions", async (route) => {
+      providerCalls += 1;
+      await fulfillSse(route, [textEvent(patchResponse())]);
+    });
+    await openProject(page);
+    await page.fill('[data-testid="prompt-input"]', "Propose a patch with injected settlement failure.");
+    await page.click('[data-testid="send-button"]');
+    await expect(page.locator('[data-testid="agent-state"]')).toHaveText("WaitingForPatchApproval");
+
+    await page.reload();
+    await openSessions(page);
+    await page.locator('[data-testid="session-row"]').first().getByRole("button", { name: "Resume recovery" }).click();
+    await page.locator('[data-testid="reauthorize-project"]').click();
+    await page.locator('[data-testid="approve-recovered-action"]').click();
+    await expect(page.locator('[data-testid="session-notice"]')).toContainText("physical result is unknown");
+    await expect(page.locator('[data-testid="session-row"]').first()).toContainText("Interrupted");
+    expect((await readProjectFixture(page)).writes).toBe(1);
+    expect((await readProjectFixture(page)).files["src/value.ts"]).toBe(changed);
+    expect(providerCalls).toBe(1);
+    const entryTypes = await readSessionEntryTypes(page);
+    expect(entryTypes).toContain("PATCH_STARTED");
+    expect(entryTypes).toContain("SESSION_INTERRUPTED");
+    expect(entryTypes).not.toContain("PATCH_APPLIED");
+    expect(entryTypes).not.toContain("SESSION_FAILED");
+    expect(entryTypes).not.toContain("SESSION_COMPLETED");
+    expect(entryTypes).not.toContain("RECOVERY_COMPLETED");
+
+    await page.reload();
+    await openSessions(page);
+    await page.locator('[data-testid="session-row"]').first().getByRole("button", { name: "Resume recovery" }).click();
+    await expect(page.locator('[data-testid="approve-recovered-action"]')).toHaveCount(0);
+    await expect(page.locator('[data-testid="reauthorize-project"]')).toHaveCount(0);
+    await expect(page.locator('[data-testid="abandon-session"]')).toHaveCount(0);
+    await expect(page.locator('[data-testid="recovery-banner"]')).toContainText("cannot be replayed");
+    expect((await readProjectFixture(page)).writes).toBe(1);
+    expect(providerCalls).toBe(1);
+  });
+
+  test("recovered Command settlement persistence failure remains Interrupted without replay", async ({ page }) => {
+    await installPersistentSessionStore(page, { failOnceOn: ["COMMAND_COMPLETED"] });
+    await installProjectFixture(page, files, { persistent: true });
+    await installDelayedAgentCommandFixture(page, 0);
+    await setupApp(page);
+    await configureDeterministicProvider(page, "unused");
+    let providerCalls = 0;
+    await page.route("**/chat/completions", async (route) => {
+      providerCalls += 1;
+      await fulfillSse(route, [
+        toolEvent("catalog-settlement", "list_project_commands", {}, 0),
+        toolEvent("command-settlement", "run_project_command", { commandId: "package-script:test" }, 1),
+      ]);
+    });
+    await openProject(page);
+    await page.fill('[data-testid="prompt-input"]', "Propose a command with injected settlement failure.");
+    await page.click('[data-testid="send-button"]');
+    await expect(page.locator('[data-testid="agent-state"]')).toHaveText("WaitingForCommandApproval");
+
+    await page.reload();
+    await openSessions(page);
+    await page.locator('[data-testid="session-row"]').first().getByRole("button", { name: "Resume recovery" }).click();
+    await page.locator('[data-testid="reauthorize-project"]').click();
+    await page.locator('[data-testid="approve-recovered-action"]').click();
+    await expect(page.locator('[data-testid="session-notice"]')).toContainText("physical result is unknown");
+    await expect(page.locator('[data-testid="session-row"]').first()).toContainText("Interrupted");
+    expect((await readAgentCommandFixture(page)).starts).toBe(1);
+    expect(providerCalls).toBe(1);
+    const entryTypes = await readSessionEntryTypes(page);
+    expect(entryTypes).toContain("COMMAND_STARTED");
+    expect(entryTypes).toContain("SESSION_INTERRUPTED");
+    expect(entryTypes).not.toContain("COMMAND_COMPLETED");
+    expect(entryTypes).not.toContain("SESSION_FAILED");
+    expect(entryTypes).not.toContain("SESSION_COMPLETED");
+    expect(entryTypes).not.toContain("RECOVERY_COMPLETED");
+
+    await page.reload();
+    await openSessions(page);
+    await page.locator('[data-testid="session-row"]').first().getByRole("button", { name: "Resume recovery" }).click();
+    await expect(page.locator('[data-testid="approve-recovered-action"]')).toHaveCount(0);
+    await expect(page.locator('[data-testid="reauthorize-project"]')).toHaveCount(0);
+    await expect(page.locator('[data-testid="abandon-session"]')).toHaveCount(0);
+    await expect(page.locator('[data-testid="recovery-banner"]')).toContainText("cannot be replayed");
+    expect((await readAgentCommandFixture(page)).starts).toBe(1);
+    expect(providerCalls).toBe(1);
   });
 
   test("changed command catalog blocks recovered execution", async ({ page }) => {

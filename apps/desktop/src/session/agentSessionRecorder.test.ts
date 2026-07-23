@@ -1,7 +1,36 @@
 import { describe, expect, it } from "vitest";
-import type { AgentLoopTask, ProjectCommandResult } from "@qodex/agent-runtime";
-import { InMemorySessionStore, SessionRuntime } from "@qodex/session-runtime";
+import {
+  SETTLEMENT_PERSISTENCE_ERROR_MESSAGE,
+  SettlementPersistenceError,
+  type AgentLoopTask,
+  type ProjectCommandResult,
+} from "@qodex/agent-runtime";
+import {
+  InMemorySessionStore,
+  SessionRuntime,
+  type SessionEntry,
+  type SessionEventType,
+  type SessionMutation,
+} from "@qodex/session-runtime";
 import { AgentSessionLedgerRecorder } from "./agentSessionRecorder";
+
+class FaultInjectingSessionStore extends InMemorySessionStore {
+  private readonly remainingFailures: Partial<Record<SessionEventType, number>>;
+
+  constructor(failures: Partial<Record<SessionEventType, number>>) {
+    super();
+    this.remainingFailures = { ...failures };
+  }
+
+  override async appendEntry(entry: SessionEntry, mutation: SessionMutation): Promise<void> {
+    const remaining = this.remainingFailures[entry.type] ?? 0;
+    if (remaining > 0) {
+      this.remainingFailures[entry.type] = remaining - 1;
+      throw new Error(`Injected ${entry.type} persistence failure.`);
+    }
+    await super.appendEntry(entry, mutation);
+  }
+}
 
 function task(overrides: Partial<AgentLoopTask> = {}): AgentLoopTask {
   return {
@@ -49,6 +78,33 @@ function task(overrides: Partial<AgentLoopTask> = {}): AgentLoopTask {
     updatedAt: 2,
     ...overrides,
   };
+}
+
+function patchTask(): AgentLoopTask {
+  return task({
+    status: "WaitingForPatchApproval",
+    pendingCommand: null,
+    pendingPatch: {
+      id: "patch-settlement",
+      taskId: "task-1",
+      summary: "Update config",
+      files: [{
+        path: "src/config.ts",
+        oldContent: "export const value = 1;",
+        newContent: "export const value = 2;",
+      }],
+      createdAt: "2026-01-01T00:00:04Z",
+    },
+    timeline: [{
+      id: "timeline-patch-settlement",
+      kind: "patch_proposal",
+      title: "Patch proposed",
+      status: "pending",
+      summary: "Update config",
+      actionId: "patch-settlement",
+      timestamp: "2026-01-01T00:00:04Z",
+    }],
+  });
 }
 
 describe("AgentSessionLedgerRecorder", () => {
@@ -178,5 +234,143 @@ describe("AgentSessionLedgerRecorder", () => {
     expect(serialized).not.toContain(sensitiveValue);
     expect(serialized).not.toContain("/Users/example/Private/project");
     expect(serialized).not.toContain("newContent");
+  });
+
+  it("records Interrupted instead of ordinary Failed when Patch settlement persistence fails", async () => {
+    const store = new FaultInjectingSessionStore({ PATCH_APPLIED: 1 });
+    const runtime = new SessionRuntime(store);
+    await runtime.createSession({ id: "task-1", title: "Patch settlement" });
+    const recorder = new AgentSessionLedgerRecorder({ runtime, sessionId: "task-1" });
+    const waiting = patchTask();
+    const proposal = waiting.pendingPatch!;
+    recorder.recordTask(waiting);
+    await recorder.flush();
+    await recorder.beforePatchApply({
+      taskId: waiting.id,
+      proposal,
+      approvalId: "approval-patch-settlement",
+      executionReceiptId: "receipt-patch-settlement",
+    });
+
+    await expect(recorder.afterPatchApply({
+      taskId: waiting.id,
+      proposal,
+      approvalId: "approval-patch-settlement",
+      executionReceiptId: "receipt-patch-settlement",
+      results: [{ path: "src/config.ts", success: true, readbackVerified: true }],
+    })).rejects.toBeInstanceOf(SettlementPersistenceError);
+    recorder.recordTask(task({
+      status: "Failed",
+      error: SETTLEMENT_PERSISTENCE_ERROR_MESSAGE,
+      pendingCommand: null,
+      timeline: [{
+        id: "timeline-patch-uncertain",
+        kind: "failure",
+        title: "Agent failed",
+        status: "error",
+        summary: SETTLEMENT_PERSISTENCE_ERROR_MESSAGE,
+        timestamp: "2026-01-01T00:00:05Z",
+      }],
+    }));
+    await recorder.flush();
+
+    const entries = await runtime.loadActivePath("task-1");
+    expect(entries.some((entry) => entry.type === "PATCH_STARTED")).toBe(true);
+    expect(entries.some((entry) => entry.type === "PATCH_APPLIED")).toBe(false);
+    expect(entries.some((entry) => entry.type === "SESSION_INTERRUPTED")).toBe(true);
+    expect(entries.some((entry) => entry.type === "SESSION_FAILED")).toBe(false);
+    const recovered = await runtime.recoverSession("task-1");
+    expect(recovered.status).toBe("Interrupted");
+    expect(recovered.pendingAction?.started).toBe(true);
+    expect(recovered.pendingAction?.approved).toBe(false);
+  });
+
+  it("records Interrupted instead of ordinary Failed when Command settlement persistence fails", async () => {
+    const store = new FaultInjectingSessionStore({ COMMAND_COMPLETED: 1 });
+    const runtime = new SessionRuntime(store);
+    await runtime.createSession({ id: "task-1", title: "Command settlement" });
+    const recorder = new AgentSessionLedgerRecorder({ runtime, sessionId: "task-1" });
+    const waiting = task();
+    const pending = waiting.pendingCommand!;
+    recorder.recordTask(waiting);
+    await recorder.flush();
+    await recorder.beforeCommandStart({
+      taskId: waiting.id,
+      pending,
+      approvalId: "approval-command-settlement",
+      executionReceiptId: "receipt-command-settlement",
+    });
+
+    await expect(recorder.afterCommandComplete({
+      taskId: waiting.id,
+      pending,
+      approvalId: "approval-command-settlement",
+      executionReceiptId: "receipt-command-settlement",
+      result: {
+        commandId: pending.command.id,
+        approved: true,
+        started: true,
+        exitCode: 0,
+        stdout: "pass",
+        stderr: "",
+        timedOut: false,
+        cancelled: false,
+        stdoutTruncated: false,
+        stderrTruncated: false,
+        durationMs: 5,
+      },
+    })).rejects.toBeInstanceOf(SettlementPersistenceError);
+    recorder.recordTask(task({
+      status: "Failed",
+      error: SETTLEMENT_PERSISTENCE_ERROR_MESSAGE,
+      pendingCommand: null,
+      timeline: [{
+        id: "timeline-command-uncertain",
+        kind: "failure",
+        title: "Agent failed",
+        status: "error",
+        summary: SETTLEMENT_PERSISTENCE_ERROR_MESSAGE,
+        timestamp: "2026-01-01T00:00:05Z",
+      }],
+    }));
+    await recorder.flush();
+
+    const entries = await runtime.loadActivePath("task-1");
+    expect(entries.some((entry) => entry.type === "COMMAND_STARTED")).toBe(true);
+    expect(entries.some((entry) => entry.type === "COMMAND_COMPLETED")).toBe(false);
+    expect(entries.some((entry) => entry.type === "SESSION_INTERRUPTED")).toBe(true);
+    expect(entries.some((entry) => entry.type === "SESSION_FAILED")).toBe(false);
+    expect((await runtime.recoverSession("task-1")).status).toBe("Interrupted");
+  });
+
+  it("recovers from unmatched Started when both settlement and immediate Interrupted persistence fail", async () => {
+    const store = new FaultInjectingSessionStore({ PATCH_APPLIED: 1, SESSION_INTERRUPTED: 1 });
+    const runtime = new SessionRuntime(store);
+    await runtime.createSession({ id: "task-1", title: "Persistent settlement failure" });
+    const recorder = new AgentSessionLedgerRecorder({ runtime, sessionId: "task-1" });
+    const waiting = patchTask();
+    const proposal = waiting.pendingPatch!;
+    recorder.recordTask(waiting);
+    await recorder.flush();
+    await recorder.beforePatchApply({
+      taskId: waiting.id,
+      proposal,
+      approvalId: "approval-fallback",
+      executionReceiptId: "receipt-fallback",
+    });
+
+    await expect(recorder.afterPatchApply({
+      taskId: waiting.id,
+      proposal,
+      approvalId: "approval-fallback",
+      executionReceiptId: "receipt-fallback",
+      results: [{ path: "src/config.ts", success: true, readbackVerified: true }],
+    })).rejects.toBeInstanceOf(SettlementPersistenceError);
+    expect((await runtime.loadActivePath("task-1")).at(-1)?.type).toBe("PATCH_STARTED");
+
+    const recovered = await runtime.recoverSession("task-1");
+    expect(recovered.status).toBe("Interrupted");
+    expect(recovered.pendingAction?.started).toBe(true);
+    expect(recovered.pendingAction?.approved).toBe(false);
   });
 });

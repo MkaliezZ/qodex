@@ -53,6 +53,23 @@ action is always `Interrupted` and cannot become reapprovable. Only proposed or
 approved-but-not-started actions can enter `RecoveryRequired`, which invalidates
 the old approval and increments an explicit approval generation.
 
+The full-path scan precedes acceptance of projected or cached Session terminal
+state. The projector rejects `SESSION_COMPLETED`, `DELIVERY_COMPLETED`,
+`SESSION_FAILED`, `SESSION_CANCELLED`, and `SESSION_LIMIT_REACHED` while an
+action has started without matching `PATCH_APPLIED`, `COMMAND_COMPLETED`,
+`ACTION_COMPLETED`, or `ACTION_FAILED` evidence. An unstarted pending action may
+still be disposed by an appropriate terminal event. For a legacy malformed path
+where a terminal event masks an unmatched start, recovery selects an active
+branch ending in `SESSION_INTERRUPTED` instead of accepting the cached terminal
+claim.
+
+Settlement persistence after dispatch is a separate failure class. KerniQ first
+attempts to append `SESSION_INTERRUPTED` with an unknown execution status. If
+that append also fails, it leaves the durable started receipt unmatched so the
+next recovery reaches the same conservative conclusion. The in-memory Agent
+task stops, the provider is not continued, and the action is neither replayed
+nor offered for reapproval.
+
 One bounded local sensitive-text scanner is applied before session persistence
 and again during export. It removes sensitive field names and redacts recognised
 credential and absolute-path patterns as defense in depth. Patches containing
@@ -72,6 +89,11 @@ The durable pre-dispatch receipt closes the unrecorded-side-effect window for
 normal and recovered patch/command execution. A crash after the started receipt
 but before a settled receipt is represented conservatively as an unknown
 interrupted outcome, so KerniQ will not offer the action for another execution.
+
+SQLite settlement evidence and external filesystem or process side effects are
+not transactionally atomic. KerniQ can prove that dispatch started; if final
+evidence cannot be persisted, it deliberately makes no claim that the physical
+operation completed or failed.
 
 KerniQ does not provide live process recovery, automatic provider continuation,
 automatic patch or command approval, cloud backup, cross-device synchronization,

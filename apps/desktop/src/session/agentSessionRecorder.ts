@@ -1,20 +1,22 @@
-import type {
-  AgentCommandLifecycleInput,
-  AgentCommandResultLifecycleInput,
-  AgentLoopTask,
-  AgentPatchLifecycleInput,
-  AgentPatchProposal,
-  AgentPatchResultLifecycleInput,
-  AgentSideEffectFailureInput,
-  AgentSideEffectLifecycle,
-  AgentTimelineEntry,
-  PendingCommandApproval,
-  ProjectCommandResult,
+import {
+  SettlementPersistenceError,
+  type AgentCommandLifecycleInput,
+  type AgentCommandResultLifecycleInput,
+  type AgentLoopTask,
+  type AgentPatchLifecycleInput,
+  type AgentPatchProposal,
+  type AgentPatchResultLifecycleInput,
+  type AgentSideEffectFailureInput,
+  type AgentSideEffectLifecycle,
+  type AgentTimelineEntry,
+  type PendingCommandApproval,
+  type ProjectCommandResult,
 } from "@qodex/agent-runtime";
 import {
   inspectSensitiveText,
   sanitizeSensitiveText,
   SessionRecorder,
+  type AppendEntryInput,
   type SafeJson,
   type SessionRuntime,
 } from "@qodex/session-runtime";
@@ -32,6 +34,7 @@ export class AgentSessionLedgerRecorder implements AgentSideEffectLifecycle {
   private stateSequence = 0;
   private pendingPatch: AgentPatchProposal | null = null;
   private pendingCommand: PendingCommandApproval | null = null;
+  private settlementEvidenceUncertain = false;
 
   constructor(options: AgentSessionRecorderOptions) {
     this.recorder = new SessionRecorder(options.runtime, options.sessionId, options.onRecorded);
@@ -94,7 +97,7 @@ export class AgentSessionLedgerRecorder implements AgentSideEffectLifecycle {
   async afterPatchApply(input: AgentPatchResultLifecycleInput): Promise<void> {
     const success = input.results.length === input.proposal.files.length
       && input.results.every((result) => result.success && result.readbackVerified === true);
-    await this.recorder.recordDurably({
+    await this.recordSettlement("patch", input.proposal.id, input.executionReceiptId, {
       type: success ? "PATCH_APPLIED" : "ACTION_FAILED",
       payload: {
         actionId: input.proposal.id,
@@ -150,7 +153,7 @@ export class AgentSessionLedgerRecorder implements AgentSideEffectLifecycle {
 
   async afterCommandComplete(input: AgentCommandResultLifecycleInput): Promise<void> {
     const actionId = input.pending.toolCall.id;
-    await this.recorder.recordDurably({
+    await this.recordSettlement("command", actionId, input.executionReceiptId, {
       type: "COMMAND_COMPLETED",
       payload: { actionId, ...safeRecoveredCommandResult(input.result) },
       safeMetadata: {
@@ -167,7 +170,7 @@ export class AgentSessionLedgerRecorder implements AgentSideEffectLifecycle {
   }
 
   async afterSideEffectFailure(input: AgentSideEffectFailureInput): Promise<void> {
-    await this.recorder.recordDurably({
+    await this.recordSettlement(input.kind, input.actionId, input.executionReceiptId, {
       type: "ACTION_FAILED",
       payload: { actionId: input.actionId, reason: safeText(input.message) },
       safeMetadata: {
@@ -180,6 +183,34 @@ export class AgentSessionLedgerRecorder implements AgentSideEffectLifecycle {
         executionStatus: "failed",
       },
     });
+  }
+
+  private async recordSettlement(
+    kind: "patch" | "command",
+    actionId: string,
+    executionReceiptId: string,
+    entry: AppendEntryInput,
+  ): Promise<void> {
+    try {
+      await this.recorder.recordDurably(entry);
+    } catch {
+      this.settlementEvidenceUncertain = true;
+      try {
+        await this.recorder.recordDurably({
+          type: "SESSION_INTERRUPTED",
+          payload: { reason: "settlement_evidence_persistence_failed" },
+          safeMetadata: {
+            recordKey: `settlement-interrupted:${executionReceiptId}`,
+            actionId,
+            executionReceiptId,
+            executionStatus: "unknown_or_interrupted",
+          },
+        });
+      } catch {
+        // The durable started receipt remains the authoritative restart evidence.
+      }
+      throw new SettlementPersistenceError(actionId, kind, executionReceiptId);
+    }
   }
 
   private recordPendingActions(task: AgentLoopTask): void {
@@ -227,7 +258,9 @@ export class AgentSessionLedgerRecorder implements AgentSideEffectLifecycle {
         recordKey: `agent-state:${task.id}:${this.stateSequence}:${task.status}`,
         taskId: task.id,
         runtimeStatus: task.status,
-        executionStatus: activeExecutionStatus(task.status),
+        executionStatus: this.settlementEvidenceUncertain
+          ? "unknown_or_interrupted"
+          : activeExecutionStatus(task.status),
       },
     });
   }
@@ -299,6 +332,7 @@ export class AgentSessionLedgerRecorder implements AgentSideEffectLifecycle {
         this.recordCommandOutput(entry, base);
         return;
       case "final":
+        if (this.settlementEvidenceUncertain) return;
         this.recorder.record({
           type: "SESSION_COMPLETED",
           payload: { reason: safeText(entry.summary) },
@@ -307,6 +341,7 @@ export class AgentSessionLedgerRecorder implements AgentSideEffectLifecycle {
         });
         return;
       case "failure":
+        if (this.settlementEvidenceUncertain) return;
         this.recorder.record({
           type: task.status === "Cancelled" ? "SESSION_CANCELLED" : "SESSION_FAILED",
           payload: { reason: safeText(entry.summary) },
@@ -315,6 +350,7 @@ export class AgentSessionLedgerRecorder implements AgentSideEffectLifecycle {
         });
         return;
       case "limit":
+        if (this.settlementEvidenceUncertain) return;
         this.recorder.record({
           type: "SESSION_LIMIT_REACHED",
           payload: { reason: safeText(entry.summary) },

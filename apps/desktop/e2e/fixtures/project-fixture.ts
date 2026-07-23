@@ -1,4 +1,5 @@
 import type { Page } from "@playwright/test";
+import type { SessionEventType } from "@qodex/session-runtime";
 
 interface ProjectFixtureState {
   files: Record<string, string>;
@@ -107,11 +108,16 @@ export async function readAgentCommandFixture(page: Page): Promise<AgentCommandF
   });
 }
 
-export async function installPersistentSessionStore(page: Page): Promise<void> {
-  await page.addInitScript(() => {
+export async function installPersistentSessionStore(
+  page: Page,
+  options: { failOnceOn?: SessionEventType[] } = {},
+): Promise<void> {
+  await page.addInitScript(({ failOnceOn }) => {
     const storageKey = "kerniq-e2e-session-ledger";
+    const failureKey = "kerniq-e2e-session-failures";
     if (!sessionStorage.getItem("kerniq-session-store-initialized")) {
       localStorage.removeItem(storageKey);
+      localStorage.removeItem(failureKey);
       sessionStorage.setItem("kerniq-session-store-initialized", "1");
     }
     const empty = (): PersistentSessionFixtureState => ({ sessions: {}, entries: {}, bindings: {} });
@@ -127,6 +133,12 @@ export async function installPersistentSessionStore(page: Page): Promise<void> {
         write(state);
       },
       appendEntry: async (entry, mutation) => {
+        const consumed = JSON.parse(localStorage.getItem(failureKey) ?? "[]") as string[];
+        if (failOnceOn.includes(entry.type) && !consumed.includes(entry.type)) {
+          consumed.push(entry.type);
+          localStorage.setItem(failureKey, JSON.stringify(consumed));
+          throw new Error(`Injected ${entry.type} persistence failure.`);
+        }
         const state = read();
         const session = state.sessions[entry.sessionId];
         if (!session) throw new Error("Session not found.");
@@ -172,6 +184,15 @@ export async function installPersistentSessionStore(page: Page): Promise<void> {
         message: "Deterministic reload persistence is active for this Playwright scenario.",
       }),
     };
+  }, { failOnceOn: options.failOnceOn ?? [] });
+}
+
+export async function readSessionEntryTypes(page: Page): Promise<string[]> {
+  return page.evaluate(() => {
+    const raw = localStorage.getItem("kerniq-e2e-session-ledger");
+    if (!raw) return [];
+    const state = JSON.parse(raw) as PersistentSessionFixtureState;
+    return Object.values(state.entries).flat().map((entry) => String(entry.type));
   });
 }
 

@@ -631,3 +631,27 @@ and the patch is marked non-recoverable. Export re-sanitizes session metadata,
 project display names, entries, and patch summaries as defense in depth. This
 pattern-based protection is intentionally bounded and does not claim to detect
 every possible secret.
+
+### KerniQ Settlement Evidence Honesty v0.5.2
+
+**Date:** 2026-07-23  |  **Status:** Correction implemented, final review pending
+
+Strengthened the Session projector so an ordinary completed, failed, cancelled,
+delivery-completed, or limit-reached event cannot hide a started action without
+matching settlement evidence. Unstarted pending actions retain their existing
+terminal-disposal semantics. Recovery now scans the full active path for
+unmatched started evidence before accepting projected or cached terminal state,
+including conservative repair of legacy malformed ledgers.
+
+Normal and recovered Patch and Command execution now distinguish pre-dispatch
+persistence failure from post-dispatch settlement persistence failure. The
+former remains fail-closed before a filesystem write or process start. The
+latter stops provider continuation and attempts `SESSION_INTERRUPTED` with an
+unknown physical outcome; if that write also fails, the ledger deliberately
+ends at the unmatched started receipt for restart recovery. Such actions are not
+replayed or offered for reapproval.
+
+This correction does not claim transactional atomicity between SQLite and an
+external filesystem operation or native process. KerniQ can prove that dispatch
+started, but it does not invent whether the physical operation completed when
+final evidence cannot be persisted.

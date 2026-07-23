@@ -192,24 +192,28 @@ export class SessionProjector {
           break;
         case "SESSION_COMPLETED":
         case "DELIVERY_COMPLETED":
+          requireNoUnsettledStartedAction(pendingAction, entry);
           status = "Completed";
           completedAt = entry.createdAt;
           pendingAction = null;
           recoveryRequirement = null;
           break;
         case "SESSION_FAILED":
+          requireNoUnsettledStartedAction(pendingAction, entry);
           status = "Failed";
           completedAt = entry.createdAt;
           pendingAction = null;
           recoveryRequirement = null;
           break;
         case "SESSION_CANCELLED":
+          requireNoUnsettledStartedAction(pendingAction, entry);
           status = "Cancelled";
           completedAt = entry.createdAt;
           pendingAction = null;
           recoveryRequirement = null;
           break;
         case "SESSION_LIMIT_REACHED":
+          requireNoUnsettledStartedAction(pendingAction, entry);
           status = "LimitReached";
           completedAt = entry.createdAt;
           pendingAction = null;
@@ -262,6 +266,15 @@ function proposed(entry: SessionEntry, kind: PendingActionProjection["kind"]): P
 
 function requireNoPending(pending: PendingActionProjection | null, entry: SessionEntry): void {
   if (pending) throw new Error(`${entry.type} cannot replace an unsettled action.`);
+}
+
+function requireNoUnsettledStartedAction(
+  pending: PendingActionProjection | null,
+  entry: SessionEntry,
+): void {
+  if (pending?.started && !pending.settled) {
+    throw new Error(`${entry.type} cannot hide a started action without matching settlement evidence.`);
+  }
 }
 
 function requirePending(pending: PendingActionProjection | null, entry: SessionEntry): PendingActionProjection {

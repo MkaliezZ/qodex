@@ -158,6 +158,29 @@ export interface AgentSideEffectFailureInput {
   message: string;
 }
 
+export type AgentSideEffectKind = "patch" | "command" | "action";
+
+export const SETTLEMENT_PERSISTENCE_ERROR_MESSAGE =
+  "The action started, but KerniQ could not persist its final outcome. "
+  + "The physical result is unknown. The action will not be replayed.";
+
+export class SettlementPersistenceError extends Error {
+  readonly physicalOutcome = "unknown" as const;
+
+  constructor(
+    readonly actionId: string,
+    readonly actionKind: AgentSideEffectKind,
+    readonly executionReceiptId: string,
+  ) {
+    super(SETTLEMENT_PERSISTENCE_ERROR_MESSAGE);
+    this.name = "SettlementPersistenceError";
+  }
+}
+
+export function isSettlementPersistenceError(value: unknown): value is SettlementPersistenceError {
+  return value instanceof SettlementPersistenceError;
+}
+
 export interface AgentSideEffectLifecycle {
   beforePatchApply(input: AgentPatchLifecycleInput): Promise<void>;
   afterPatchApply(input: AgentPatchResultLifecycleInput): Promise<void>;

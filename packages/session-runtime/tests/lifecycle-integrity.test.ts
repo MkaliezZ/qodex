@@ -263,4 +263,61 @@ describe("session lifecycle integrity", () => {
       safeMetadata: { approvalGeneration: 1 },
     })).rejects.toThrow("cannot become reapprovable");
   });
+
+  it.each([
+    ["patch", "SESSION_FAILED"],
+    ["command", "SESSION_CANCELLED"],
+    ["action", "SESSION_COMPLETED"],
+    ["command", "SESSION_LIMIT_REACHED"],
+  ] as const)("rejects %s started evidence masked by %s", async (kind, terminalType) => {
+    const instance = runtime();
+    const session = await instance.createSession({ title: `${kind} terminal masking` });
+    const actionId = `${kind}-terminal-masking`;
+    await propose(instance, session.id, kind, actionId);
+    await instance.appendEntry(session.id, {
+      type: EVENTS[kind].approved,
+      payload: { actionId },
+      safeMetadata: evidence(actionId),
+    });
+    await instance.appendEntry(session.id, {
+      type: EVENTS[kind].started,
+      payload: { actionId },
+      safeMetadata: evidence(actionId),
+    });
+    await expect(instance.appendEntry(session.id, {
+      type: terminalType,
+      payload: { reason: "must not hide started evidence" },
+    })).rejects.toThrow("cannot hide a started action");
+  });
+
+  it.each([
+    ["patch", "PATCH_APPLIED", "SESSION_COMPLETED", "Completed"],
+    ["command", "COMMAND_COMPLETED", "SESSION_COMPLETED", "Completed"],
+    ["action", "ACTION_FAILED", "SESSION_FAILED", "Failed"],
+  ] as const)("accepts a settled %s before %s", async (kind, settlementType, terminalType, expectedStatus) => {
+    const instance = runtime();
+    const session = await instance.createSession({ title: `${kind} settled terminal` });
+    const actionId = `${kind}-settled-terminal`;
+    await propose(instance, session.id, kind, actionId);
+    await instance.appendEntry(session.id, {
+      type: EVENTS[kind].approved,
+      payload: { actionId },
+      safeMetadata: evidence(actionId),
+    });
+    await instance.appendEntry(session.id, {
+      type: EVENTS[kind].started,
+      payload: { actionId },
+      safeMetadata: evidence(actionId),
+    });
+    await instance.appendEntry(session.id, {
+      type: settlementType,
+      payload: { actionId },
+      safeMetadata: evidence(actionId),
+    });
+    await instance.appendEntry(session.id, {
+      type: terminalType,
+      payload: { reason: "action settlement is durable" },
+    });
+    expect((await instance.projectCurrentState(session.id)).status).toBe(expectedStatus);
+  });
 });

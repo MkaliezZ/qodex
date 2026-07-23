@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { InMemorySessionStore, SessionRuntime } from "../src/index.js";
+import {
+  InMemorySessionStore,
+  SessionRuntime,
+  type SessionEntry,
+  type SessionEventType,
+  type SessionStatus,
+} from "../src/index.js";
 
 function runtime() {
   let index = 0;
@@ -220,5 +226,76 @@ describe("session projection and restart recovery", () => {
       payload: { actionId: "missing" },
       safeMetadata: { actionId: "missing" },
     })).rejects.toThrow("no pending action");
+  });
+
+  it.each([
+    ["command", "COMMAND_PROPOSED", "COMMAND_APPROVED", "COMMAND_STARTED", "SESSION_FAILED", "Failed"],
+    ["patch", "PATCH_PROPOSED", "PATCH_APPROVED", "PATCH_STARTED", "SESSION_CANCELLED", "Cancelled"],
+  ] as const)("repairs legacy %s started evidence masked by cached %s", async (
+    kind,
+    proposedType,
+    approvedType,
+    startedType,
+    terminalType,
+    terminalStatus,
+  ) => {
+    const store = new InMemorySessionStore();
+    let id = 0;
+    const instance = new SessionRuntime(
+      store,
+      () => new Date(Date.UTC(2026, 4, 1, 0, 0, id++)),
+      () => `legacy-${++id}`,
+    );
+    const session = await instance.createSession({ title: `Legacy ${kind}` });
+    const actionId = `${kind}-legacy-started`;
+    const approvalId = `${kind}-legacy-approval`;
+    const executionReceiptId = `${kind}-legacy-receipt`;
+    await instance.appendEntry(session.id, {
+      type: proposedType,
+      payload: { actionId },
+      safeMetadata: { actionId },
+    });
+    await instance.appendEntry(session.id, {
+      type: approvedType,
+      payload: { actionId },
+      safeMetadata: { actionId, approvalId, approvalGeneration: 0 },
+    });
+    await instance.appendEntry(session.id, {
+      type: startedType,
+      payload: { actionId },
+      safeMetadata: { actionId, approvalId, approvalGeneration: 0, executionReceiptId },
+    });
+
+    const started = (await instance.loadActivePath(session.id)).at(-1)!;
+    const terminal: SessionEntry = {
+      id: `legacy-terminal-${kind}`,
+      sessionId: session.id,
+      parentEntryId: started.id,
+      sequence: started.sequence + 1,
+      type: terminalType as SessionEventType,
+      payloadVersion: 1,
+      payload: { reason: "legacy terminal masking" },
+      safeMetadata: {},
+      createdAt: new Date(Date.UTC(2026, 4, 1, 0, 1, id++)).toISOString(),
+    };
+    await store.appendEntry(terminal, {
+      activeLeafId: terminal.id,
+      status: terminalStatus as SessionStatus,
+      updatedAt: terminal.createdAt,
+      completedAt: terminal.createdAt,
+    });
+
+    await expect(instance.projectCurrentState(session.id)).rejects.toThrow("cannot hide a started action");
+    expect((await store.getSession(session.id))?.status).toBe(terminalStatus);
+
+    const recovered = await instance.recoverSession(session.id);
+    expect(recovered.status).toBe("Interrupted");
+    expect(recovered.recoveryRequirement?.executionStatus).toBe("unknown_or_interrupted");
+    expect(recovered.pendingAction?.started).toBe(true);
+    expect(recovered.pendingAction?.approved).toBe(false);
+    const activePath = await instance.loadActivePath(session.id);
+    expect(activePath.at(-1)?.type).toBe("SESSION_INTERRUPTED");
+    expect(activePath.some((entry) => entry.id === terminal.id)).toBe(false);
+    expect((await store.listEntries(session.id)).some((entry) => entry.id === terminal.id)).toBe(true);
   });
 });

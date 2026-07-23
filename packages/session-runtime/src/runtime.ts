@@ -150,7 +150,7 @@ export class SessionRuntime {
   async recoverSession(sessionId: string): Promise<ProjectedSessionState> {
     const session = await this.requireSession(sessionId);
     const activePath = await this.loadActivePath(sessionId);
-    return this.recovery.recover(session, this.projector.project(activePath), activePath);
+    return this.recovery.recover(session, activePath);
   }
 
   async recoverIncompleteSessions(): Promise<void> {

@@ -132,7 +132,11 @@ For mutating Agent actions, the adapter is also an awaitable pre-dispatch
 barrier: a fresh approval and `PATCH_STARTED` or `COMMAND_STARTED` receipt must
 commit successfully before the Diff Engine writes or the native command runner
 starts. Persistence failure therefore blocks dispatch rather than leaving an
-unrecorded side effect.
+unrecorded side effect. Once dispatch has begun, failure to persist the matching
+settlement is a distinct `SettlementPersistenceError`: the in-memory task stops,
+provider continuation is blocked, and the Session adapter records
+`SESSION_INTERRUPTED` when persistence remains available. It does not report the
+physical operation as an ordinary known failure.
 
 ### Session Runtime (`packages/session-runtime`)
 
@@ -165,11 +169,25 @@ failed, cancelled, and limit-reached outcomes remain terminal. Pending patch or
 command decisions become `RecoveryRequired`, increment an explicit approval
 generation, and invalidate earlier approval. The projector rejects approval,
 start, completion, duplicate, mismatched-ID, and post-terminal sequences that
-cannot form a valid action lifecycle. Any unmatched `ACTION_STARTED`,
-`PATCH_STARTED`, or `COMMAND_STARTED` receipt on the full active path becomes
-honestly `Interrupted` with an unknown outcome and is never reapprovable.
+cannot form a valid action lifecycle. It also rejects a completed, failed,
+cancelled, delivery-completed, or limit-reached Session terminal event while a
+started action lacks matching settlement evidence. An unstarted pending action
+may still be disposed by an appropriate terminal event.
+
+Recovery scans the full active path for unmatched `ACTION_STARTED`,
+`PATCH_STARTED`, or `COMMAND_STARTED` evidence before accepting a projected or
+cached terminal status. An unmatched start becomes honestly `Interrupted` with
+an unknown outcome and is never reapprovable, including for legacy malformed
+ledgers where a later terminal event masked the start. If an exact settlement
+append fails after dispatch, KerniQ attempts `SESSION_INTERRUPTED`; if that append
+also fails, the durable unmatched started receipt remains the recovery signal.
 Recovery never calls a provider, applies a patch, or starts a command
 automatically.
+
+The SQLite ledger cannot form one atomic transaction with an external filesystem
+write or native process. KerniQ can prove that dispatch started, but when final
+evidence cannot be persisted it does not invent whether the physical operation
+completed.
 
 All session titles, display metadata, entry payloads, and safe metadata pass
 through one bounded local scanner before persistence. It removes sensitive

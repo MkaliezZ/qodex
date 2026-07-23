@@ -15,7 +15,7 @@ v0.2.0-beta.1 may still reference the Qodex name.
 
 ![Beta](https://img.shields.io/badge/status-beta-blue)
 ![License](https://img.shields.io/badge/license-MIT-blue)
-![Tests](https://img.shields.io/badge/tests-1390%20passing-green)
+![Tests](https://img.shields.io/badge/tests-1404%20passing-green)
 ![Platform](https://img.shields.io/badge/platform-Desktop%20(Tauri)-purple)
 ![TypeScript](https://img.shields.io/badge/TypeScript-5.5-blue)
 [![CI](https://github.com/MkaliezZ/qodex/actions/workflows/ci.yml/badge.svg)](https://github.com/MkaliezZ/qodex/actions/workflows/ci.yml)
@@ -123,7 +123,7 @@ Full guide: [QUICK_START.md](docs/QUICK_START.md)
 pnpm -r test
 ```
 
-**1,390 tests** across 15 tested workspace projects - all passing.
+**1,404 tests** across 15 tested workspace projects - all passing.
 
 ## Minimal Agent Loop v0.4
 
@@ -198,6 +198,22 @@ Session persistence and redacted export apply bounded local scanning for
 recognised credential and absolute-path patterns. Sensitive patch contents are
 not retained for recovery. This is defense in depth and does not claim to detect
 every possible secret.
+
+## Settlement Evidence Honesty v0.5.2
+
+KerniQ distinguishes persistence failure before dispatch from failure to record
+the final outcome after dispatch. If approval or started evidence cannot be
+committed, the filesystem write or command process does not start. If dispatch
+has started but its settlement evidence cannot be committed, the Session becomes
+`Interrupted` with an unknown physical outcome, or retains the unmatched started
+receipt for recovery to classify the same way.
+
+An ordinary completed, failed, cancelled, or limit-reached Session event cannot
+hide a started-but-unsettled action. Recovery checks that evidence before trusting
+a cached terminal status. KerniQ does not replay or reapprove the action and does
+not continue the provider. SQLite evidence and external filesystem or process
+side effects are not transactionally atomic, so the product deliberately avoids
+inventing whether the physical operation completed.
 
 ---
 
