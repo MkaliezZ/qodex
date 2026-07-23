@@ -198,6 +198,36 @@ same rules again to session metadata, project display names, entries, and patch
 summaries. This deterministic scanner intentionally does not claim to detect
 every possible secret or private identifier.
 
+### Universal Action Runtime (`packages/action-runtime`)
+
+**Purpose:** Provider-neutral approval and dispatch contracts for future
+non-coding capabilities.
+
+`ActionProposal`, `ActionApproval`, `ActionDecision`, and `ActionOutcome` remain
+separate records. Approval binds a canonical SHA-256 proposal digest and expiry.
+Deny, hold, decision error, unknown action, stale approval, and dispatch-evidence
+failure all block the physical handler. A successful decision creates no
+outcome; only a dispatched handler can settle one.
+
+The optional v0.6 proof maps lifecycle facts into existing Session Runtime
+events without changing its schema. Patch and Command paths remain unchanged.
+
+### Managed Python and AgentFuse
+
+`packages/python-runtime` defines managed-runtime contracts and deterministic
+manifest/protocol policies. Tauri owns provisioning below its private
+application-data root, verifies pinned archive hashes, rejects unsafe archive
+entries, promotes only verified profiles, and starts the fixed interpreter
+without a shell under a cleared environment.
+
+`packages/agentfuse-adapter` maps an exact Action proposal and approval to
+`kerniq.agentfuse.bridge.v1`, then validates decision identity, policy/schema
+versions, evidence, and the pinned canonical source revision. The Python bridge
+loads canonical DHMS AgentFuse source at commit
+`8c6ae9875b3618a529d5150c96385da7461099c2`; TypeScript does not implement its
+policy. The development proof is excluded unless its dedicated build flag is
+enabled.
+
 ### 5. Diff Engine (`packages/diff-engine`)
 
 **Purpose:** Safe code modifications through patch proposals.

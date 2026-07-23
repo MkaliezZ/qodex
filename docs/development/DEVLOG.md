@@ -699,3 +699,27 @@ Desktop unit tests (48), Desktop E2E (56 passed with four credential-gated
 real-provider scenarios skipped), Rust formatting/check/tests (14 native
 tests), debug Tauri build, fresh-browser console smoke, real macOS window smoke,
 and `git diff --check`.
+
+### KerniQ Managed Python and Universal Action Runtime v0.6.0
+
+**Date:** 2026-07-24  |  **Status:** Implementation complete, final review and CI pending
+
+Added provider-neutral Action contracts with exact proposal-digest approval,
+pre-dispatch policy decisions, awaited durable dispatch evidence, at-most-once
+handler dispatch, and separate physical outcomes. The optional desktop proof
+records proposal, approval, decision, receipt, outcome, canonical source
+revision, and policy/schema identities through existing Session events.
+
+Added user-initiated private CPython provisioning in Tauri with an embedded
+cross-platform manifest, fixed HTTPS artifacts, SHA-256 verification, safe
+archive extraction, exclusive locks, interrupted-install recovery, verified
+rename promotion, integrity checks, and removal. Managed Python starts without a
+shell under a cleared allowlisted environment and does not use system Python,
+global pip, or project environments.
+
+The NDJSON bridge loads canonical DHMS AgentFuse source pinned to commit
+`8c6ae9875b3618a529d5150c96385da7461099c2`. The TypeScript adapter validates
+identity, revision, protocol, policy, schema, and evidence and fails closed.
+Exactly one trusted in-memory counter proof is available behind
+`VITE_KERNIQ_ENABLE_AGENTFUSE_PROOF=1`; ordinary production registration,
+Patch integration, and Command integration are not included.

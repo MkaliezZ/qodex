@@ -47,6 +47,8 @@ KerniQ is an AI coding agent that follows the Codex workflow philosophy while re
 | **Context Engine** | Structured prompt assembly: Rules → Memory → Skills → Metadata → Files → Task |
 | **Agent Runtime** | Task lifecycle with streaming, cancellation, and event bus |
 | **Session Runtime** | Append-only local session history, deterministic projection, and approval-safe restart recovery |
+| **Action Runtime** | Proposal/approval/decision/outcome contracts with a durable pre-dispatch barrier |
+| **Managed Python** | User-installed private CPython runtime for the pinned canonical AgentFuse proof bridge |
 | **Diff Engine** | User-approved patches for selected local text files, with stale-content checks, verified writes, and session rollback |
 | **Git Runtime** | Checkpoints, commits, branches, restore — no Git knowledge required |
 | **Skill Runtime** | Domain-specific guidelines via markdown skills, keyword resolution |
@@ -215,13 +217,22 @@ not continue the provider. SQLite evidence and external filesystem or process
 side effects are not transactionally atomic, so the product deliberately avoids
 inventing whether the physical operation completed.
 
+## Managed Python and AgentFuse Foundation v0.6.0
+
+KerniQ can explicitly install and verify a private CPython runtime without
+changing system Python or a project environment. The v0.6.0 bridge pins the
+canonical DHMS AgentFuse source and uses it for one development-only bounded
+counter proof. AgentFuse allow is a pre-dispatch policy decision, not an
+execution-success claim. Patch and Command behavior is unchanged and is not
+routed through AgentFuse in this milestone.
+
 ---
 
 ## Roadmap
 
 The authoritative roadmap is maintained in
 [PRODUCT_ROADMAP.md](docs/development/PRODUCT_ROADMAP.md). v0.4.1 is frozen;
-v0.5 adds the universal session ledger and restart recovery. Installer work is
+v0.6 adds the managed Python and universal action foundation. Installer work is
 planned for v0.8, and the Stage 2 namespace-wide rename remains explicitly
 deferred.
 
