@@ -702,7 +702,7 @@ and `git diff --check`.
 
 ### KerniQ Managed Python and Universal Action Runtime v0.6.0
 
-**Date:** 2026-07-24  |  **Status:** Implementation complete, final review and CI pending
+**Date:** 2026-07-24  |  **Status:** Implementation and local validation complete; Draft PR CI pending
 
 Added provider-neutral Action contracts with exact proposal-digest approval,
 pre-dispatch policy decisions, awaited durable dispatch evidence, at-most-once
@@ -723,3 +723,12 @@ identity, revision, protocol, policy, schema, and evidence and fails closed.
 Exactly one trusted in-memory counter proof is available behind
 `VITE_KERNIQ_ENABLE_AGENTFUSE_PROOF=1`; ordinary production registration,
 Patch integration, and Command integration are not included.
+
+Local validation passed the frozen install, workspace build and 1,460 tests,
+Desktop unit tests (54), Desktop E2E (56 passed, four credential-gated
+scenarios skipped), canonical Python bridge tests (8), native Rust tests,
+verified production archive extraction, debug Tauri build, and
+`git diff --check`. A real isolated macOS x86_64 smoke installed the pinned
+runtime, completed canonical self-check, proved allow dispatch once and deny
+dispatch zero, persisted Session evidence, stopped without an orphan bridge,
+and reverified after app restart. The system Python remained unchanged.

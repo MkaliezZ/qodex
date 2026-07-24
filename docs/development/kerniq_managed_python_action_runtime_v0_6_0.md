@@ -1,7 +1,7 @@
 # KerniQ v0.6.0 Managed Python and Action Runtime
 
 **Date:** 2026-07-24  
-**Status:** Implementation complete; final review and CI pending
+**Status:** Implementation and local validation complete; Draft PR CI pending
 
 ## Delivered
 
@@ -24,8 +24,10 @@
 The managed interpreter starts without a shell and receives fixed arguments.
 The runtime does not use system Python, global pip, project environments,
 model-selected downloads, arbitrary imports, arbitrary paths, or provider
-credentials. The download manifest is embedded and hash pinned. Archive links,
-special entries, absolute paths, and parent traversal are rejected.
+credentials. The download manifest is embedded and hash pinned. Unsafe archive
+links, special entries, absolute paths, and parent traversal are rejected. Safe
+archive-internal symlinks are materialized as ordinary files; escaping targets,
+hardlinks, and unresolved links fail closed.
 
 The proof handler is not registered in ordinary production builds. It can be
 enabled only with `VITE_KERNIQ_ENABLE_AGENTFUSE_PROOF=1`, accepts a fixed trusted
@@ -55,9 +57,26 @@ Local validation covers:
 - desktop proof allow, deny, bridge-failure, duplicate-call, and Session ledger
   integration tests
 
-The final validation record must include repository build/lint/test, Desktop
-unit and E2E suites, Rust locked checks, debug Tauri build, real macOS managed
-runtime provisioning/restart smoke, Draft PR CI, and `git diff --check`.
+Local validation passed frozen installation, workspace build, 1,460 workspace
+tests, Desktop unit tests (54), Desktop E2E (56 passed and four credential-gated
+scenarios skipped), canonical Python bridge tests (8), native Rust tests,
+verified production runtime/source archive extraction, debug Tauri build, and
+`git diff --check`. The workspace lint command completed successfully and
+reported that no selected package defines a lint script.
+
+The real macOS x86_64 smoke used an isolated application-data root and a
+user-initiated production download. CPython 3.12.13 and canonical AgentFuse
+commit `8c6ae9875b3618a529d5150c96385da7461099c2` installed under the private
+managed root after SHA-256 verification. Self-check returned allow and deny
+with zero deny dispatches. The approval-driven proof dispatched the allow
+handler exactly once (`counter=1`) and dispatched the deny handler zero times.
+The Session SQLite ledger retained proposal, approval, decision, execution
+receipt, outcome, source revision, policy, and schema identities. Full app
+stop/restart reverified the runtime and repeated self-check successfully;
+system Python remained 3.14.6 and no bridge or bytecode-cache orphan remained.
+
+Visual evidence is stored under `docs/assets/runtime-smoke/v0.6.0/`. Draft PR
+CI remains required before the final review verdict.
 
 ## Known Limitations
 

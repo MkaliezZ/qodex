@@ -105,10 +105,12 @@ temporary sibling directory, verifies hashes before extraction, validates
 archive entries and expected executable/source layout, writes the installed
 manifest, verifies the completed tree, and atomically renames it into place.
 
-Extraction rejects absolute paths, parent traversal, symlinks, hardlinks,
-devices, and entries escaping the destination. An interrupted temporary
-installation is removed on the next explicit provisioning attempt. The active
-profile is never partially replaced.
+Extraction rejects absolute paths, parent traversal, hardlinks, devices,
+escaping or missing symlink targets, and entries escaping the destination.
+Relative symlinks that resolve to verified regular files inside the archive
+root are materialized as ordinary files, so the promoted runtime contains no
+filesystem links. An interrupted temporary installation is removed on the next
+explicit provisioning attempt. The active profile is never partially replaced.
 
 Removal stops any owned bridge process and deletes only the canonical managed
 profile under the app-private root. It does not touch system Python, Homebrew,

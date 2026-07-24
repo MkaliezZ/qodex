@@ -46,8 +46,10 @@ The trusted manifest is
 
 Downloads use fixed HTTPS URLs from the embedded manifest. Model or provider
 output cannot choose a URL, executable, package, path, or module. Archives are
-hash-verified before extraction. Absolute paths, parent traversal, links, and
-special entries are rejected.
+hash-verified before extraction. Absolute paths, parent traversal, hardlinks,
+special entries, and escaping or missing symlink targets are rejected. Safe
+relative symlinks that resolve to regular files inside the verified archive are
+materialized as ordinary files; promoted profiles contain no filesystem links.
 
 ## Lifecycle
 
@@ -76,7 +78,10 @@ environments.
 The native layer starts the fixed managed interpreter without a shell and with
 fixed arguments. The environment is cleared and rebuilt from a narrow
 platform-safe allowlist. Common credential variables are not forwarded.
-`PYTHONNOUSERSITE=1` and `PYTHONDONTWRITEBYTECODE=1` are always set.
+`PYTHONNOUSERSITE=1` and `PYTHONDONTWRITEBYTECODE=1` are always set. The bridge
+also starts with CPython's `-B` flag because `-E` intentionally ignores Python
+environment variables. This keeps bridge imports from mutating the verified
+runtime with bytecode caches.
 
 Bridge stdin, stdout, stderr, individual messages, startup, and request duration
 are bounded. Stdout is protocol-only NDJSON. Any timeout, malformed response,
