@@ -792,7 +792,8 @@ fn write_bridge(root: &Path) -> Result<(), String> {
         ("__main__.py", BRIDGE_MAIN),
         ("service.py", BRIDGE_SERVICE),
     ] {
-        fs::write(package.join(name), contents)
+        let normalized = contents.replace("\r\n", "\n").replace('\r', "\n");
+        fs::write(package.join(name), normalized)
             .map_err(|_| "Managed bridge source could not be installed.")?;
     }
     Ok(())
