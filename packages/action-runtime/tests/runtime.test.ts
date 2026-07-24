@@ -4,11 +4,17 @@ import {
   ActionRuntimeError,
   InMemoryActionEvidenceStore,
   createActionProposal,
+  validateActionApproval,
+  validateActionDecision,
+  validateActionOutcome,
+  validateActionStarted,
   type ActionApproval,
   type ActionDecision,
   type ActionDecisionProvider,
   type ActionLifecycleHooks,
+  type ActionOutcome,
   type ActionProposal,
+  type ActionStarted,
 } from "../src/index.js";
 
 const NOW = "2026-07-24T00:00:00.000Z";
@@ -60,7 +66,7 @@ function decisionFor(
     decision,
     reasonCode: `${decision}_fixture`,
     summary: `Canonical fixture returned ${decision}.`,
-    policyVersion: "dhms-agentfuse@3.5.0",
+    policyVersion: "dhms-agentfuse@3.5.1",
     evidence: { schemaVersion: "agentfuse-evidence-schema-v0.1" },
     decidedAt: NOW,
   };
@@ -97,7 +103,9 @@ describe("ActionRuntime contracts and dispatch barrier", () => {
     const action = await proposal();
     const instance = runtime();
     await instance.propose(action);
-    await expect(instance.approve(approvalFor(action, { proposalDigest: "sha256:wrong" })))
+    await expect(instance.approve(approvalFor(action, {
+      proposalDigest: `sha256:${"0".repeat(64)}`,
+    })))
       .rejects.toMatchObject({ code: "approval_mismatch" });
   });
 
@@ -169,6 +177,92 @@ describe("ActionRuntime contracts and dispatch barrier", () => {
     expect(handler).not.toHaveBeenCalled();
   });
 
+  it.each([
+    ["empty decision ID", { decisionId: "" }, "invalid_decision"],
+    ["empty policy version", { policyVersion: "" }, "invalid_decision"],
+    ["empty reason code", { reasonCode: "" }, "invalid_decision"],
+    ["invalid decision timestamp", { decidedAt: "not-a-timestamp" }, "invalid_decision"],
+    ["undefined evidence", { evidence: undefined }, "invalid_decision"],
+    ["non-JSON evidence", { evidence: () => "unsafe" }, "invalid_decision"],
+    ["non-JSON object evidence", { evidence: new Date(NOW) }, "invalid_decision"],
+    [
+      "oversized evidence",
+      { evidence: { value: "x".repeat(70 * 1024) } },
+      "invalid_decision",
+    ],
+    ["wrong action binding", { actionId: "another-action" }, "decision_mismatch"],
+  ] as const)(
+    "malformed allow with %s fails closed before physical dispatch",
+    async (_label, overrides, expectedReasonCode) => {
+      const action = await proposal();
+      const instance = runtime();
+      const handler = vi.fn(async () => ({ physicalMutation: 1 }));
+      instance.registry.register(action.actionType, handler);
+      await instance.propose(action);
+      await instance.approve(approvalFor(action));
+      const malformed = {
+        ...decisionFor(action, "allow"),
+        ...overrides,
+      } as ActionDecision;
+      const result = await instance.execute(action.actionId, async () => malformed);
+      expect(result).toMatchObject({
+        state: "DecisionError",
+        started: null,
+        outcome: null,
+        decision: { decision: "error", reasonCode: expectedReasonCode },
+      });
+      expect(handler).not.toHaveBeenCalled();
+    },
+  );
+
+  it("duplicate decision ID fails the second action closed before dispatch", async () => {
+    const instance = runtime();
+    const first = await proposal("action-1");
+    const second = await proposal("action-2");
+    const handler = vi.fn(async () => ({ physicalMutation: 1 }));
+    instance.registry.register(first.actionType, handler);
+    for (const action of [first, second]) {
+      await instance.propose(action);
+      await instance.approve(approvalFor(action));
+    }
+    await instance.execute(first.actionId, async () => ({
+      ...decisionFor(first, "allow"),
+      decisionId: "shared-decision",
+    }));
+    const result = await instance.execute(second.actionId, async () => ({
+      ...decisionFor(second, "allow"),
+      decisionId: "shared-decision",
+    }));
+    expect(result).toMatchObject({
+      state: "DecisionError",
+      started: null,
+      outcome: null,
+      decision: { decision: "error", reasonCode: "duplicate_decision" },
+    });
+    expect(handler).toHaveBeenCalledTimes(1);
+  });
+
+  it("decision persistence failure blocks physical dispatch", async () => {
+    const action = await proposal();
+    const handler = vi.fn(async () => ({ physicalMutation: 1 }));
+    const instance = runtime({
+      afterDecisionReceived: async () => {
+        throw new Error("ledger unavailable");
+      },
+    });
+    instance.registry.register(action.actionType, handler);
+    await instance.propose(action);
+    await instance.approve(approvalFor(action));
+    const result = await instance.execute(action.actionId, async () => decisionFor(action, "allow"));
+    expect(result).toMatchObject({
+      state: "DecisionError",
+      started: null,
+      outcome: null,
+      decision: { decision: "error", reasonCode: "decision_persistence_failed" },
+    });
+    expect(handler).not.toHaveBeenCalled();
+  });
+
   it("unknown action fails closed before AgentFuse or dispatch", async () => {
     const action = await proposal();
     const instance = runtime();
@@ -213,6 +307,73 @@ describe("ActionRuntime contracts and dispatch barrier", () => {
       error: { code: "handler_failed", message: "Action handler failed after dispatch." },
     });
     expect(JSON.stringify(result)).not.toContain("raw handler failure");
+  });
+
+  it.each(["completed", "failed"] as const)(
+    "%s physical result becomes interrupted when durable settlement fails",
+    async (physicalResult) => {
+      const action = await proposal();
+      const interrupted = vi.fn(async () => undefined);
+      const instance = runtime({
+        afterSettlement: async () => {
+          throw new Error("ledger unavailable");
+        },
+        afterSettlementPersistenceFailure: interrupted,
+      });
+      const handler = vi.fn(async () => {
+        if (physicalResult === "failed") throw new Error("physical failure");
+        return { physicalMutation: 1 };
+      });
+      instance.registry.register(action.actionType, handler);
+      await instance.propose(action);
+      await instance.approve(approvalFor(action));
+      const first = await instance.execute(
+        action.actionId,
+        async () => decisionFor(action, "allow"),
+      );
+      const duplicate = await instance.execute(
+        action.actionId,
+        async () => decisionFor(action, "allow"),
+      );
+      expect(first).toMatchObject({
+        state: "Interrupted",
+        outcome: {
+          status: "unknown_or_interrupted",
+          error: {
+            code: "settlement_persistence_failed",
+            message: "Durable settlement evidence could not be recorded.",
+          },
+        },
+      });
+      expect(duplicate).toEqual(first);
+      expect(handler).toHaveBeenCalledTimes(1);
+      expect(interrupted).toHaveBeenCalledTimes(1);
+    },
+  );
+
+  it("secondary interruption evidence failure stays fail closed and does not replay", async () => {
+    const action = await proposal();
+    const instance = runtime({
+      afterSettlement: async () => {
+        throw new Error("ledger unavailable");
+      },
+      afterSettlementPersistenceFailure: async () => {
+        throw new Error("secondary ledger unavailable");
+      },
+    });
+    const handler = vi.fn(async () => ({ physicalMutation: 1 }));
+    instance.registry.register(action.actionType, handler);
+    await instance.propose(action);
+    await instance.approve(approvalFor(action));
+    const first = await instance.execute(action.actionId, async () => decisionFor(action, "allow"));
+    const duplicate = await instance.execute(
+      action.actionId,
+      async () => decisionFor(action, "allow"),
+    );
+    expect(first.state).toBe("Interrupted");
+    expect(first.outcome?.status).toBe("unknown_or_interrupted");
+    expect(duplicate).toEqual(first);
+    expect(handler).toHaveBeenCalledTimes(1);
   });
 
   it("cancellation before dispatch invokes neither decision provider nor handler", async () => {
@@ -316,6 +477,61 @@ describe("ActionRuntime contracts and dispatch barrier", () => {
       "dispatch.recorded",
       "outcome.settled",
     ]);
+  });
+
+  it("strict validators reject malformed approval, started, and outcome records", async () => {
+    const action = await proposal();
+    const approval = approvalFor(action);
+    const decision = decisionFor(action, "allow");
+    const started: ActionStarted = {
+      actionId: action.actionId,
+      approvalId: approval.approvalId,
+      decisionId: decision.decisionId,
+      executionReceiptId: "receipt-1",
+      startedAt: NOW,
+    };
+    const outcome: ActionOutcome = {
+      actionId: action.actionId,
+      executionReceiptId: started.executionReceiptId,
+      status: "completed",
+      result: { count: 1 },
+      settledAt: NOW,
+    };
+    expect(() => validateActionApproval(
+      { ...approval, approvedAt: "invalid" },
+      action,
+      1,
+      new Date(NOW),
+    )).toThrowError(expect.objectContaining({ code: "invalid_approval" }));
+    expect(() => validateActionDecision(
+      { ...decision, evidence: Number.NaN },
+      action,
+    )).toThrowError(expect.objectContaining({ code: "invalid_decision" }));
+    const circular: Record<string, unknown> = {};
+    circular.self = circular;
+    expect(() => validateActionDecision(
+      { ...decision, evidence: circular as never },
+      action,
+    )).toThrowError(expect.objectContaining({ code: "invalid_decision" }));
+    expect(() => validateActionStarted(
+      { ...started, decisionId: "wrong-decision" },
+      action,
+      approval,
+      decision,
+      new Date(NOW),
+    )).toThrowError(expect.objectContaining({ code: "invalid_started" }));
+    expect(() => validateActionStarted(
+      started,
+      action,
+      { ...approval, expiresAt: NOW },
+      decision,
+      new Date(NOW),
+    )).toThrowError(expect.objectContaining({ code: "approval_expired" }));
+    expect(() => validateActionOutcome(
+      { ...outcome, status: "failed", error: undefined },
+      action,
+      started,
+    )).toThrowError(expect.objectContaining({ code: "invalid_outcome" }));
   });
 
   it("surfaces ActionRuntimeError with stable codes", () => {

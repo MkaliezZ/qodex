@@ -105,10 +105,21 @@ export interface ActionLifecycleHooks {
   afterDecisionReceived?(snapshot: ActionSnapshot, decision: ActionDecision): Promise<void>;
   beforeDispatch?(snapshot: ActionSnapshot, started: ActionStarted): Promise<void>;
   afterSettlement?(snapshot: ActionSnapshot, outcome: ActionOutcome): Promise<void>;
+  afterSettlementPersistenceFailure?(
+    snapshot: ActionSnapshot,
+    uncertainOutcome: ActionOutcome,
+    failure: ActionLifecycleFailure,
+  ): Promise<void>;
+}
+
+export interface ActionLifecycleFailure {
+  code: "settlement_persistence_failed";
+  message: string;
 }
 
 export interface ActionRuntimeOptions {
   hooks?: ActionLifecycleHooks;
   clock?: () => Date;
   idFactory?: (kind: "executionReceipt") => string;
+  evidenceSizeLimit?: number;
 }

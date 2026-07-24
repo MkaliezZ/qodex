@@ -6,7 +6,8 @@ export interface ActionEvidenceEvent {
     | "decision.requested"
     | "decision.received"
     | "dispatch.recorded"
-    | "outcome.settled";
+    | "outcome.settled"
+    | "outcome.interrupted";
   actionId: string;
   snapshot: ActionSnapshot;
 }
@@ -21,6 +22,9 @@ export class InMemoryActionEvidenceStore {
       afterDecisionReceived: async (snapshot) => this.record("decision.received", snapshot),
       beforeDispatch: async (snapshot) => this.record("dispatch.recorded", snapshot),
       afterSettlement: async (snapshot) => this.record("outcome.settled", snapshot),
+      afterSettlementPersistenceFailure: async (snapshot) => {
+        this.record("outcome.interrupted", snapshot);
+      },
     };
   }
 

@@ -1,5 +1,9 @@
 export type ActionRuntimeErrorCode =
   | "invalid_proposal"
+  | "invalid_approval"
+  | "invalid_decision"
+  | "invalid_started"
+  | "invalid_outcome"
   | "duplicate_action"
   | "action_not_found"
   | "invalid_transition"
@@ -7,6 +11,7 @@ export type ActionRuntimeErrorCode =
   | "approval_expired"
   | "approval_generation_mismatch"
   | "decision_mismatch"
+  | "duplicate_decision"
   | "unknown_action"
   | "dispatch_barrier_failed"
   | "duplicate_dispatch"

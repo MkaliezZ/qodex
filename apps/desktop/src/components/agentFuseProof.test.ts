@@ -45,18 +45,26 @@ describe("AgentFuse desktop proof", () => {
       "SESSION_CREATED",
       "ACTION_PROPOSED",
       "ACTION_APPROVED",
+      "ACTION_DECIDED",
       "ACTION_STARTED",
       "ACTION_COMPLETED",
     ]);
+    const decided = entries.find(({ type }) => type === "ACTION_DECIDED");
+    expect(decided?.safeMetadata).toMatchObject({
+      actionId: proof.proposal.actionId,
+      decisionId: expect.any(String),
+      decision: "allow",
+      approvalId: expect.any(String),
+      agentFuseCommit: AGENTFUSE_COMMIT,
+      policyVersion: AGENTFUSE_POLICY,
+      decisionSchemaVersion: AGENTFUSE_SCHEMA,
+    });
     const started = entries.find(({ type }) => type === "ACTION_STARTED");
     expect(started?.safeMetadata).toMatchObject({
       actionId: proof.proposal.actionId,
       decisionId: expect.any(String),
       approvalId: expect.any(String),
       executionReceiptId: expect.any(String),
-      agentFuseCommit: AGENTFUSE_COMMIT,
-      policyVersion: AGENTFUSE_POLICY,
-      decisionSchemaVersion: AGENTFUSE_SCHEMA,
     });
   });
 
@@ -77,7 +85,7 @@ describe("AgentFuse desktop proof", () => {
     expect(result.outcome).toBeNull();
     expect(counter.snapshot()).toEqual({ count: 0, handlerInvocations: 0 });
     expect((await sessionRuntime.loadActivePath(proof.sessionId)).map(({ type }) => type))
-      .toEqual(["SESSION_CREATED", "ACTION_PROPOSED", "ACTION_APPROVED", "ACTION_DENIED"]);
+      .toEqual(["SESSION_CREATED", "ACTION_PROPOSED", "ACTION_APPROVED", "ACTION_DECIDED"]);
   });
 
   it("fails closed when the bridge is unavailable", async () => {
@@ -99,6 +107,86 @@ describe("AgentFuse desktop proof", () => {
     expect(result.state).toBe("DecisionError");
     expect(result.started).toBeNull();
     expect(counter.snapshot()).toEqual({ count: 0, handlerInvocations: 0 });
+    const entries = await sessionRuntime.loadActivePath(proof.sessionId);
+    expect(entries.map(({ type }) => type))
+      .toEqual(["SESSION_CREATED", "ACTION_PROPOSED", "ACTION_APPROVED", "ACTION_DECIDED"]);
+    expect(entries.at(-1)?.safeMetadata).toMatchObject({
+      decision: "error",
+      agentFuseCommit: "local-fail-closed",
+    });
+  });
+
+  it("records interruption honestly when settlement persistence fails", async () => {
+    const sessionRuntime = new SessionRuntime(new InMemorySessionStore());
+    const counter = new ProofCounterStore();
+    const bridge = fixtureBridge("allow");
+    const proof = await prepareAgentFuseProof({
+      fixture: "allow",
+      bridge,
+      sessionRuntime,
+      counterStore: counter,
+      now: () => NOW,
+      idFactory: sequenceIds(),
+      failSettlementPersistence: true,
+    });
+    const first = await proof.approveAndRun();
+    const duplicate = await proof.approveAndRun();
+    expect(first).toMatchObject({
+      state: "Interrupted",
+      outcome: {
+        status: "unknown_or_interrupted",
+        error: { code: "settlement_persistence_failed" },
+      },
+    });
+    expect(duplicate).toEqual(first);
+    expect(counter.snapshot()).toEqual({ count: 1, handlerInvocations: 1 });
+    expect(bridge.requestDecision).toHaveBeenCalledTimes(1);
+    expect((await sessionRuntime.loadActivePath(proof.sessionId)).map(({ type }) => type))
+      .toEqual([
+        "SESSION_CREATED",
+        "ACTION_PROPOSED",
+        "ACTION_APPROVED",
+        "ACTION_DECIDED",
+        "ACTION_STARTED",
+        "SESSION_INTERRUPTED",
+      ]);
+    expect(await sessionRuntime.projectCurrentState(proof.sessionId)).toMatchObject({
+      status: "Interrupted",
+      pendingAction: {
+        started: true,
+        recoveryRequired: false,
+      },
+    });
+  });
+
+  it("restart recovery records interruption when both immediate evidence writes fail", async () => {
+    const sessionRuntime = new SessionRuntime(new InMemorySessionStore());
+    const counter = new ProofCounterStore();
+    const proof = await prepareAgentFuseProof({
+      fixture: "allow",
+      bridge: fixtureBridge("allow"),
+      sessionRuntime,
+      counterStore: counter,
+      now: () => NOW,
+      idFactory: sequenceIds(),
+      failSettlementPersistence: true,
+      failInterruptionPersistence: true,
+    });
+    const result = await proof.approveAndRun();
+    expect(result.state).toBe("Interrupted");
+    expect(counter.snapshot()).toEqual({ count: 1, handlerInvocations: 1 });
+    expect((await sessionRuntime.loadActivePath(proof.sessionId)).at(-1)?.type)
+      .toBe("ACTION_STARTED");
+    const recovered = await sessionRuntime.recoverSession(proof.sessionId);
+    expect(recovered).toMatchObject({
+      status: "Interrupted",
+      pendingAction: {
+        started: true,
+        recoveryRequired: false,
+      },
+    });
+    expect((await sessionRuntime.loadActivePath(proof.sessionId)).at(-1)?.type)
+      .toBe("SESSION_INTERRUPTED");
   });
 });
 

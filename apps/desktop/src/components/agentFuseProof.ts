@@ -18,10 +18,10 @@ import {
 
 export const PROOF_ACTION_TYPE = "kerniq.proof.increment-counter";
 export const PROOF_SANDBOX_ID = "kerniq-private-counter-v1";
-export const AGENTFUSE_COMMIT = "8c6ae9875b3618a529d5150c96385da7461099c2";
+export const AGENTFUSE_COMMIT = "af08d80abaeb196da1e66d9e74c2d1c7002c9c2e";
 export const AGENTFUSE_PROTOCOL = "kerniq.agentfuse.bridge.v1";
 export const AGENTFUSE_SCHEMA = "agentfuse-evidence-schema-v0.1";
-export const AGENTFUSE_POLICY = "dhms-agentfuse-runtime-guard@3.5.0";
+export const AGENTFUSE_POLICY = "dhms-agentfuse-runtime-guard@3.5.1";
 
 export type AgentFuseProofFixture = "allow" | "deny";
 
@@ -51,6 +51,8 @@ export interface PrepareAgentFuseProofOptions {
   counterStore?: ProofCounterStore;
   now?: () => Date;
   idFactory?: () => string;
+  failSettlementPersistence?: boolean;
+  failInterruptionPersistence?: boolean;
 }
 
 export class PreparedAgentFuseProof {
@@ -102,7 +104,11 @@ export async function prepareAgentFuseProof(
     session.id,
     options.refreshSessions,
   );
-  const hooks = sessionEvidenceHooks(recorder);
+  const hooks = sessionEvidenceHooks(
+    recorder,
+    options.failSettlementPersistence ?? false,
+    options.failInterruptionPersistence ?? false,
+  );
   const runtime = new ActionRuntime({ hooks, clock: now });
   runtime.registry.register(PROOF_ACTION_TYPE, async ({ proposal }) => {
     const parameters = asRecord(proposal.parameters);
@@ -160,7 +166,11 @@ export async function prepareAgentFuseProof(
   );
 }
 
-function sessionEvidenceHooks(recorder: SessionRecorder): ActionLifecycleHooks {
+function sessionEvidenceHooks(
+  recorder: SessionRecorder,
+  failSettlementPersistence: boolean,
+  failInterruptionPersistence: boolean,
+): ActionLifecycleHooks {
   return {
     beforeApprovalAccepted: async (snapshot, approval) => {
       await recorder.recordDurably({
@@ -178,11 +188,9 @@ function sessionEvidenceHooks(recorder: SessionRecorder): ActionLifecycleHooks {
       });
     },
     afterDecisionReceived: async (snapshot, decision) => {
-      if (decision.decision !== "deny") return;
       await recorder.recordDurably({
-        type: "ACTION_DENIED",
+        type: "ACTION_DECIDED",
         payload: {
-          actionId: snapshot.proposal.actionId,
           decision: decision.decision,
           reasonCode: decision.reasonCode,
           summary: decision.summary,
@@ -211,12 +219,15 @@ function sessionEvidenceHooks(recorder: SessionRecorder): ActionLifecycleHooks {
             snapshot.approval?.generation ?? 1,
             `action-start:${started.executionReceiptId}`,
           ),
-          ...decisionMetadata(snapshot.proposal, decision),
+          decisionId: decision.decisionId,
           executionReceiptId: started.executionReceiptId,
         },
       });
     },
     afterSettlement: async (snapshot, outcome) => {
+      if (failSettlementPersistence) {
+        throw new Error("Injected settlement persistence failure.");
+      }
       const approval = snapshot.approval;
       const started = snapshot.started;
       if (!approval || !started) throw new Error("Settlement evidence requires dispatch identity.");
@@ -238,6 +249,25 @@ function sessionEvidenceHooks(recorder: SessionRecorder): ActionLifecycleHooks {
           ),
           executionReceiptId: outcome.executionReceiptId,
           outcomeId: `outcome-${outcome.executionReceiptId}`,
+        },
+      });
+    },
+    afterSettlementPersistenceFailure: async (snapshot, outcome, failure) => {
+      if (failInterruptionPersistence) {
+        throw new Error("Injected interruption persistence failure.");
+      }
+      await recorder.recordDurably({
+        type: "SESSION_INTERRUPTED",
+        payload: {
+          reason: failure.code,
+          actionId: snapshot.proposal.actionId,
+          executionReceiptId: outcome.executionReceiptId,
+        },
+        safeMetadata: {
+          actionId: snapshot.proposal.actionId,
+          executionReceiptId: outcome.executionReceiptId,
+          executionStatus: outcome.status,
+          recordKey: `action-interrupted:${outcome.executionReceiptId}`,
         },
       });
     },
@@ -266,10 +296,12 @@ function decisionMetadata(
   const evidence = asRecord(decision.evidence);
   return {
     actionId: proposal.actionId,
+    taskId: proposal.taskId,
     decisionId: decision.decisionId,
+    decision: decision.decision,
     policyVersion: decision.policyVersion,
-    decisionSchemaVersion: text(evidence.schemaVersion),
-    agentFuseCommit: text(evidence.agentFuseCommit),
+    decisionSchemaVersion: optionalText(evidence.schemaVersion) ?? "kerniq.action.v1",
+    agentFuseCommit: optionalText(evidence.agentFuseCommit) ?? "local-fail-closed",
   };
 }
 
@@ -287,4 +319,8 @@ function asRecord(value: JsonValue): Record<string, JsonValue> {
 function text(value: JsonValue | undefined): string {
   if (typeof value !== "string" || !value) throw new Error("Required proof identity is missing.");
   return value;
+}
+
+function optionalText(value: JsonValue | undefined): string | null {
+  return typeof value === "string" && value ? value : null;
 }

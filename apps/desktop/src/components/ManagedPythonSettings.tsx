@@ -84,7 +84,10 @@ export function ManagedPythonSettings() {
     }
   }, [bridge, inspect]);
 
-  const prepareProof = useCallback(async (fixture: AgentFuseProofFixture) => {
+  const prepareProof = useCallback(async (
+    fixture: AgentFuseProofFixture,
+    failSettlementPersistence = false,
+  ) => {
     if (!bridge) return;
     setBusy(`Prepare ${fixture} proof`);
     setError(null);
@@ -95,6 +98,7 @@ export function ManagedPythonSettings() {
         bridge,
         sessionRuntime,
         refreshSessions,
+        failSettlementPersistence,
       }));
     } catch (cause) {
       setError(messageOf(cause, "AgentFuse proof could not be prepared."));
@@ -109,11 +113,14 @@ export function ManagedPythonSettings() {
     setError(null);
     try {
       const result = await prepared.approveAndRun();
+      const duplicate = await prepared.approveAndRun();
       const counter = prepared.counterStore.snapshot();
       setProofResult(
-        result.state === "Completed"
-          ? `Allowed, dispatched once, counter=${counter.count}.`
-          : `${result.state}; handler invocations=${counter.handlerInvocations}.`,
+        `state=${result.state}; outcome=${result.outcome?.status ?? "none"}; `
+        + `handler_invocations=${counter.handlerInvocations}; `
+        + `physical_mutations=${counter.count}; `
+        + `replay_count=${duplicate === result || duplicate.outcome?.executionReceiptId
+          === result.outcome?.executionReceiptId ? 0 : 1}.`,
       );
       setPrepared(null);
       await refreshSessions();
@@ -260,6 +267,7 @@ export function ManagedPythonSettings() {
                 className="qodex-button qodex-button-secondary"
                 disabled={busy !== null}
                 onClick={() => void prepareProof("allow")}
+                data-testid="prepare-agentfuse-allow-proof"
               >
                 Prepare allow proof
               </button>
@@ -267,13 +275,28 @@ export function ManagedPythonSettings() {
                 className="qodex-button qodex-button-secondary"
                 disabled={busy !== null}
                 onClick={() => void prepareProof("deny")}
+                data-testid="prepare-agentfuse-deny-proof"
               >
                 Prepare deny proof
+              </button>
+              <button
+                className="qodex-button qodex-button-secondary"
+                disabled={busy !== null}
+                onClick={() => void prepareProof("allow", true)}
+                data-testid="prepare-agentfuse-settlement-fault-proof"
+              >
+                Prepare settlement-fault proof
               </button>
             </div>
           )}
           {proofResult ? (
-            <div className="managed-runtime-result" role="status">{proofResult}</div>
+            <div
+              className="managed-runtime-result"
+              role="status"
+              data-testid="agentfuse-proof-result"
+            >
+              {proofResult}
+            </div>
           ) : null}
         </div>
       ) : null}

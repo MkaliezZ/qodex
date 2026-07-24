@@ -5,13 +5,21 @@ import type {
   ActionApproval,
   ActionDecision,
   ActionDecisionProvider,
+  ActionLifecycleFailure,
   ActionOutcome,
   ActionProposal,
   ActionRuntimeOptions,
   ActionSnapshot,
   ActionStarted,
 } from "./types.js";
-import { validateActionProposal } from "./validation.js";
+import {
+  DEFAULT_ACTION_JSON_SIZE_LIMIT,
+  validateActionApproval,
+  validateActionDecision,
+  validateActionOutcome,
+  validateActionProposal,
+  validateActionStarted,
+} from "./validation.js";
 
 interface ActionRecord {
   snapshot: ActionSnapshot;
@@ -23,10 +31,12 @@ interface ActionRecord {
 export class ActionRuntime {
   private readonly records = new Map<string, ActionRecord>();
   private readonly terminalOutcomes = new Map<string, ActionOutcome>();
+  private readonly decisionIds = new Set<string>();
   private readonly executionReceipts = new Set<string>();
   private readonly hooks;
   private readonly clock;
   private readonly idFactory;
+  private readonly evidenceSizeLimit;
   readonly registry = new ActionHandlerRegistry();
 
   constructor(options: ActionRuntimeOptions = {}) {
@@ -34,6 +44,7 @@ export class ActionRuntime {
     this.clock = options.clock ?? (() => new Date());
     this.idFactory = options.idFactory
       ?? (() => `receipt-${globalThis.crypto.randomUUID()}`);
+    this.evidenceSizeLimit = options.evidenceSizeLimit ?? DEFAULT_ACTION_JSON_SIZE_LIMIT;
   }
 
   async propose(proposal: ActionProposal): Promise<ActionSnapshot> {
@@ -65,19 +76,12 @@ export class ActionRuntime {
     if (record.snapshot.state !== "AwaitingApproval") {
       throw new ActionRuntimeError("invalid_transition", "Action is not awaiting approval.");
     }
-    if (
-      approval.taskId !== proposal.taskId
-      || approval.proposalDigest !== proposal.proposalDigest
-    ) {
-      throw new ActionRuntimeError("approval_mismatch", "Approval does not bind the exact action proposal.");
-    }
-    if (approval.generation !== record.expectedGeneration) {
-      throw new ActionRuntimeError(
-        "approval_generation_mismatch",
-        "Approval generation is stale or unexpected.",
-      );
-    }
-    this.assertApprovalNotExpired(approval);
+    validateActionApproval(
+      approval,
+      proposal,
+      record.expectedGeneration,
+      this.clock(),
+    );
     await this.hooks.beforeApprovalAccepted?.(clone(record.snapshot), approval);
     record.snapshot.approval = clone(approval);
     record.snapshot.state = transitionActionState(record.snapshot.state, "Approved");
@@ -124,8 +128,7 @@ export class ActionRuntime {
     const handler = this.registry.resolve(snapshot.proposal.actionType);
     if (!handler) {
       snapshot.state = transitionActionState(snapshot.state, "Evaluating");
-      snapshot.decision = this.localDecision(snapshot.proposal, "unknown_action");
-      snapshot.state = transitionActionState(snapshot.state, "DecisionError");
+      await this.failClosedDecision(record, this.localDecision(snapshot.proposal, "unknown_action"));
       return clone(snapshot);
     }
 
@@ -137,9 +140,30 @@ export class ActionRuntime {
     } catch {
       decision = this.localDecision(snapshot.proposal, "decision_provider_failed");
     }
-    this.validateDecision(snapshot.proposal, decision);
+    try {
+      validateActionDecision(decision, snapshot.proposal, this.evidenceSizeLimit);
+      if (this.decisionIds.has(decision.decisionId)) {
+        throw new ActionRuntimeError(
+          "duplicate_decision",
+          "Decision ID is already bound to another action.",
+        );
+      }
+    } catch (error) {
+      const reasonCode = error instanceof ActionRuntimeError
+        ? error.code
+        : "invalid_decision";
+      await this.failClosedDecision(record, this.localDecision(snapshot.proposal, reasonCode));
+      return clone(snapshot);
+    }
+    this.decisionIds.add(decision.decisionId);
     snapshot.decision = clone(decision);
-    await this.hooks.afterDecisionReceived?.(clone(snapshot), decision);
+    try {
+      await this.hooks.afterDecisionReceived?.(clone(snapshot), decision);
+    } catch {
+      snapshot.decision = this.localDecision(snapshot.proposal, "decision_persistence_failed");
+      snapshot.state = transitionActionState(snapshot.state, "DecisionError");
+      return clone(snapshot);
+    }
 
     if (record.abortController.signal.aborted) {
       snapshot.state = transitionActionState(snapshot.state, "Cancelled");
@@ -167,6 +191,7 @@ export class ActionRuntime {
       executionReceiptId: this.idFactory("executionReceipt"),
       startedAt: this.clock().toISOString(),
     };
+    validateActionStarted(started, snapshot.proposal, approval, decision, this.clock());
     if (snapshot.started) {
       throw new ActionRuntimeError("duplicate_dispatch", "Action already has an execution receipt.");
     }
@@ -191,7 +216,7 @@ export class ActionRuntime {
     snapshot.started = started;
     snapshot.state = transitionActionState(snapshot.state, "Running");
 
-    let outcome: ActionOutcome;
+    let candidateOutcome: ActionOutcome;
     try {
       const result = await handler({
         proposal: snapshot.proposal,
@@ -199,7 +224,7 @@ export class ActionRuntime {
         decision,
         signal: record.abortController.signal,
       });
-      outcome = {
+      candidateOutcome = {
         actionId: snapshot.proposal.actionId,
         executionReceiptId: started.executionReceiptId,
         status: "completed",
@@ -208,7 +233,7 @@ export class ActionRuntime {
       };
     } catch (error) {
       const cancelled = record.abortController.signal.aborted || isAbortError(error);
-      outcome = {
+      candidateOutcome = {
         actionId: snapshot.proposal.actionId,
         executionReceiptId: started.executionReceiptId,
         status: cancelled ? "cancelled" : "failed",
@@ -221,16 +246,30 @@ export class ActionRuntime {
         settledAt: this.clock().toISOString(),
       };
     }
-    this.recordTerminalOutcome(outcome);
-    snapshot.outcome = outcome;
-    await this.hooks.afterSettlement?.(clone(snapshot), outcome);
+
+    try {
+      validateActionOutcome(
+        candidateOutcome,
+        snapshot.proposal,
+        started,
+        this.evidenceSizeLimit,
+      );
+      const settlementSnapshot = clone(snapshot);
+      settlementSnapshot.outcome = clone(candidateOutcome);
+      await this.hooks.afterSettlement?.(settlementSnapshot, candidateOutcome);
+    } catch {
+      return this.interruptAfterSettlementFailure(record, started);
+    }
+
+    this.recordTerminalOutcome(candidateOutcome);
+    snapshot.outcome = candidateOutcome;
     snapshot.state = transitionActionState(
       snapshot.state,
-      outcome.status === "completed"
+      candidateOutcome.status === "completed"
         ? "Completed"
-        : outcome.status === "failed"
+        : candidateOutcome.status === "failed"
           ? "Failed"
-          : outcome.status === "cancelled"
+          : candidateOutcome.status === "cancelled"
             ? "Cancelled"
             : "Interrupted",
     );
@@ -244,32 +283,12 @@ export class ActionRuntime {
   }
 
   private assertApprovalValid(record: ActionRecord, approval: ActionApproval): void {
-    if (
-      approval.proposalDigest !== record.snapshot.proposal.proposalDigest
-      || approval.taskId !== record.snapshot.proposal.taskId
-    ) {
-      throw new ActionRuntimeError("approval_mismatch", "Approval no longer matches the proposal.");
-    }
-    if (approval.generation !== record.expectedGeneration) {
-      throw new ActionRuntimeError("approval_generation_mismatch", "Approval generation is stale.");
-    }
-    this.assertApprovalNotExpired(approval);
-  }
-
-  private assertApprovalNotExpired(approval: ActionApproval): void {
-    const expires = Date.parse(approval.expiresAt);
-    if (Number.isNaN(expires) || expires <= this.clock().getTime()) {
-      throw new ActionRuntimeError("approval_expired", "Approval has expired.");
-    }
-  }
-
-  private validateDecision(proposal: ActionProposal, decision: ActionDecision): void {
-    if (decision.actionId !== proposal.actionId) {
-      throw new ActionRuntimeError("decision_mismatch", "Decision does not match the action.");
-    }
-    if (!["allow", "deny", "hold", "error"].includes(decision.decision)) {
-      throw new ActionRuntimeError("decision_mismatch", "Decision value is unsupported.");
-    }
+    validateActionApproval(
+      approval,
+      record.snapshot.proposal,
+      record.expectedGeneration,
+      this.clock(),
+    );
   }
 
   private localDecision(proposal: ActionProposal, reasonCode: string): ActionDecision {
@@ -293,6 +312,66 @@ export class ActionRuntime {
       );
     }
     this.terminalOutcomes.set(outcome.executionReceiptId, outcome);
+  }
+
+  private async failClosedDecision(
+    record: ActionRecord,
+    decision: ActionDecision,
+  ): Promise<void> {
+    validateActionDecision(decision, record.snapshot.proposal, this.evidenceSizeLimit);
+    if (this.decisionIds.has(decision.decisionId)) {
+      throw new ActionRuntimeError(
+        "duplicate_decision",
+        "Local fail-closed decision ID is already in use.",
+      );
+    }
+    this.decisionIds.add(decision.decisionId);
+    record.snapshot.decision = clone(decision);
+    try {
+      await this.hooks.afterDecisionReceived?.(clone(record.snapshot), decision);
+    } catch {
+      record.snapshot.decision = this.localDecision(
+        record.snapshot.proposal,
+        "decision_persistence_failed",
+      );
+    }
+    record.snapshot.state = transitionActionState(record.snapshot.state, "DecisionError");
+  }
+
+  private async interruptAfterSettlementFailure(
+    record: ActionRecord,
+    started: ActionStarted,
+  ): Promise<ActionSnapshot> {
+    const failure: ActionLifecycleFailure = {
+      code: "settlement_persistence_failed",
+      message: "Durable settlement evidence could not be recorded.",
+    };
+    const uncertainOutcome: ActionOutcome = {
+      actionId: record.snapshot.proposal.actionId,
+      executionReceiptId: started.executionReceiptId,
+      status: "unknown_or_interrupted",
+      error: failure,
+      settledAt: this.clock().toISOString(),
+    };
+    validateActionOutcome(
+      uncertainOutcome,
+      record.snapshot.proposal,
+      started,
+      this.evidenceSizeLimit,
+    );
+    this.recordTerminalOutcome(uncertainOutcome);
+    record.snapshot.outcome = uncertainOutcome;
+    record.snapshot.state = transitionActionState(record.snapshot.state, "Interrupted");
+    try {
+      await this.hooks.afterSettlementPersistenceFailure?.(
+        clone(record.snapshot),
+        uncertainOutcome,
+        failure,
+      );
+    } catch {
+      // The runtime state remains interrupted even when secondary evidence storage is unavailable.
+    }
+    return clone(record.snapshot);
   }
 }
 
