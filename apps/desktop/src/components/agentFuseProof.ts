@@ -18,10 +18,10 @@ import {
 
 export const PROOF_ACTION_TYPE = "kerniq.proof.increment-counter";
 export const PROOF_SANDBOX_ID = "kerniq-private-counter-v1";
-export const AGENTFUSE_COMMIT = "af08d80abaeb196da1e66d9e74c2d1c7002c9c2e";
+export const AGENTFUSE_COMMIT = "ec4b5842339dccfba0db62df7541920759203bc9";
 export const AGENTFUSE_PROTOCOL = "kerniq.agentfuse.bridge.v1";
 export const AGENTFUSE_SCHEMA = "agentfuse-evidence-schema-v0.1";
-export const AGENTFUSE_POLICY = "dhms-agentfuse-runtime-guard@3.5.1";
+export const AGENTFUSE_POLICY = "dhms-agentfuse-runtime-guard@3.6.0";
 
 export type AgentFuseProofFixture = "allow" | "deny";
 

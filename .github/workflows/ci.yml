@@ -67,8 +67,8 @@ jobs:
         run: |
           curl --fail --location --proto '=https' --tlsv1.2 \
             --output /tmp/dhms-engine.tar.gz \
-            https://codeload.github.com/MkaliezZ/dhms-engine/tar.gz/af08d80abaeb196da1e66d9e74c2d1c7002c9c2e
-          echo "0272c61db1d09880d4ab17da5c77da7a89dfbf6a7e9381095addcbc1caf13dc5  /tmp/dhms-engine.tar.gz" \
+            https://codeload.github.com/MkaliezZ/dhms-engine/tar.gz/ec4b5842339dccfba0db62df7541920759203bc9
+          echo "1659d81d39aab382d550c33c3b6a42b24254f584055eb15d8168f17200e323c3  /tmp/dhms-engine.tar.gz" \
             | sha256sum --check
           mkdir .ci-agentfuse
           tar -xzf /tmp/dhms-engine.tar.gz --strip-components=1 -C .ci-agentfuse

@@ -8,10 +8,15 @@ native process bridge. TypeScript does not reimplement AgentFuse policy.
 ```text
 repository: MkaliezZ/dhms-engine
 branch reviewed: feat/agentfuse-public-decision-api-v3-5-1
-commit: af08d80abaeb196da1e66d9e74c2d1c7002c9c2e
-package: dhms-agentfuse 3.5.1
+commit: ec4b5842339dccfba0db62df7541920759203bc9
+package: dhms-agentfuse 3.6.0
+policy: dhms-agentfuse-runtime-guard@3.6.0
 license: Apache-2.0
 ```
+
+The DHMS historical evidence milestones `v3.5.1` and `v3.5.2` remain
+unchanged; Python package versions and evidence milestones are separate
+identities.
 
 The source archive and SHA-256 are pinned in the managed runtime manifest. The
 bridge loads the verified first-party `runtime_guard.py` and

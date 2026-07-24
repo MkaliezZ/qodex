@@ -229,11 +229,15 @@ manifest rather than the mutable installed profile record.
 `packages/agentfuse-adapter` maps an exact Action proposal and approval to
 `kerniq.agentfuse.bridge.v1`, then validates decision identity, policy/schema
 versions, evidence, and the pinned canonical source revision. The Python bridge
-loads canonical DHMS AgentFuse 3.5.1 source at commit
-`af08d80abaeb196da1e66d9e74c2d1c7002c9c2e` and calls its public
+loads canonical DHMS AgentFuse 3.6.0 source at commit
+`ec4b5842339dccfba0db62df7541920759203bc9` and calls its public
 `RuntimeGuard.evaluate()` decision-only API; TypeScript does not implement its
 policy. The one-shot bridge process has one enforced 15-second session deadline.
 The development proof is excluded unless its dedicated build flag is enabled.
+
+The package version is independent of the preserved DHMS historical evidence
+milestone `v3.5.2`; both continue using evidence schema
+`agentfuse-evidence-schema-v0.1`.
 
 ### 5. Diff Engine (`packages/diff-engine`)
 

@@ -11,10 +11,10 @@ import {
   type AgentFuseBridgeClient,
 } from "../src/index.js";
 
-const COMMIT = "af08d80abaeb196da1e66d9e74c2d1c7002c9c2e";
+const COMMIT = "ec4b5842339dccfba0db62df7541920759203bc9";
 const PROTOCOL = "kerniq.agentfuse.bridge.v1";
 const SCHEMA = "agentfuse-evidence-schema-v0.1";
-const POLICY = "dhms-agentfuse-runtime-guard@3.5.1";
+const POLICY = "dhms-agentfuse-runtime-guard@3.6.0";
 const NOW = "2026-07-24T00:00:00.000Z";
 
 async function proposal(): Promise<ActionProposal> {

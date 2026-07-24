@@ -100,7 +100,8 @@ asset, license, executable layout, and hashes are documented. No moving
 
 The canonical AgentFuse source is the GitHub source archive for
 `MkaliezZ/dhms-engine` commit
-`af08d80abaeb196da1e66d9e74c2d1c7002c9c2e`, package version 3.5.1,
+`ec4b5842339dccfba0db62df7541920759203bc9`, package version 3.6.0,
+policy version `dhms-agentfuse-runtime-guard@3.6.0`,
 verified against its pinned archive and installed-tree SHA-256. The bridge
 loads the stdlib-only canonical
 `dhms_agentfuse.runtime_guard` and evidence modules from that verified source.

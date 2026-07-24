@@ -18,7 +18,7 @@ from python.kerniq_agentfuse_bridge.service import (
 )
 
 
-COMMIT = "af08d80abaeb196da1e66d9e74c2d1c7002c9c2e"
+COMMIT = "ec4b5842339dccfba0db62df7541920759203bc9"
 NOW = "2026-07-24T00:00:00.000Z"
 
 
@@ -67,7 +67,7 @@ def canonical() -> CanonicalAgentFuse:
         evidence_schema=SimpleNamespace(
             SCHEMA_VERSION="agentfuse-evidence-schema-v0.1",
         ),
-        package_version="3.5.1",
+        package_version="3.6.0",
         source_commit=COMMIT,
     )
 
@@ -120,6 +120,7 @@ def test_handshake_reports_version_revision_schema_and_pid() -> None:
     assert response["messageType"] == "hello_ack"
     assert response["payload"]["bridgeProtocolVersion"] == BRIDGE_PROTOCOL_VERSION
     assert response["payload"]["agentFuseSourceCommit"] == COMMIT
+    assert response["payload"]["agentFusePackageVersion"] == "3.6.0"
     assert response["payload"]["supportedDecisionSchema"] == "agentfuse-evidence-schema-v0.1"
     assert isinstance(response["payload"]["processId"], int)
 

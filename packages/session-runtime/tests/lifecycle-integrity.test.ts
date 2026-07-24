@@ -73,9 +73,9 @@ async function decideAllow(
       ...evidence(actionId, suffix),
       taskId: "task-1",
       decision: "allow",
-      policyVersion: "dhms-agentfuse-runtime-guard@3.5.1",
+      policyVersion: "dhms-agentfuse-runtime-guard@3.6.0",
       decisionSchemaVersion: "agentfuse-evidence-schema-v0.1",
-      agentFuseCommit: "af08d80abaeb196da1e66d9e74c2d1c7002c9c2e",
+      agentFuseCommit: "ec4b5842339dccfba0db62df7541920759203bc9",
     },
   });
 }
@@ -194,9 +194,9 @@ describe("session lifecycle integrity", () => {
           ...evidence(actionId),
           taskId: "task-1",
           decision,
-          policyVersion: "dhms-agentfuse-runtime-guard@3.5.1",
+          policyVersion: "dhms-agentfuse-runtime-guard@3.6.0",
           decisionSchemaVersion: "agentfuse-evidence-schema-v0.1",
-          agentFuseCommit: "af08d80abaeb196da1e66d9e74c2d1c7002c9c2e",
+          agentFuseCommit: "ec4b5842339dccfba0db62df7541920759203bc9",
         },
       });
       expect((await instance.projectCurrentState(session.id)).pendingAction).toBeNull();

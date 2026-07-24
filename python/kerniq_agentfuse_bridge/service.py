@@ -17,7 +17,7 @@ from typing import Any, TextIO
 
 BRIDGE_PROTOCOL_VERSION = "kerniq.agentfuse.bridge.v1"
 SUPPORTED_DECISION_SCHEMA = "agentfuse-evidence-schema-v0.1"
-EXPECTED_PACKAGE_VERSION = "3.5.1"
+EXPECTED_PACKAGE_VERSION = "3.6.0"
 POLICY_VERSION = f"dhms-agentfuse-runtime-guard@{EXPECTED_PACKAGE_VERSION}"
 MESSAGE_LIMIT = 64 * 1024
 

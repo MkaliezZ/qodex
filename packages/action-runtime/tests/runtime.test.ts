@@ -66,7 +66,7 @@ function decisionFor(
     decision,
     reasonCode: `${decision}_fixture`,
     summary: `Canonical fixture returned ${decision}.`,
-    policyVersion: "dhms-agentfuse@3.5.1",
+    policyVersion: "dhms-agentfuse@3.6.0",
     evidence: { schemaVersion: "agentfuse-evidence-schema-v0.1" },
     decidedAt: NOW,
   };

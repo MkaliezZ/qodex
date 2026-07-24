@@ -1451,6 +1451,15 @@ mod tests {
     fn trusted_manifest_selects_current_platform_and_pins_every_hash() {
         let manifest = trusted_manifest().unwrap();
         let artifact = selected_artifact(&manifest).unwrap();
+        assert_eq!(
+            manifest.runtime_version,
+            "20260718-cpython-3.12.13-agentfuse-ec4b584"
+        );
+        assert_eq!(
+            manifest.agent_fuse.commit,
+            "ec4b5842339dccfba0db62df7541920759203bc9"
+        );
+        assert_eq!(manifest.agent_fuse.package_version, "3.6.0");
         assert_eq!(artifact.archive_sha256.len(), 64);
         assert_eq!(artifact.installed_tree_sha256.len(), 64);
         assert!(artifact.url.starts_with("https://"));
@@ -1991,7 +2000,7 @@ mod tests {
     }
 
     #[test]
-    fn handshake_rejects_unexpected_agentfuse_revision() {
+    fn handshake_rejects_previous_agentfuse_revision_before_dispatch() {
         let manifest = trusted_manifest().unwrap();
         let response = json!({
             "protocolVersion": BRIDGE_PROTOCOL,
@@ -2001,12 +2010,37 @@ mod tests {
                 "bridgeProtocolVersion": BRIDGE_PROTOCOL,
                 "pythonVersion": manifest.python_version,
                 "agentFusePackageVersion": manifest.agent_fuse.package_version,
-                "agentFuseSourceCommit": "0000000000000000000000000000000000000000",
+                "agentFuseSourceCommit": "af08d80abaeb196da1e66d9e74c2d1c7002c9c2e",
                 "supportedDecisionSchema": manifest.decision_schema_version,
                 "processId": 1
             }
         });
-        assert!(validate_handshake(&response, &manifest).is_err());
+        let mut handler_invocations = 0;
+        let result = validate_handshake(&response, &manifest).map(|_| handler_invocations += 1);
+        assert!(result.is_err());
+        assert_eq!(handler_invocations, 0);
+    }
+
+    #[test]
+    fn handshake_rejects_previous_package_version_before_dispatch() {
+        let manifest = trusted_manifest().unwrap();
+        let response = json!({
+            "protocolVersion": BRIDGE_PROTOCOL,
+            "messageId": "hello",
+            "messageType": "hello_ack",
+            "payload": {
+                "bridgeProtocolVersion": BRIDGE_PROTOCOL,
+                "pythonVersion": manifest.python_version,
+                "agentFusePackageVersion": "3.5.1",
+                "agentFuseSourceCommit": manifest.agent_fuse.commit,
+                "supportedDecisionSchema": manifest.decision_schema_version,
+                "processId": 1
+            }
+        });
+        let mut handler_invocations = 0;
+        let result = validate_handshake(&response, &manifest).map(|_| handler_invocations += 1);
+        assert!(result.is_err());
+        assert_eq!(handler_invocations, 0);
     }
 
     #[cfg(unix)]

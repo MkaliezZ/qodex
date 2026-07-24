@@ -13,7 +13,7 @@ import {
 
 const manifestFixture = {
   manifestVersion: "kerniq.python-runtime-manifest.v1",
-  runtimeVersion: "20260718-cpython-3.12.13-agentfuse-af08d80",
+  runtimeVersion: "20260718-cpython-3.12.13-agentfuse-ec4b584",
   pythonVersion: "3.12.13",
   distribution: {
     publisher: "astral-sh/python-build-standalone",
@@ -33,8 +33,8 @@ const manifestFixture = {
   },
   agentFuse: {
     repository: "MkaliezZ/dhms-engine",
-    commit: "af08d80abaeb196da1e66d9e74c2d1c7002c9c2e",
-    packageVersion: "3.5.1",
+    commit: "ec4b5842339dccfba0db62df7541920759203bc9",
+    packageVersion: "3.6.0",
     url: "https://example.test/dhms.tar.gz",
     archiveSha256: "3".repeat(64),
     installedTreeSha256: "4".repeat(64),

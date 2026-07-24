@@ -15,7 +15,7 @@ the runtime below:
 ```
 
 The current runtime version is
-`20260718-cpython-3.12.13-agentfuse-af08d80`. This keeps executable material
+`20260718-cpython-3.12.13-agentfuse-ec4b584`. This keeps executable material
 separate from projects and from system Python. Existing KerniQ local data paths
 and the compatibility bundle identifier remain unchanged.
 
@@ -40,9 +40,13 @@ The trusted manifest is
 - CPython `3.12.13` archives for supported platform and architecture pairs
 - archive and post-extraction installed-tree SHA-256 for every runtime artifact
 - DHMS AgentFuse source commit
-  `af08d80abaeb196da1e66d9e74c2d1c7002c9c2e`
-- archive and installed-tree SHA-256 for canonical AgentFuse 3.5.1 source
-- installed-tree SHA-256 for the embedded KerniQ bridge
+  `ec4b5842339dccfba0db62df7541920759203bc9`
+- canonical AgentFuse 3.6.0 archive SHA-256
+  `1659d81d39aab382d550c33c3b6a42b24254f584055eb15d8168f17200e323c3`
+- canonical AgentFuse 3.6.0 installed-tree SHA-256
+  `9a51121ec6a719bc7c79db428d522f3c4430d99d5f176b9e62a939bf004d32e9`
+- embedded bridge installed-tree SHA-256
+  `52bd2dfd5fdd7eb183ed30d4fad56666cd19363fcce381a94ef77b3ac4a4a8dc`
 - bridge protocol and evidence schema versions
 
 Downloads use fixed HTTPS URLs from the embedded manifest. Model or provider

@@ -232,8 +232,12 @@ precedes every generic Action dispatch. If terminal evidence cannot be
 committed after a handler runs, the Action is `Interrupted` with an unknown
 physical outcome and is not replayed. Managed runtime verification compares
 all installed trees with compile-time trusted digests, and the bridge uses the
-public DHMS AgentFuse 3.5.1 `evaluate()` API under one 15-second bridge-session
+public DHMS AgentFuse 3.6.0 `evaluate()` API under one 15-second bridge-session
 deadline.
+
+The DHMS historical evidence milestone remains `v3.5.2`; the package version
+is independent, and the evidence schema remains
+`agentfuse-evidence-schema-v0.1`.
 
 ---
 
