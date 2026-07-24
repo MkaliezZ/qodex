@@ -20,6 +20,7 @@ const BRIDGE_MAIN: &str = include_str!("../../../../python/kerniq_agentfuse_brid
 const BRIDGE_SERVICE: &str = include_str!("../../../../python/kerniq_agentfuse_bridge/service.py");
 
 const BRIDGE_PROTOCOL: &str = "kerniq.agentfuse.bridge.v1";
+const BRIDGE_PYTHON_FLAGS: [&str; 3] = ["-B", "-s", "-E"];
 const MESSAGE_LIMIT: usize = 64 * 1024;
 const STDOUT_LIMIT: usize = 256 * 1024;
 const STDERR_LIMIT: usize = 64 * 1024;
@@ -612,11 +613,22 @@ fn extract_tar_gz(
     let entries = archive
         .entries()
         .map_err(|_| "Verified archive index is malformed.")?;
+    let mut deferred_links = Vec::new();
     for entry in entries {
         let mut entry = entry.map_err(|_| "Verified archive entry is malformed.")?;
         let entry_type = entry.header().entry_type();
-        if !(entry_type.is_file() || entry_type.is_dir()) {
-            return Err("Managed archive contains a forbidden link or special file.".into());
+        if entry_type.is_pax_global_extensions()
+            || entry_type.is_pax_local_extensions()
+            || entry_type.is_gnu_longname()
+            || entry_type.is_gnu_longlink()
+        {
+            continue;
+        }
+        if !(entry_type.is_file() || entry_type.is_dir() || entry_type.is_symlink()) {
+            return Err(format!(
+                "Managed archive contains unsupported entry type 0x{:02x}.",
+                entry_type.as_byte()
+            ));
         }
         let raw_path = entry
             .path()
@@ -629,7 +641,14 @@ fn extract_tar_gz(
         if !output.starts_with(destination) {
             return Err("Managed archive entry escapes the destination.".into());
         }
-        if entry_type.is_dir() {
+        if entry_type.is_symlink() {
+            let link_name = entry
+                .link_name()
+                .map_err(|_| "Managed archive link target is malformed.")?
+                .ok_or("Managed archive link target is missing.")?;
+            let target_relative = resolve_archive_link_target(&relative, &link_name)?;
+            deferred_links.push((output, destination.join(target_relative)));
+        } else if entry_type.is_dir() {
             fs::create_dir_all(&output)
                 .map_err(|_| "Managed archive directory could not be created.")?;
         } else {
@@ -641,6 +660,62 @@ fn extract_tar_gz(
                 .unpack(&output)
                 .map_err(|_| "Managed archive file could not be extracted.")?;
         }
+    }
+    materialize_archive_links(deferred_links)
+}
+
+fn resolve_archive_link_target(link_path: &Path, link_target: &Path) -> Result<PathBuf, String> {
+    if link_target.is_absolute() {
+        return Err("Managed archive link target is absolute.".into());
+    }
+    let mut resolved = link_path
+        .parent()
+        .map(Path::to_path_buf)
+        .unwrap_or_default();
+    for component in link_target.components() {
+        match component {
+            Component::Normal(value) => resolved.push(value),
+            Component::CurDir => {}
+            Component::ParentDir => {
+                if !resolved.pop() {
+                    return Err("Managed archive link target escapes the destination.".into());
+                }
+            }
+            Component::RootDir | Component::Prefix(_) => {
+                return Err("Managed archive link target is invalid.".into());
+            }
+        }
+    }
+    if resolved.as_os_str().is_empty() || resolved == link_path {
+        return Err("Managed archive link target is invalid.".into());
+    }
+    Ok(resolved)
+}
+
+fn materialize_archive_links(mut links: Vec<(PathBuf, PathBuf)>) -> Result<(), String> {
+    while !links.is_empty() {
+        let mut remaining = Vec::new();
+        let mut progress = false;
+        for (output, target) in links {
+            if !target.is_file() {
+                remaining.push((output, target));
+                continue;
+            }
+            if output.exists() {
+                return Err("Managed archive link path collides with another entry.".into());
+            }
+            if let Some(parent) = output.parent() {
+                fs::create_dir_all(parent)
+                    .map_err(|_| "Managed archive link parent could not be created.")?;
+            }
+            fs::copy(target, output)
+                .map_err(|_| "Managed archive link could not be materialized.")?;
+            progress = true;
+        }
+        if !progress {
+            return Err("Managed archive link target is missing or not a regular file.".into());
+        }
+        links = remaining;
     }
     Ok(())
 }
@@ -909,13 +984,8 @@ fn run_bridge_session(
 
     let mut command = Command::new(&executable);
     command
-        .args([
-            "-s",
-            "-E",
-            "-m",
-            "kerniq_agentfuse_bridge",
-            "--agentfuse-source",
-        ])
+        .args(BRIDGE_PYTHON_FLAGS)
+        .args(["-m", "kerniq_agentfuse_bridge", "--agentfuse-source"])
         .arg(&source_root)
         .arg("--expected-commit")
         .arg(&manifest.agent_fuse.commit)
@@ -1359,6 +1429,13 @@ mod tests {
     }
 
     #[test]
+    fn bridge_flags_disable_bytecode_and_ignore_python_environment() {
+        assert!(BRIDGE_PYTHON_FLAGS.contains(&"-B"));
+        assert!(BRIDGE_PYTHON_FLAGS.contains(&"-E"));
+        assert!(BRIDGE_PYTHON_FLAGS.contains(&"-s"));
+    }
+
+    #[test]
     fn native_decision_request_rejects_unknown_fixture_and_extra_fields() {
         let valid = json!({
             "protocolVersion": BRIDGE_PROTOCOL,
@@ -1425,7 +1502,7 @@ mod tests {
     }
 
     #[test]
-    fn archive_extraction_rejects_symbolic_links() {
+    fn archive_extraction_rejects_escaping_symbolic_links() {
         use flate2::{write::GzEncoder, Compression};
 
         let root =
@@ -1449,6 +1526,73 @@ mod tests {
         assert!(extract_tar_gz(&archive_path, &destination, true).is_err());
         assert!(!destination.join("link").exists());
         fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn archive_extraction_materializes_safe_internal_symbolic_links() {
+        use flate2::{write::GzEncoder, Compression};
+
+        let root =
+            std::env::temp_dir().join(format!("kerniq-python-safe-link-{}", operation_nonce()));
+        fs::create_dir_all(&root).unwrap();
+        let archive_path = root.join("safe-link.tar.gz");
+        let encoder = GzEncoder::new(File::create(&archive_path).unwrap(), Compression::default());
+        let mut archive = tar::Builder::new(encoder);
+        let contents = b"python";
+        let mut file_header = tar::Header::new_gnu();
+        file_header.set_entry_type(tar::EntryType::Regular);
+        file_header.set_size(contents.len() as u64);
+        file_header.set_mode(0o700);
+        file_header.set_cksum();
+        archive
+            .append_data(&mut file_header, "root/python3.12", contents.as_slice())
+            .unwrap();
+        let mut link_header = tar::Header::new_gnu();
+        link_header.set_entry_type(tar::EntryType::Symlink);
+        link_header.set_size(0);
+        link_header.set_mode(0o777);
+        link_header.set_link_name("python3.12").unwrap();
+        link_header.set_cksum();
+        archive
+            .append_data(&mut link_header, "root/python3", std::io::empty())
+            .unwrap();
+        archive.into_inner().unwrap().finish().unwrap();
+        let destination = root.join("destination");
+        fs::create_dir_all(&destination).unwrap();
+        extract_tar_gz(&archive_path, &destination, true).unwrap();
+        assert_eq!(fs::read(destination.join("python3")).unwrap(), contents);
+        assert!(!fs::symlink_metadata(destination.join("python3"))
+            .unwrap()
+            .file_type()
+            .is_symlink());
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn external_verified_archive_fixture_extracts_when_explicitly_provided() {
+        if let Ok(fixture) = std::env::var("KERNIQ_VERIFIED_RUNTIME_ARCHIVE_FIXTURE") {
+            let root = std::env::temp_dir().join(format!(
+                "kerniq-python-external-runtime-{}",
+                operation_nonce()
+            ));
+            fs::create_dir_all(&root).unwrap();
+            extract_tar_gz(Path::new(&fixture), &root, false).unwrap();
+            assert!(root.join("python").join("bin").join("python3").is_file());
+            fs::remove_dir_all(root).unwrap();
+        }
+        if let Ok(fixture) = std::env::var("KERNIQ_VERIFIED_SOURCE_ARCHIVE_FIXTURE") {
+            let root = std::env::temp_dir().join(format!(
+                "kerniq-python-external-source-{}",
+                operation_nonce()
+            ));
+            fs::create_dir_all(&root).unwrap();
+            extract_tar_gz(Path::new(&fixture), &root, true).unwrap();
+            assert!(root
+                .join("dhms_agentfuse")
+                .join("runtime_guard.py")
+                .is_file());
+            fs::remove_dir_all(root).unwrap();
+        }
     }
 
     #[test]

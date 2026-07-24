@@ -103,7 +103,7 @@ export async function prepareAgentFuseProof(
     options.refreshSessions,
   );
   const hooks = sessionEvidenceHooks(recorder);
-  const runtime = new ActionRuntime({ hooks });
+  const runtime = new ActionRuntime({ hooks, clock: now });
   runtime.registry.register(PROOF_ACTION_TYPE, async ({ proposal }) => {
     const parameters = asRecord(proposal.parameters);
     return counterStore.increment(text(parameters.sandboxId));

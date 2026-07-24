@@ -57,12 +57,17 @@ export function ManagedPythonSettings() {
     try {
       setRuntimeInfo(await operation());
     } catch (cause) {
-      setError(messageOf(cause, `${label} failed.`));
-      await inspect();
+      const operationError = messageOf(cause, `${label} failed.`);
+      setError(operationError);
+      try {
+        setRuntimeInfo(await bridge?.inspect() ?? null);
+      } catch {
+        // Preserve the operation failure; it is more actionable than refresh failure.
+      }
     } finally {
       setBusy(null);
     }
-  }, [inspect]);
+  }, [bridge]);
 
   const runSelfCheck = useCallback(async () => {
     if (!bridge) return;
