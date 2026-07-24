@@ -104,8 +104,11 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Build session runtime
-        run: pnpm --filter @qodex/session-runtime build
+      - name: Build desktop runtime dependencies
+        run: |
+          pnpm --filter @qodex/action-runtime build
+          pnpm --filter @qodex/agentfuse-adapter build
+          pnpm --filter @qodex/session-runtime build
 
       - name: Install Playwright Chromium
         run: pnpm --filter @qodex/desktop exec playwright install --with-deps chromium
