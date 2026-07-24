@@ -1,7 +1,7 @@
 # KerniQ v0.6.0 Managed Python and Action Runtime
 
 **Date:** 2026-07-24  
-**Status:** Implementation and local validation complete; Draft PR CI pending
+**Status:** Implementation, real smoke, and Draft PR CI complete; final review pending
 
 ## Delivered
 

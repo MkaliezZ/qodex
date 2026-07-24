@@ -702,7 +702,7 @@ and `git diff --check`.
 
 ### KerniQ Managed Python and Universal Action Runtime v0.6.0
 
-**Date:** 2026-07-24  |  **Status:** Implementation and local validation complete; Draft PR CI pending
+**Date:** 2026-07-24  |  **Status:** Implementation, real smoke, and Draft PR CI complete; final review pending
 
 Added provider-neutral Action contracts with exact proposal-digest approval,
 pre-dispatch policy decisions, awaited durable dispatch evidence, at-most-once
@@ -732,3 +732,6 @@ verified production archive extraction, debug Tauri build, and
 runtime, completed canonical self-check, proved allow dispatch once and deny
 dispatch zero, persisted Session evidence, stopped without an orphan bridge,
 and reverified after app restart. The system Python remained unchanged.
+
+Draft PR CI run `30079631063` passed workspace build/test, canonical Python
+bridge validation, Desktop E2E, and native Rust checks on macOS and Windows.

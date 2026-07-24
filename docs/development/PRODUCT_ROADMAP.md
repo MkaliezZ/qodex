@@ -14,7 +14,7 @@ mature Capability Pack, not the product boundary.
 
 ### v0.6 - Managed Python Runtime, Universal Action Runtime, and DHMS / AgentFuse Integration
 
-**Status:** Implementation and local validation complete; Draft PR CI pending
+**Status:** Implementation, real smoke, and Draft PR CI complete; final review pending
 
 Private managed CPython provisioning, universal action contracts, and one
 development-only canonical AgentFuse proof are implemented. Patch and Command
