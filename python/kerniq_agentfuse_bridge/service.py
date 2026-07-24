@@ -17,7 +17,8 @@ from typing import Any, TextIO
 
 BRIDGE_PROTOCOL_VERSION = "kerniq.agentfuse.bridge.v1"
 SUPPORTED_DECISION_SCHEMA = "agentfuse-evidence-schema-v0.1"
-POLICY_VERSION = "dhms-agentfuse-runtime-guard@3.5.0"
+EXPECTED_PACKAGE_VERSION = "3.5.1"
+POLICY_VERSION = f"dhms-agentfuse-runtime-guard@{EXPECTED_PACKAGE_VERSION}"
 MESSAGE_LIMIT = 64 * 1024
 
 _ALLOWED_FIXTURE = "kerniq-proof-allow-v1"
@@ -51,6 +52,8 @@ class CanonicalAgentFuse:
         package_version = metadata.get("project", {}).get("version")
         if not isinstance(package_version, str) or not package_version:
             raise ProtocolFailure("canonical_package_version_missing")
+        if package_version != EXPECTED_PACKAGE_VERSION:
+            raise ProtocolFailure("canonical_package_version_mismatch")
 
         # Avoid importing optional LangGraph dependencies from package __init__.
         package = types.ModuleType("dhms_agentfuse")
@@ -62,7 +65,15 @@ class CanonicalAgentFuse:
         evidence_schema = importlib.import_module("dhms_agentfuse.evidence_schema")
         runtime_guard = importlib.import_module("dhms_agentfuse.runtime_guard")
         if getattr(evidence_schema, "SCHEMA_VERSION", None) != SUPPORTED_DECISION_SCHEMA:
-            raise ProtocolFailure("canonical_evidence_schema_mismatch")
+            raise ProtocolFailure("canonical_schema_mismatch")
+        guard_type = getattr(runtime_guard, "RuntimeGuard", None)
+        if (
+            guard_type is None
+            or not callable(getattr(guard_type, "evaluate", None))
+            or not callable(getattr(guard_type, "aevaluate", None))
+            or getattr(runtime_guard, "RuntimeGuardDecision", None) is None
+        ):
+            raise ProtocolFailure("canonical_public_decision_api_missing")
         return cls(runtime_guard, evidence_schema, package_version, expected_commit)
 
     def decide(self, payload: dict[str, Any]) -> dict[str, Any]:
@@ -104,10 +115,10 @@ class CanonicalAgentFuse:
         else:
             raise ProtocolFailure("unknown_trusted_policy_fixture")
 
-        # This is the same canonical pre-dispatch resolver used by the pinned
-        # first-party LangGraph adapter. KerniQ never invokes AgentFuse handlers.
-        resolved = guard._resolve_policy_sync(tool_call)
-        evidence = guard._evidence(tool_call, resolved).to_dict()
+        # KerniQ consumes only the canonical public pre-dispatch decision API.
+        # AgentFuse never invokes a KerniQ action handler.
+        resolved = guard.evaluate(tool_call)
+        evidence = resolved.evidence.to_dict()
         decision = "allow" if resolved.action == "allow" else "deny"
         decision_id = stable_id(
             "decision",

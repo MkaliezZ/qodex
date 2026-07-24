@@ -24,8 +24,7 @@ const BRIDGE_PYTHON_FLAGS: [&str; 3] = ["-B", "-s", "-E"];
 const MESSAGE_LIMIT: usize = 64 * 1024;
 const STDOUT_LIMIT: usize = 256 * 1024;
 const STDERR_LIMIT: usize = 64 * 1024;
-const STARTUP_TIMEOUT: Duration = Duration::from_secs(8);
-const REQUEST_TIMEOUT: Duration = Duration::from_secs(15);
+const BRIDGE_SESSION_TIMEOUT: Duration = Duration::from_secs(15);
 const PYTHON_ARCHIVE_LIMIT: u64 = 256 * 1024 * 1024;
 const AGENTFUSE_ARCHIVE_LIMIT: u64 = 16 * 1024 * 1024;
 
@@ -78,6 +77,7 @@ struct RuntimeManifest {
     python_version: String,
     distribution: DistributionManifest,
     agent_fuse: AgentFuseManifest,
+    bridge: BridgeManifest,
     bridge_protocol_version: String,
     decision_schema_version: String,
     installed_package_lock: InstalledPackageLock,
@@ -98,7 +98,8 @@ struct RuntimeArtifact {
     platform: String,
     architecture: String,
     url: String,
-    sha256: String,
+    archive_sha256: String,
+    installed_tree_sha256: String,
     archive_format: String,
     expected_executable: String,
 }
@@ -108,10 +109,18 @@ struct RuntimeArtifact {
 struct AgentFuseManifest {
     repository: String,
     commit: String,
+    package_version: String,
     url: String,
-    sha256: String,
+    archive_sha256: String,
+    installed_tree_sha256: String,
     archive_format: String,
     expected_module: String,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct BridgeManifest {
+    installed_tree_sha256: String,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -254,7 +263,7 @@ pub(crate) async fn agentfuse_decide(
                 .map_err(|_| "AgentFuse decision request could not be encoded.")?,
             protocol_message("native-shutdown", "shutdown", json!({})),
         ];
-        let responses = run_bridge_session(&app, messages, REQUEST_TIMEOUT)?;
+        let responses = run_bridge_session(&app, messages)?;
         validate_handshake(&responses[0], &trusted_manifest()?)?;
         validate_shutdown(&responses[2])?;
         Ok(responses[1].clone())
@@ -268,12 +277,17 @@ fn trusted_manifest() -> Result<RuntimeManifest, String> {
         .map_err(|_| "Trusted managed Python manifest is malformed.")?;
     if manifest.manifest_version != "kerniq.python-runtime-manifest.v1"
         || manifest.bridge_protocol_version != BRIDGE_PROTOCOL
-        || manifest.agent_fuse.commit.len() != 40
         || manifest.installed_package_lock.mode != "verified-source-no-site-packages"
         || !manifest.installed_package_lock.packages.is_empty()
+        || !is_lower_hex(&manifest.agent_fuse.commit, 40)
+        || !is_trusted_sha256(&manifest.bridge.installed_tree_sha256)
     {
         return Err("Trusted managed Python manifest failed validation.".into());
     }
+    for artifact in &manifest.distribution.artifacts {
+        validate_manifest_artifact(artifact)?;
+    }
+    validate_source_artifact(&manifest.agent_fuse)?;
     Ok(manifest)
 }
 
@@ -433,7 +447,7 @@ fn provision_runtime(app: &tauri::AppHandle) -> Result<ManagedPythonRuntimeInfo,
         let python_archive = temporary.join("locks").join("python.tar.gz");
         download_verified(
             &artifact.url,
-            &artifact.sha256,
+            &artifact.archive_sha256,
             &python_archive,
             PYTHON_ARCHIVE_LIMIT,
         )?;
@@ -443,7 +457,7 @@ fn provision_runtime(app: &tauri::AppHandle) -> Result<ManagedPythonRuntimeInfo,
         let source_archive = temporary.join("locks").join("agentfuse.tar.gz");
         download_verified(
             &manifest.agent_fuse.url,
-            &manifest.agent_fuse.sha256,
+            &manifest.agent_fuse.archive_sha256,
             &source_archive,
             AGENTFUSE_ARCHIVE_LIMIT,
         )?;
@@ -521,7 +535,8 @@ fn remove_runtime(app: &tauri::AppHandle) -> Result<(), String> {
 
 fn validate_manifest_artifact(artifact: &RuntimeArtifact) -> Result<(), String> {
     if !artifact.url.starts_with("https://")
-        || artifact.sha256.len() != 64
+        || !is_trusted_sha256(&artifact.archive_sha256)
+        || !is_trusted_sha256(&artifact.installed_tree_sha256)
         || artifact.archive_format != "tar.gz"
         || Path::new(&artifact.expected_executable).is_absolute()
     {
@@ -533,14 +548,27 @@ fn validate_manifest_artifact(artifact: &RuntimeArtifact) -> Result<(), String> 
 
 fn validate_source_artifact(source: &AgentFuseManifest) -> Result<(), String> {
     if !source.url.starts_with("https://")
-        || source.sha256.len() != 64
-        || source.commit.len() != 40
+        || !is_trusted_sha256(&source.archive_sha256)
+        || !is_trusted_sha256(&source.installed_tree_sha256)
+        || !is_lower_hex(&source.commit, 40)
+        || source.package_version.is_empty()
         || source.archive_format != "tar.gz"
     {
         return Err("Trusted AgentFuse source entry is invalid.".into());
     }
     validate_relative_path(Path::new(&source.expected_module))?;
     Ok(())
+}
+
+fn is_trusted_sha256(value: &str) -> bool {
+    is_lower_hex(value, 64) && value.bytes().any(|byte| byte != b'0')
+}
+
+fn is_lower_hex(value: &str, expected_length: usize) -> bool {
+    value.len() == expected_length
+        && value
+            .bytes()
+            .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
 }
 
 fn download_verified(
@@ -791,20 +819,63 @@ fn verify_profile(
         &fs::read(record_path).map_err(|_| "Installed runtime record is unavailable.")?,
     )
     .map_err(|_| "Installed runtime record is malformed.")?;
-    if record.manifest_sha256 != sha256_bytes(TRUSTED_MANIFEST.as_bytes())
-        || record.executable_sha256 != sha256_file(&executable)?
-        || record.agent_fuse_module_sha256 != sha256_file(&agent_fuse_module)?
-        || record.bridge_service_sha256 != sha256_file(&bridge_service)?
-        || record.distribution_tree_sha256 != sha256_tree(&profile.join("distribution"))?
-        || record.agent_fuse_tree_sha256 != sha256_tree(&profile.join("agentfuse-source"))?
-        || record.bridge_tree_sha256 != sha256_tree(&profile.join("bridge"))?
-    {
+    if record.manifest_sha256 != sha256_bytes(TRUSTED_MANIFEST.as_bytes()) {
         return Err("Managed runtime integrity digest mismatch.".into());
     }
+    verify_trusted_profile_trees(profile, &artifact, manifest)?;
+    if !executable.is_file() || !agent_fuse_module.is_file() || !bridge_service.is_file() {
+        return Err("Managed runtime integrity layout mismatch.".into());
+    }
+    verify_agentfuse_source_contract(&profile.join("agentfuse-source"), manifest)?;
     if execute_version_check {
         verify_python_version(&executable, &manifest.python_version)?;
     }
     Ok(record)
+}
+
+fn verify_trusted_profile_trees(
+    profile: &Path,
+    artifact: &RuntimeArtifact,
+    manifest: &RuntimeManifest,
+) -> Result<(), String> {
+    if sha256_tree(&profile.join("distribution"))? != artifact.installed_tree_sha256
+        || sha256_tree(&profile.join("agentfuse-source"))?
+            != manifest.agent_fuse.installed_tree_sha256
+        || sha256_tree(&profile.join("bridge"))? != manifest.bridge.installed_tree_sha256
+    {
+        return Err("Managed runtime integrity digest mismatch.".into());
+    }
+    Ok(())
+}
+
+fn verify_agentfuse_source_contract(
+    source_root: &Path,
+    manifest: &RuntimeManifest,
+) -> Result<(), String> {
+    let pyproject = fs::read_to_string(source_root.join("pyproject.toml"))
+        .map_err(|_| "Trusted AgentFuse package metadata is unavailable.")?;
+    let runtime_guard =
+        fs::read_to_string(source_root.join("dhms_agentfuse").join("runtime_guard.py"))
+            .map_err(|_| "Trusted AgentFuse runtime guard is unavailable.")?;
+    let evidence_schema = fs::read_to_string(
+        source_root
+            .join("dhms_agentfuse")
+            .join("evidence_schema.py"),
+    )
+    .map_err(|_| "Trusted AgentFuse evidence schema is unavailable.")?;
+    if !pyproject.contains(&format!(
+        "version = \"{}\"",
+        manifest.agent_fuse.package_version
+    )) || !evidence_schema.contains(&format!(
+        "SCHEMA_VERSION = \"{}\"",
+        manifest.decision_schema_version
+    )) || !runtime_guard.contains("class RuntimeGuardDecision:")
+        || !runtime_guard.contains("def evaluate(")
+        || !runtime_guard.contains("async def aevaluate(")
+    {
+        return Err("Trusted AgentFuse public decision contract is unavailable.".into());
+    }
+    Ok(())
 }
 
 fn verify_python_version(executable: &Path, expected: &str) -> Result<(), String> {
@@ -890,7 +961,7 @@ fn self_check(app: &tauri::AppHandle) -> Result<AgentFuseSelfCheckResult, String
         deny,
         protocol_message("self-check-shutdown", "shutdown", json!({})),
     ];
-    let responses = run_bridge_session(app, messages, REQUEST_TIMEOUT)?;
+    let responses = run_bridge_session(app, messages)?;
     let handshake = validate_handshake(&responses[0], &manifest)?;
     if responses[1]["messageType"] != "health_result"
         || responses[1]["payload"]["canonicalImport"] != true
@@ -951,11 +1022,7 @@ fn proof_decision_message(message_id: &str, fixture: &str) -> Value {
     )
 }
 
-fn run_bridge_session(
-    app: &tauri::AppHandle,
-    messages: Vec<Value>,
-    timeout: Duration,
-) -> Result<Vec<Value>, String> {
+fn run_bridge_session(app: &tauri::AppHandle, messages: Vec<Value>) -> Result<Vec<Value>, String> {
     let manifest = trusted_manifest()?;
     let profile = profile_path(app, &manifest)?;
     verify_profile(&profile, &manifest, true)?;
@@ -1004,7 +1071,7 @@ fn run_bridge_session(
         .ok_or("Managed bridge stdin is unavailable.")?
         .write_all(input.as_bytes())
         .map_err(|_| "Managed bridge request could not be written.")?;
-    let output = wait_for_child_output(&mut child, timeout.max(STARTUP_TIMEOUT))?;
+    let output = wait_for_child_output(&mut child, BRIDGE_SESSION_TIMEOUT)?;
     if !output.status.success() || output.stdout_truncated || output.stderr_truncated {
         return Err("Managed AgentFuse bridge exited without a bounded response.".into());
     }
@@ -1151,7 +1218,7 @@ fn validate_handshake<'a>(
         || payload["bridgeProtocolVersion"] != manifest.bridge_protocol_version
         || payload["agentFuseSourceCommit"] != manifest.agent_fuse.commit
         || payload["supportedDecisionSchema"] != manifest.decision_schema_version
-        || payload["agentFusePackageVersion"] != "3.5.0"
+        || payload["agentFusePackageVersion"] != manifest.agent_fuse.package_version
         || !payload["pythonVersion"]
             .as_str()
             .is_some_and(|value| value == manifest.python_version)
@@ -1171,7 +1238,11 @@ fn validate_decision_response(
         || response["payload"]["decision"] != expected
         || response["payload"]["agentFuseCommit"] != manifest.agent_fuse.commit
         || response["payload"]["schemaVersion"] != manifest.decision_schema_version
-        || response["payload"]["policyVersion"] != "dhms-agentfuse-runtime-guard@3.5.0"
+        || response["payload"]["policyVersion"]
+            != format!(
+                "dhms-agentfuse-runtime-guard@{}",
+                manifest.agent_fuse.package_version
+            )
         || !response["payload"]["evidence"].is_object()
     {
         return Err("Managed bridge decision response failed validation.".into());
@@ -1259,7 +1330,7 @@ fn hash_tree_entries(root: &Path, directory: &Path, hasher: &mut Sha256) -> Resu
         if metadata.file_type().is_symlink() {
             return Err("Managed runtime integrity tree contains a link.".into());
         }
-        let relative_bytes = relative.to_string_lossy();
+        let relative_bytes = normalized_integrity_path(relative)?;
         if metadata.is_dir() {
             hasher.update(b"directory\0");
             hasher.update(relative_bytes.as_bytes());
@@ -1286,6 +1357,21 @@ fn hash_tree_entries(root: &Path, directory: &Path, hasher: &mut Sha256) -> Resu
         }
     }
     Ok(())
+}
+
+fn normalized_integrity_path(path: &Path) -> Result<String, String> {
+    let mut components = Vec::new();
+    for component in path.components() {
+        match component {
+            Component::Normal(value) => components.push(value.to_string_lossy().into_owned()),
+            Component::CurDir => {}
+            _ => return Err("Managed runtime integrity path is invalid.".into()),
+        }
+    }
+    if components.is_empty() {
+        return Err("Managed runtime integrity path is invalid.".into());
+    }
+    Ok(components.join("/"))
 }
 
 fn write_json(path: &Path, value: &impl Serialize) -> Result<(), String> {
@@ -1364,11 +1450,25 @@ mod tests {
     fn trusted_manifest_selects_current_platform_and_pins_every_hash() {
         let manifest = trusted_manifest().unwrap();
         let artifact = selected_artifact(&manifest).unwrap();
-        assert_eq!(artifact.sha256.len(), 64);
+        assert_eq!(artifact.archive_sha256.len(), 64);
+        assert_eq!(artifact.installed_tree_sha256.len(), 64);
         assert!(artifact.url.starts_with("https://"));
         assert_eq!(manifest.agent_fuse.commit.len(), 40);
-        assert_eq!(manifest.agent_fuse.sha256.len(), 64);
+        assert_eq!(manifest.agent_fuse.archive_sha256.len(), 64);
+        assert_eq!(manifest.agent_fuse.installed_tree_sha256.len(), 64);
+        assert_eq!(manifest.bridge.installed_tree_sha256.len(), 64);
         assert!(manifest.installed_package_lock.packages.is_empty());
+    }
+
+    #[test]
+    fn embedded_bridge_tree_matches_trusted_manifest() {
+        let root = std::env::temp_dir().join(format!("kerniq-bridge-anchor-{}", operation_nonce()));
+        write_bridge(&root).unwrap();
+        assert_eq!(
+            sha256_tree(&root).unwrap(),
+            trusted_manifest().unwrap().bridge.installed_tree_sha256
+        );
+        fs::remove_dir_all(root).unwrap();
     }
 
     #[test]
@@ -1596,6 +1696,300 @@ mod tests {
     }
 
     #[test]
+    #[ignore = "downloads every supported pinned runtime archive"]
+    fn regenerate_trusted_installed_tree_digests() {
+        assert_eq!(
+            std::env::var("KERNIQ_REGENERATE_RUNTIME_DIGESTS").as_deref(),
+            Ok("1"),
+            "Set KERNIQ_REGENERATE_RUNTIME_DIGESTS=1 to run this maintenance command."
+        );
+        let manifest: RuntimeManifest = serde_json::from_str(TRUSTED_MANIFEST).unwrap();
+        let cache = std::env::var_os("KERNIQ_RUNTIME_DIGEST_CACHE")
+            .map(PathBuf::from)
+            .unwrap_or_else(|| std::env::temp_dir().join("kerniq-runtime-digest-cache"));
+        let extraction_root = std::env::var_os("KERNIQ_RUNTIME_DIGEST_EXTRACT_ROOT")
+            .map(PathBuf::from)
+            .unwrap_or_else(|| cache.clone());
+        fs::create_dir_all(&cache).unwrap();
+        fs::create_dir_all(&extraction_root).unwrap();
+        for artifact in &manifest.distribution.artifacts {
+            let archive = cache.join(format!(
+                "python-{}-{}.tar.gz",
+                artifact.platform, artifact.architecture
+            ));
+            if archive.exists()
+                && sha256_file(&archive).ok().as_deref() != Some(artifact.archive_sha256.as_str())
+            {
+                fs::remove_file(&archive).unwrap();
+            }
+            if !archive.exists() {
+                download_verified(
+                    &artifact.url,
+                    &artifact.archive_sha256,
+                    &archive,
+                    PYTHON_ARCHIVE_LIMIT,
+                )
+                .unwrap();
+            }
+            let extracted = extraction_root.join(format!(
+                "extract-{}-{}",
+                artifact.platform, artifact.architecture
+            ));
+            fs::remove_dir_all(&extracted).ok();
+            fs::create_dir_all(&extracted).unwrap();
+            extract_tar_gz(&archive, &extracted, false).unwrap();
+            assert!(extracted.join(&artifact.expected_executable).is_file());
+            println!(
+                "distribution {} {} {}",
+                artifact.platform,
+                artifact.architecture,
+                sha256_tree(&extracted).unwrap()
+            );
+            fs::remove_dir_all(extracted).unwrap();
+        }
+
+        let source_archive = cache.join("agentfuse-source.tar.gz");
+        if source_archive.exists()
+            && sha256_file(&source_archive).ok().as_deref()
+                != Some(manifest.agent_fuse.archive_sha256.as_str())
+        {
+            fs::remove_file(&source_archive).unwrap();
+        }
+        if !source_archive.exists() {
+            download_verified(
+                &manifest.agent_fuse.url,
+                &manifest.agent_fuse.archive_sha256,
+                &source_archive,
+                AGENTFUSE_ARCHIVE_LIMIT,
+            )
+            .unwrap();
+        }
+        let source = extraction_root.join("extract-agentfuse-source");
+        fs::remove_dir_all(&source).ok();
+        fs::create_dir_all(&source).unwrap();
+        extract_tar_gz(&source_archive, &source, true).unwrap();
+        println!("agentfuse {}", sha256_tree(&source).unwrap());
+        fs::remove_dir_all(source).unwrap();
+
+        let bridge = extraction_root.join("extract-kerniq-bridge");
+        fs::remove_dir_all(&bridge).ok();
+        fs::create_dir_all(&bridge).unwrap();
+        write_bridge(&bridge).unwrap();
+        println!("bridge {}", sha256_tree(&bridge).unwrap());
+        fs::remove_dir_all(bridge).unwrap();
+    }
+
+    #[test]
+    #[ignore = "prepares an isolated real-smoke profile from verified local archives"]
+    fn prepare_verified_real_smoke_profile_from_cache() {
+        let profile = PathBuf::from(
+            std::env::var_os("KERNIQ_PREPARE_SMOKE_PROFILE")
+                .expect("Set KERNIQ_PREPARE_SMOKE_PROFILE to a new isolated profile path."),
+        );
+        assert!(!profile.exists(), "Smoke profile path must be new.");
+        let cache = PathBuf::from(
+            std::env::var_os("KERNIQ_RUNTIME_DIGEST_CACHE")
+                .expect("Set KERNIQ_RUNTIME_DIGEST_CACHE to the verified archive cache."),
+        );
+        let manifest = trusted_manifest().unwrap();
+        let artifact = selected_artifact(&manifest).unwrap();
+        let python_archive = cache.join(format!(
+            "python-{}-{}.tar.gz",
+            artifact.platform, artifact.architecture
+        ));
+        let source_archive = cache.join("agentfuse-source.tar.gz");
+        assert_eq!(
+            sha256_file(&python_archive).unwrap(),
+            artifact.archive_sha256
+        );
+        assert_eq!(
+            sha256_file(&source_archive).unwrap(),
+            manifest.agent_fuse.archive_sha256
+        );
+        for directory in [
+            "distribution",
+            "environment",
+            "agentfuse-source",
+            "bridge",
+            "manifest",
+            "logs",
+            "locks",
+        ] {
+            fs::create_dir_all(profile.join(directory)).unwrap();
+        }
+        set_private_directory_permissions(&profile).unwrap();
+        extract_tar_gz(&python_archive, &profile.join("distribution"), false).unwrap();
+        extract_tar_gz(&source_archive, &profile.join("agentfuse-source"), true).unwrap();
+        write_bridge(&profile.join("bridge")).unwrap();
+
+        let executable = profile
+            .join("distribution")
+            .join(&artifact.expected_executable);
+        let agent_fuse_module = profile
+            .join("agentfuse-source")
+            .join(&manifest.agent_fuse.expected_module);
+        let bridge_service = profile
+            .join("bridge")
+            .join("kerniq_agentfuse_bridge")
+            .join("service.py");
+        verify_python_version(&executable, &manifest.python_version).unwrap();
+        let now = timestamp();
+        let record = InstalledRuntimeRecord {
+            manifest_sha256: sha256_bytes(TRUSTED_MANIFEST.as_bytes()),
+            executable_sha256: sha256_file(&executable).unwrap(),
+            agent_fuse_module_sha256: sha256_file(&agent_fuse_module).unwrap(),
+            bridge_service_sha256: sha256_file(&bridge_service).unwrap(),
+            distribution_tree_sha256: sha256_tree(&profile.join("distribution")).unwrap(),
+            agent_fuse_tree_sha256: sha256_tree(&profile.join("agentfuse-source")).unwrap(),
+            bridge_tree_sha256: sha256_tree(&profile.join("bridge")).unwrap(),
+            installed_at: now.clone(),
+            last_verified_at: now,
+        };
+        fs::write(
+            profile.join("manifest").join("trusted-manifest.json"),
+            TRUSTED_MANIFEST,
+        )
+        .unwrap();
+        write_json(
+            &profile.join("manifest").join("installed-runtime.json"),
+            &record,
+        )
+        .unwrap();
+        fs::write(
+            profile
+                .join("environment")
+                .join("installed-package-lock.json"),
+            serde_json::to_vec_pretty(&manifest.installed_package_lock).unwrap(),
+        )
+        .unwrap();
+        verify_profile(&profile, &manifest, true).unwrap();
+        println!("verified_smoke_profile={}", profile.display());
+    }
+
+    #[test]
+    fn embedded_tree_anchors_reject_tampering_even_after_local_record_recalculation() {
+        let root = std::env::temp_dir().join(format!("kerniq-python-anchor-{}", operation_nonce()));
+        let profile = root.join("profile");
+        let distribution = profile.join("distribution");
+        let source = profile.join("agentfuse-source");
+        let bridge = profile.join("bridge");
+        let record_path = profile.join("manifest").join("installed-runtime.json");
+        let mut manifest = trusted_manifest().unwrap();
+        let mut artifact = selected_artifact(&manifest).unwrap();
+        let executable = distribution.join(&artifact.expected_executable);
+        let stdlib = distribution.join("python").join("lib").join("stdlib.py");
+        let runtime_guard = source.join(&manifest.agent_fuse.expected_module);
+        let evidence_schema = source.join("dhms_agentfuse").join("evidence_schema.py");
+        let other_source = source.join("dhms_agentfuse").join("__init__.py");
+        let pyproject = source.join("pyproject.toml");
+        let bridge_service = bridge.join("kerniq_agentfuse_bridge").join("service.py");
+        let bridge_main = bridge.join("kerniq_agentfuse_bridge").join("__main__.py");
+        for path in [
+            &executable,
+            &stdlib,
+            &runtime_guard,
+            &evidence_schema,
+            &other_source,
+            &pyproject,
+            &bridge_service,
+            &bridge_main,
+        ] {
+            fs::create_dir_all(path.parent().unwrap()).unwrap();
+        }
+        fs::create_dir_all(record_path.parent().unwrap()).unwrap();
+        fs::write(&executable, "trusted executable").unwrap();
+        fs::write(&stdlib, "trusted stdlib").unwrap();
+        fs::write(
+            &runtime_guard,
+            "class RuntimeGuardDecision:\n    pass\nclass RuntimeGuard:\n    def evaluate(self): pass\n    async def aevaluate(self): pass\n",
+        )
+        .unwrap();
+        fs::write(
+            &evidence_schema,
+            format!(
+                "SCHEMA_VERSION = \"{}\"\n",
+                manifest.decision_schema_version
+            ),
+        )
+        .unwrap();
+        fs::write(&other_source, "trusted package surface").unwrap();
+        fs::write(
+            &pyproject,
+            format!(
+                "[project]\nversion = \"{}\"\n",
+                manifest.agent_fuse.package_version
+            ),
+        )
+        .unwrap();
+        fs::write(&bridge_service, "trusted bridge").unwrap();
+        fs::write(&bridge_main, "trusted bridge entrypoint").unwrap();
+        artifact.installed_tree_sha256 = sha256_tree(&distribution).unwrap();
+        manifest
+            .distribution
+            .artifacts
+            .iter_mut()
+            .find(|candidate| {
+                candidate.platform == artifact.platform
+                    && candidate.architecture == artifact.architecture
+            })
+            .unwrap()
+            .installed_tree_sha256 = artifact.installed_tree_sha256.clone();
+        manifest.agent_fuse.installed_tree_sha256 = sha256_tree(&source).unwrap();
+        manifest.bridge.installed_tree_sha256 = sha256_tree(&bridge).unwrap();
+
+        let mut record = InstalledRuntimeRecord {
+            manifest_sha256: sha256_bytes(TRUSTED_MANIFEST.as_bytes()),
+            executable_sha256: sha256_file(&executable).unwrap(),
+            agent_fuse_module_sha256: sha256_file(&runtime_guard).unwrap(),
+            bridge_service_sha256: sha256_file(&bridge_service).unwrap(),
+            distribution_tree_sha256: sha256_tree(&distribution).unwrap(),
+            agent_fuse_tree_sha256: sha256_tree(&source).unwrap(),
+            bridge_tree_sha256: sha256_tree(&bridge).unwrap(),
+            installed_at: "fixture".into(),
+            last_verified_at: "fixture".into(),
+        };
+        write_json(&record_path, &record).unwrap();
+        assert!(verify_profile(&profile, &manifest, false).is_ok());
+
+        for (path, trusted_contents) in [
+            (&executable, "trusted executable"),
+            (&stdlib, "trusted stdlib"),
+            (
+                &runtime_guard,
+                "class RuntimeGuardDecision:\n    pass\nclass RuntimeGuard:\n    def evaluate(self): pass\n    async def aevaluate(self): pass\n",
+            ),
+            (
+                &evidence_schema,
+                "SCHEMA_VERSION = \"agentfuse-evidence-schema-v0.1\"\n",
+            ),
+            (&other_source, "trusted package surface"),
+            (&bridge_service, "trusted bridge"),
+            (&bridge_main, "trusted bridge entrypoint"),
+        ] {
+            fs::write(path, "tampered").unwrap();
+            record.executable_sha256 = sha256_file(&executable).unwrap();
+            record.agent_fuse_module_sha256 = sha256_file(&runtime_guard).unwrap();
+            record.bridge_service_sha256 = sha256_file(&bridge_service).unwrap();
+            record.distribution_tree_sha256 = sha256_tree(&distribution).unwrap();
+            record.agent_fuse_tree_sha256 = sha256_tree(&source).unwrap();
+            record.bridge_tree_sha256 = sha256_tree(&bridge).unwrap();
+            write_json(&record_path, &record).unwrap();
+            assert!(verify_profile(&profile, &manifest, false).is_err());
+            fs::write(path, trusted_contents).unwrap();
+        }
+
+        let trusted_manifest_sha256 = record.manifest_sha256.clone();
+        record.manifest_sha256 = "0".repeat(64);
+        write_json(&record_path, &record).unwrap();
+        assert!(verify_profile(&profile, &manifest, false).is_err());
+        record.manifest_sha256 = trusted_manifest_sha256;
+        write_json(&record_path, &record).unwrap();
+        assert!(verify_profile(&profile, &manifest, false).is_ok());
+
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
     fn handshake_rejects_unexpected_agentfuse_revision() {
         let manifest = trusted_manifest().unwrap();
         let response = json!({
@@ -1605,7 +1999,7 @@ mod tests {
             "payload": {
                 "bridgeProtocolVersion": BRIDGE_PROTOCOL,
                 "pythonVersion": manifest.python_version,
-                "agentFusePackageVersion": "3.5.0",
+                "agentFusePackageVersion": manifest.agent_fuse.package_version,
                 "agentFuseSourceCommit": "0000000000000000000000000000000000000000",
                 "supportedDecisionSchema": manifest.decision_schema_version,
                 "processId": 1

@@ -13,7 +13,7 @@ import {
 
 const manifestFixture = {
   manifestVersion: "kerniq.python-runtime-manifest.v1",
-  runtimeVersion: "20260718-cpython-3.12.13-agentfuse-8c6ae987",
+  runtimeVersion: "20260718-cpython-3.12.13-agentfuse-af08d80",
   pythonVersion: "3.12.13",
   distribution: {
     publisher: "astral-sh/python-build-standalone",
@@ -24,7 +24,8 @@ const manifestFixture = {
         platform: "macos",
         architecture: "x86_64",
         url: "https://example.test/python.tar.gz",
-        sha256: "1".repeat(64),
+        archiveSha256: "1".repeat(64),
+        installedTreeSha256: "2".repeat(64),
         archiveFormat: "tar.gz",
         expectedExecutable: "python/bin/python3",
       },
@@ -32,11 +33,16 @@ const manifestFixture = {
   },
   agentFuse: {
     repository: "MkaliezZ/dhms-engine",
-    commit: "8c6ae9875b3618a529d5150c96385da7461099c2",
+    commit: "af08d80abaeb196da1e66d9e74c2d1c7002c9c2e",
+    packageVersion: "3.5.1",
     url: "https://example.test/dhms.tar.gz",
-    sha256: "2".repeat(64),
+    archiveSha256: "3".repeat(64),
+    installedTreeSha256: "4".repeat(64),
     archiveFormat: "tar.gz",
     expectedModule: "dhms_agentfuse/runtime_guard.py",
+  },
+  bridge: {
+    installedTreeSha256: "5".repeat(64),
   },
   bridgeProtocolVersion: "kerniq.agentfuse.bridge.v1",
   decisionSchemaVersion: "agentfuse-evidence-schema-v0.1",
@@ -95,7 +101,8 @@ describe("managed Python manifest and orchestration", () => {
   it("parses a pinned trusted manifest and selects exact platform artifacts", () => {
     const manifest = parseRuntimeManifest(manifestFixture);
     expect(selectRuntimeArtifact(manifest, "macos", "x86_64")).toMatchObject({
-      sha256: "1".repeat(64),
+      archiveSha256: "1".repeat(64),
+      installedTreeSha256: "2".repeat(64),
       expectedExecutable: "python/bin/python3",
     });
   });

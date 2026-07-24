@@ -16,6 +16,7 @@ export function parseRuntimeManifest(value: unknown): ManagedPythonManifest {
   }
   const distribution = value.distribution;
   const agentFuse = value.agentFuse;
+  const bridge = value.bridge;
   const lock = value.installedPackageLock;
   if (
     !isRecord(distribution)
@@ -25,6 +26,8 @@ export function parseRuntimeManifest(value: unknown): ManagedPythonManifest {
     || !Array.isArray(distribution.artifacts)
     || distribution.artifacts.length === 0
     || !isRecord(agentFuse)
+    || !isRecord(bridge)
+    || !sha256(bridge.installedTreeSha256)
     || !isRecord(lock)
     || lock.mode !== "verified-source-no-site-packages"
     || !Array.isArray(lock.packages)
@@ -37,8 +40,10 @@ export function parseRuntimeManifest(value: unknown): ManagedPythonManifest {
     !text(agentFuse.repository)
     || !text(agentFuse.commit)
     || !/^[0-9a-f]{40}$/.test(agentFuse.commit)
+    || !text(agentFuse.packageVersion)
     || !httpsUrl(agentFuse.url)
-    || !sha256(agentFuse.sha256)
+    || !sha256(agentFuse.archiveSha256)
+    || !sha256(agentFuse.installedTreeSha256)
     || agentFuse.archiveFormat !== "tar.gz"
     || !text(agentFuse.expectedModule)
   ) {
@@ -57,10 +62,15 @@ export function parseRuntimeManifest(value: unknown): ManagedPythonManifest {
     agentFuse: {
       repository: agentFuse.repository,
       commit: agentFuse.commit,
+      packageVersion: agentFuse.packageVersion,
       url: agentFuse.url,
-      sha256: agentFuse.sha256,
+      archiveSha256: agentFuse.archiveSha256,
+      installedTreeSha256: agentFuse.installedTreeSha256,
       archiveFormat: "tar.gz",
       expectedModule: agentFuse.expectedModule,
+    },
+    bridge: {
+      installedTreeSha256: bridge.installedTreeSha256,
     },
     bridgeProtocolVersion: "kerniq.agentfuse.bridge.v1",
     decisionSchemaVersion: value.decisionSchemaVersion,
@@ -94,7 +104,8 @@ function parseArtifact(value: unknown): RuntimeArtifact {
     || !["macos", "windows", "linux"].includes(String(value.platform))
     || !["x86_64", "aarch64"].includes(String(value.architecture))
     || !httpsUrl(value.url)
-    || !sha256(value.sha256)
+    || !sha256(value.archiveSha256)
+    || !sha256(value.installedTreeSha256)
     || value.archiveFormat !== "tar.gz"
     || !text(value.expectedExecutable)
   ) {
@@ -125,5 +136,7 @@ function httpsUrl(value: unknown): value is string {
 }
 
 function sha256(value: unknown): value is string {
-  return text(value) && SHA256_PATTERN.test(value);
+  return text(value)
+    && SHA256_PATTERN.test(value)
+    && value !== "0".repeat(64);
 }

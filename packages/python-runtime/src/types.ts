@@ -10,7 +10,8 @@ export interface RuntimeArtifact {
   platform: "macos" | "windows" | "linux";
   architecture: "x86_64" | "aarch64";
   url: string;
-  sha256: string;
+  archiveSha256: string;
+  installedTreeSha256: string;
   archiveFormat: "tar.gz";
   expectedExecutable: string;
 }
@@ -18,8 +19,10 @@ export interface RuntimeArtifact {
 export interface AgentFuseSourceArtifact {
   repository: string;
   commit: string;
+  packageVersion: string;
   url: string;
-  sha256: string;
+  archiveSha256: string;
+  installedTreeSha256: string;
   archiveFormat: "tar.gz";
   expectedModule: string;
 }
@@ -35,6 +38,9 @@ export interface ManagedPythonManifest {
     artifacts: RuntimeArtifact[];
   };
   agentFuse: AgentFuseSourceArtifact;
+  bridge: {
+    installedTreeSha256: string;
+  };
   bridgeProtocolVersion: "kerniq.agentfuse.bridge.v1";
   decisionSchemaVersion: string;
   installedPackageLock: {

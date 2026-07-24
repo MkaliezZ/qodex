@@ -18,14 +18,15 @@ from python.kerniq_agentfuse_bridge.service import (
 )
 
 
-COMMIT = "8c6ae9875b3618a529d5150c96385da7461099c2"
+COMMIT = "af08d80abaeb196da1e66d9e74c2d1c7002c9c2e"
 NOW = "2026-07-24T00:00:00.000Z"
 
 
-class FakeResolved:
+class FakeDecision:
     def __init__(self, action: str) -> None:
         self.action = action
         self.reason_code = "allowed" if action == "allow" else "explicit_denylist"
+        self.evidence = FakeEvidence(action)
 
 
 class FakeEvidence:
@@ -49,23 +50,24 @@ class FakeGuard:
     def __init__(self, allow_tools=None, deny_tools=None) -> None:
         self.allowed = bool(allow_tools) and not bool(deny_tools)
 
-    def _resolve_policy_sync(self, tool_call: FakeToolCall) -> FakeResolved:
-        return FakeResolved("allow" if self.allowed else "block")
+    def evaluate(self, tool_call: FakeToolCall) -> FakeDecision:
+        return FakeDecision("allow" if self.allowed else "block")
 
-    def _evidence(self, tool_call: FakeToolCall, resolved: FakeResolved) -> FakeEvidence:
-        return FakeEvidence(resolved.action)
+    async def aevaluate(self, tool_call: FakeToolCall) -> FakeDecision:
+        return self.evaluate(tool_call)
 
 
 def canonical() -> CanonicalAgentFuse:
     return CanonicalAgentFuse(
         runtime_guard=SimpleNamespace(
             RuntimeGuard=FakeGuard,
+            RuntimeGuardDecision=FakeDecision,
             ToolCallRequest=FakeToolCall,
         ),
         evidence_schema=SimpleNamespace(
             SCHEMA_VERSION="agentfuse-evidence-schema-v0.1",
         ),
-        package_version="3.5.0",
+        package_version="3.5.1",
         source_commit=COMMIT,
     )
 
