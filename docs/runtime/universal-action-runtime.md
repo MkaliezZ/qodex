@@ -14,6 +14,8 @@ ActionProposal -> ActionApproval -> ActionDecision -> ActionOutcome
 
 - A proposal is canonical-JSON hashed with SHA-256.
 - Approval binds the exact proposal digest, task, generation, and expiry.
+- Approval, decision, started, and outcome records have strict runtime
+  validators. Decision evidence is valid bounded JSON.
 - A decision records policy evidence but never claims execution success.
 - An outcome exists only after a physical handler was dispatched.
 
@@ -26,8 +28,9 @@ Proposed -> AwaitingApproval -> Approved -> Evaluating
   -> Completed | Failed | Cancelled | Interrupted
 ```
 
-Unknown action types, invalid proposals, stale or expired approvals, decision
-provider failure, deny, hold, and decision error all block dispatch.
+Unknown action types, malformed or duplicate decisions, invalid proposals,
+stale or expired approvals, decision provider failure, deny, hold, and decision
+error all block dispatch.
 
 ## Dispatch Barrier
 
@@ -36,9 +39,14 @@ the handler is called. A hook failure becomes `dispatch_barrier_failed`; the
 physical handler is not invoked. Execution is single-flight per action and
 execution receipt IDs cannot be reused.
 
-One terminal outcome is retained per action. Handler failure and acknowledged
-cancellation are outcomes, not policy decisions. Cancellation after dispatch is
-best effort and does not imply that an external side effect was rolled back.
+One terminal outcome is retained per action. A candidate outcome is validated
+and durably recorded before it becomes the runtime terminal result. If durable
+settlement fails after dispatch, the runtime records
+`unknown_or_interrupted/settlement_persistence_failed`, transitions to
+`Interrupted`, and returns the same result to duplicate `execute()` calls
+without replay. Handler failure and acknowledged cancellation are outcomes, not
+policy decisions. Cancellation after dispatch is best effort and does not
+imply that an external side effect was rolled back.
 
 ## Evidence
 
@@ -49,15 +57,17 @@ Session Runtime events:
 ```text
 ACTION_PROPOSED
 ACTION_APPROVED
-ACTION_DENIED
+ACTION_DECIDED
 ACTION_STARTED
 ACTION_COMPLETED | ACTION_FAILED
 ```
 
-This preserves proposal digest, approval ID, decision ID, execution receipt,
-derived outcome ID, AgentFuse source commit, and policy/schema versions without
-changing the Session schema. Deny has no started event and no physical outcome.
-Sensitive-text sanitization remains owned by Session Runtime.
+`ACTION_DECIDED` retains decision identity, value, reason, AgentFuse source
+commit, and policy/schema versions independently before dispatch.
+`ACTION_STARTED` must reference a matching prior durable allow decision. Deny,
+hold, and error have no started event and no physical outcome. Legacy
+`ACTION_DENIED` ledgers remain readable. Sensitive-text sanitization remains
+owned by Session Runtime.
 
 ## v0.6.0 Scope
 

@@ -210,23 +210,30 @@ failure all block the physical handler. A successful decision creates no
 outcome; only a dispatched handler can settle one.
 
 The optional v0.6 proof maps lifecycle facts into existing Session Runtime
-events without changing its schema. Patch and Command paths remain unchanged.
+events without changing its schema. `ACTION_DECIDED` is committed independently
+before `ACTION_STARTED`; generic Action start requires the matching durable
+allow decision. A settlement persistence failure after dispatch produces
+`Interrupted` with an unknown physical outcome and cannot replay the handler.
+Patch and Command paths remain unchanged.
 
 ### Managed Python and AgentFuse
 
 `packages/python-runtime` defines managed-runtime contracts and deterministic
 manifest/protocol policies. Tauri owns provisioning below its private
-application-data root, verifies pinned archive hashes, rejects unsafe archive
-entries, promotes only verified profiles, and starts the fixed interpreter
-without a shell under a cleared environment.
+application-data root, verifies pinned archive and installed-tree hashes,
+rejects unsafe archive entries, promotes only verified profiles, and starts the
+fixed interpreter without a shell under a cleared environment. Distribution,
+AgentFuse source, and bridge tree truth comes from the compile-time embedded
+manifest rather than the mutable installed profile record.
 
 `packages/agentfuse-adapter` maps an exact Action proposal and approval to
 `kerniq.agentfuse.bridge.v1`, then validates decision identity, policy/schema
 versions, evidence, and the pinned canonical source revision. The Python bridge
-loads canonical DHMS AgentFuse source at commit
-`8c6ae9875b3618a529d5150c96385da7461099c2`; TypeScript does not implement its
-policy. The development proof is excluded unless its dedicated build flag is
-enabled.
+loads canonical DHMS AgentFuse 3.5.1 source at commit
+`af08d80abaeb196da1e66d9e74c2d1c7002c9c2e` and calls its public
+`RuntimeGuard.evaluate()` decision-only API; TypeScript does not implement its
+policy. The one-shot bridge process has one enforced 15-second session deadline.
+The development proof is excluded unless its dedicated build flag is enabled.
 
 ### 5. Diff Engine (`packages/diff-engine`)
 

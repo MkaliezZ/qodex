@@ -15,7 +15,7 @@ the runtime below:
 ```
 
 The current runtime version is
-`20260718-cpython-3.12.13-agentfuse-8c6ae987`. This keeps executable material
+`20260718-cpython-3.12.13-agentfuse-af08d80`. This keeps executable material
 separate from projects and from system Python. Existing KerniQ local data paths
 and the compatibility bundle identifier remain unchanged.
 
@@ -38,10 +38,11 @@ The trusted manifest is
 
 - Astral `python-build-standalone` release `20260718`
 - CPython `3.12.13` archives for supported platform and architecture pairs
-- SHA-256 for every selected runtime archive
+- archive and post-extraction installed-tree SHA-256 for every runtime artifact
 - DHMS AgentFuse source commit
-  `8c6ae9875b3618a529d5150c96385da7461099c2`
-- SHA-256 for the canonical source archive
+  `af08d80abaeb196da1e66d9e74c2d1c7002c9c2e`
+- archive and installed-tree SHA-256 for canonical AgentFuse 3.5.1 source
+- installed-tree SHA-256 for the embedded KerniQ bridge
 - bridge protocol and evidence schema versions
 
 Downloads use fixed HTTPS URLs from the embedded manifest. Model or provider
@@ -50,6 +51,23 @@ hash-verified before extraction. Absolute paths, parent traversal, hardlinks,
 special entries, and escaping or missing symlink targets are rejected. Safe
 relative symlinks that resolve to regular files inside the verified archive are
 materialized as ordinary files; promoted profiles contain no filesystem links.
+
+Trusted installed-tree digests are regenerated only as an explicit maintenance
+operation:
+
+```bash
+cd apps/desktop/src-tauri
+KERNIQ_REGENERATE_RUNTIME_DIGESTS=1 \
+KERNIQ_RUNTIME_DIGEST_CACHE=/path/to/verified-archive-cache \
+KERNIQ_RUNTIME_DIGEST_EXTRACT_ROOT=/path/to/case-sensitive-volume \
+cargo test managed_python::tests::regenerate_trusted_installed_tree_digests \
+  --no-default-features -- --ignored --nocapture
+```
+
+The command verifies every archive SHA-256, runs the production extraction and
+symlink-materialization functions, and prints the resulting tree hashes.
+Cross-platform generation on macOS uses a temporary case-sensitive volume
+because Linux terminfo contains valid paths that differ only by letter case.
 
 ## Lifecycle
 
@@ -66,12 +84,15 @@ verification before promotion, and rename-based replacement. Recovery removes
 only stale temporary directories matching the selected platform profile. A
 failed install does not become the active profile.
 
-Verification checks the trusted manifest digest, Python executable digest,
-canonical AgentFuse module digest, bridge digest, expected layout, and,
-when requested, the exact Python version. Removal is blocked while a bridge
-request is active and removes only the selected managed profile. It does not
-delete projects, session history, provider settings, system Python, or project
-environments.
+Verification recomputes the complete distribution, canonical AgentFuse source,
+and bridge tree digests and compares them with the compile-time embedded
+manifest. It also checks source package version, evidence schema, public
+decision API availability, expected layout, and, when requested, the exact
+Python version. `installed-runtime.json` retains operational timestamps and
+observed digests only; it cannot bless a modified profile. Removal is blocked
+while a bridge request is active and removes only the selected managed profile.
+It does not delete projects, session history, provider settings, system Python,
+or project environments.
 
 ## Process Boundary
 
@@ -83,10 +104,12 @@ also starts with CPython's `-B` flag because `-E` intentionally ignores Python
 environment variables. This keeps bridge imports from mutating the verified
 runtime with bytecode caches.
 
-Bridge stdin, stdout, stderr, individual messages, startup, and request duration
-are bounded. Stdout is protocol-only NDJSON. Any timeout, malformed response,
-identity mismatch, nonzero exit, stderr initialization output, or oversized
-stream fails closed.
+Bridge stdin, stdout, stderr, individual messages, and total process duration
+are bounded. The one-shot hello/request/shutdown session has one enforced
+15-second deadline; separate startup and request deadlines are not claimed.
+Stdout is protocol-only NDJSON. Any timeout, malformed response, identity
+mismatch, nonzero exit, stderr initialization output, or oversized stream fails
+closed.
 
 ## Limitations
 
@@ -96,4 +119,6 @@ stream fails closed.
   and fixture tests are not a substitute for a Windows provisioning smoke.
 - The v0.6.0 bridge loads verified first-party source directly and intentionally
   has no third-party site-package lock entries.
+- The app-private profile is integrity checked but is not an OS or malware
+  sandbox.
 - Signed installer delivery remains a later packaging milestone.

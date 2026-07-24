@@ -7,17 +7,17 @@ native process bridge. TypeScript does not reimplement AgentFuse policy.
 
 ```text
 repository: MkaliezZ/dhms-engine
-branch reviewed: agent-harness-v1
-commit: 8c6ae9875b3618a529d5150c96385da7461099c2
-package: dhms-agentfuse 3.5.0
+branch reviewed: feat/agentfuse-public-decision-api-v3-5-1
+commit: af08d80abaeb196da1e66d9e74c2d1c7002c9c2e
+package: dhms-agentfuse 3.5.1
 license: Apache-2.0
 ```
 
 The source archive and SHA-256 are pinned in the managed runtime manifest. The
 bridge loads the verified first-party `runtime_guard.py` and
-`evidence_schema.py` modules. It calls the same canonical pre-dispatch
-`RuntimeGuard._resolve_policy_sync` and evidence path used by the reviewed
-first-party adapter. KerniQ does not call an AgentFuse action handler.
+`evidence_schema.py` modules. It calls the public decision-only
+`RuntimeGuard.evaluate(tool_call)` API and consumes its immutable canonical
+decision evidence. KerniQ does not call an AgentFuse action handler.
 
 ## Protocol
 
@@ -39,6 +39,11 @@ shutdown         -> shutdown_ack
 The handshake binds the Python version, AgentFuse package version, exact source
 commit, supported evidence schema, bridge protocol, and process identity.
 Request and response message IDs must match.
+
+The current one-shot process sends hello, bounded work, and shutdown in one
+session. One `bridge_session_timeout=15s` deadline covers that complete child
+process session. There is no separately enforced 8-second startup timeout or
+independent request timeout.
 
 Decision requests contain only the fully bound `ActionProposal`,
 `ActionApproval`, and one trusted proof policy fixture ID. Decision responses

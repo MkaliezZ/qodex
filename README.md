@@ -226,6 +226,15 @@ counter proof. AgentFuse allow is a pre-dispatch policy decision, not an
 execution-success claim. Patch and Command behavior is unchanged and is not
 routed through AgentFuse in this milestone.
 
+The v0.6.0.1 correction validates every approval, decision, started receipt,
+and outcome before dispatch or settlement. A durable `ACTION_DECIDED` record
+precedes every generic Action dispatch. If terminal evidence cannot be
+committed after a handler runs, the Action is `Interrupted` with an unknown
+physical outcome and is not replayed. Managed runtime verification compares
+all installed trees with compile-time trusted digests, and the bridge uses the
+public DHMS AgentFuse 3.5.1 `evaluate()` API under one 15-second bridge-session
+deadline.
+
 ---
 
 ## Roadmap

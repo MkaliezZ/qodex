@@ -1,7 +1,7 @@
 # KerniQ v0.6.0 Managed Python and Action Runtime
 
 **Date:** 2026-07-24  
-**Status:** Implementation, real smoke, and Draft PR CI complete; final review pending
+**Status:** v0.6.0.1 correction and local validation complete; Draft PR CI pending
 
 ## Delivered
 
@@ -14,10 +14,12 @@
 - Tauri-managed private CPython provisioning with pinned hashes, safe extraction,
   exclusive locks, recovery, atomic promotion, verification, and removal
 - canonical DHMS AgentFuse bridge pinned to commit
-  `8c6ae9875b3618a529d5150c96385da7461099c2`
+  `af08d80abaeb196da1e66d9e74c2d1c7002c9c2e` and public decision-only API
 - Settings runtime status and explicit lifecycle controls
 - optional approval-driven allow/deny proof using a trusted in-memory counter
-- existing Session ledger evidence for the proof action
+- independent `ACTION_DECIDED` Session evidence before generic Action start
+- embedded installed-tree integrity anchors for every distribution, canonical
+  AgentFuse source, and the KerniQ bridge
 
 ## Security Boundaries
 
@@ -36,10 +38,11 @@ current project.
 
 ## Canonical Decision Boundary
 
-Python DHMS AgentFuse remains authoritative for the proof policy decision.
+Python DHMS AgentFuse 3.5.1 remains authoritative for the proof policy decision
+through public `RuntimeGuard.evaluate()`.
 TypeScript maps contracts and validates evidence; Rust provisions and supervises
 the process; Action Runtime alone dispatches the registered handler after an
-awaited durable Session receipt.
+awaited durable decision record and started receipt.
 
 Patch and Command paths are unchanged and are not routed through AgentFuse in
 v0.6.0.
@@ -48,14 +51,21 @@ v0.6.0.
 
 Local validation covers:
 
-- Action Runtime contract and at-most-once dispatch tests
+- strict Action Runtime record validation and at-most-once dispatch tests
+- honest interruption and no-replay behavior after settlement persistence failure
+- `ACTION_DECIDED` projector order, identity, and legacy-ledger tests
 - Python Runtime manifest, state, environment, and protocol tests
 - AgentFuse Adapter identity, evidence, and failure tests
 - Python bridge protocol and pinned canonical source tests
 - native path, lock, extraction, promotion, environment, output, and command
-  boundary tests
-- desktop proof allow, deny, bridge-failure, duplicate-call, and Session ledger
-  integration tests
+  boundary tests, including embedded-anchor tamper rejection after mutable
+  record recalculation
+- desktop proof allow, deny, bridge-failure, settlement-fault, restart,
+  duplicate-call, and Session ledger integration tests
+
+The one-shot bridge enforces one `bridge_session_timeout=15s` deadline over
+hello, decision work, and shutdown. It does not claim independently enforced
+startup and request deadlines.
 
 Local validation passed frozen installation, workspace build, 1,460 workspace
 tests, Desktop unit tests (54), Desktop E2E (56 passed and four credential-gated
@@ -77,6 +87,36 @@ system Python remained 3.14.6 and no bridge or bytecode-cache orphan remained.
 
 Visual evidence is stored under `docs/assets/runtime-smoke/v0.6.0/`. Draft PR
 CI remains required before the final review verdict.
+
+## v0.6.0.1 Correction
+
+The earlier smoke paragraph above documents the original v0.6.0 candidate and
+its then-current pin. v0.6.0.1 supersedes that runtime pin with
+`af08d80abaeb196da1e66d9e74c2d1c7002c9c2e` and requires a new correction
+smoke. Normal allow must persist `ACTION_DECIDED` before `ACTION_STARTED`.
+Injected settlement failure must persist or recover to `Interrupted`, retain
+the unmatched execution receipt, expose no ordinary completed/failed result,
+and perform no replay. Installed runtime truth now comes from compile-time tree
+digests rather than mutable profile evidence.
+
+The correction passed 1,486 workspace tests, 56 Desktop unit tests, 56 Desktop
+E2E scenarios with four credential-gated scenarios skipped, 8 canonical bridge
+tests, and 34 native Rust tests with two maintenance tests explicitly ignored.
+The Action, Session, Python, and AgentFuse Adapter packages passed 35, 73, 15,
+and 15 tests respectively. Frozen install, workspace build, formatting, native
+check, debug Tauri build, bridge compileall, and `git diff --check` also passed.
+The lint command completed successfully and reported no configured package lint
+scripts.
+
+The new real macOS x86_64 correction smoke proved durable allow decision before
+start, deny without start, and settlement persistence failure as
+`Interrupted/unknown_or_interrupted` with one physical mutation and zero
+replay. SQLite retained the exact decision, approval, receipt, policy, schema,
+and canonical commit identities. Restart offered neither replay nor reapproval.
+Tampering with `runtime_guard.py` remained Broken after recalculating the
+mutable local record; bridge/proof dispatch stayed unavailable. Explicit
+Settings Repair restored Ready and self-check, and a full app stop left zero
+orphan managed Python processes.
 
 ## Known Limitations
 

@@ -31,8 +31,9 @@ commit rather than reproduce its policy in TypeScript or Rust.
 - Registered action handlers own physical side effects and receive no arbitrary
   module, shell, URL, or path selected by model output.
 - Session Runtime owns durable Session history. Action Runtime lifecycle hooks
-  are awaited before dispatch and adapt into existing generic `ACTION_*`
-  evidence without changing the Session database schema.
+  are awaited before dispatch and adapt into generic `ACTION_*` evidence
+  without changing the Session database schema. A standalone
+  `ACTION_DECIDED` record must precede generic Action dispatch.
 
 The Python bridge is a child process of the desktop native boundary. It uses
 newline-delimited JSON over private stdin/stdout pipes. Stdout is protocol-only;
@@ -58,11 +59,18 @@ Allowed  -> Starting -> Running
 Running  -> Completed | Failed | Cancelled | Interrupted
 ```
 
-Deny, hold, decision error, missing approval, expired approval, stale approval,
-unknown action type, duplicate receipt, cancellation before dispatch, or a
-failed `beforeDispatch` hook invoke no handler. A registered handler is invoked
-at most once. Handler failures are outcomes and never rewrite an allow decision
-as a deny.
+Deny, hold, malformed or duplicate decision, decision error, missing approval,
+expired approval, stale approval, unknown action type, duplicate receipt,
+cancellation before dispatch, a failed durable decision hook, or a failed
+`beforeDispatch` hook invoke no handler. A registered handler is invoked at
+most once. Handler failures are outcomes and never rewrite an allow decision as
+a deny.
+
+A candidate physical outcome becomes terminal only after its durable settlement
+hook succeeds. If that hook fails after dispatch, the runtime exposes
+`Interrupted/unknown_or_interrupted` with
+`settlement_persistence_failed`; it does not expose ordinary completion or
+failure and does not replay the handler.
 
 ### Managed runtime root and versioning
 
@@ -92,10 +100,12 @@ asset, license, executable layout, and hashes are documented. No moving
 
 The canonical AgentFuse source is the GitHub source archive for
 `MkaliezZ/dhms-engine` commit
-`8c6ae9875b3618a529d5150c96385da7461099c2`, verified against its pinned
-SHA-256 before extraction. The bridge loads the stdlib-only canonical
+`af08d80abaeb196da1e66d9e74c2d1c7002c9c2e`, package version 3.5.1,
+verified against its pinned archive and installed-tree SHA-256. The bridge
+loads the stdlib-only canonical
 `dhms_agentfuse.runtime_guard` and evidence modules from that verified source.
-It does not install into global or project site-packages.
+It calls public `RuntimeGuard.evaluate()` and does not install into global or
+project site-packages.
 
 ### Provisioning and integrity
 
@@ -111,6 +121,11 @@ Relative symlinks that resolve to verified regular files inside the archive
 root are materialized as ordinary files, so the promoted runtime contains no
 filesystem links. An interrupted temporary installation is removed on the next
 explicit provisioning attempt. The active profile is never partially replaced.
+
+Verification recomputes complete distribution, AgentFuse source, and bridge
+trees and compares them with digests embedded at compile time. The mutable
+installed-runtime record may retain timestamps and observed digests for
+diagnostics, but it is not a trust anchor and cannot bless local tampering.
 
 Removal stops any owned bridge process and deletes only the canonical managed
 profile under the app-private root. It does not touch system Python, Homebrew,
@@ -137,7 +152,9 @@ Every message carries `protocolVersion`, `messageId`, `messageType`, and
 `payload`. Handshake evidence includes Python version, bridge protocol,
 AgentFuse package version, exact source commit, supported decision schema, and
 PID. Protocol, source revision, schema, message ID, decision value, evidence,
-size, timeout, or process mismatches fail closed.
+size, timeout, or process mismatches fail closed. The current one-shot
+hello/request/shutdown child process has one enforced 15-second bridge-session
+deadline; independent startup and request deadlines are not claimed.
 
 The native process receives a minimal environment allowlist for execution,
 locale, and temporary paths. Common provider, cloud, GitHub, Slack, Google,
@@ -170,11 +187,13 @@ beforeDecisionRequest
 afterDecisionReceived
 beforeDispatch
 afterSettlement
+afterSettlementPersistenceFailure
 ```
 
-The `beforeDispatch` hook is the durable barrier. A failed barrier blocks the
-handler. Proposal, approval, decision, execution receipt, outcome, AgentFuse
-commit, policy version, and schema version are retained as bounded metadata.
+The durable decision hook and `beforeDispatch` hook are sequential barriers. A
+failed barrier blocks the handler. Proposal, approval, independent decision,
+execution receipt, outcome, AgentFuse commit, policy version, and schema
+version are retained as bounded metadata.
 Raw credentials, environment values, unrestricted absolute paths, and private
 project contents are excluded and existing Session sanitization remains active.
 
