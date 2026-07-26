@@ -245,9 +245,10 @@ is independent, and the evidence schema remains
 
 The authoritative roadmap is maintained in
 [PRODUCT_ROADMAP.md](docs/development/PRODUCT_ROADMAP.md). v0.4.1 is frozen;
-v0.6 adds the managed Python and universal action foundation. Installer work is
-planned for v0.8, and the Stage 2 namespace-wide rename remains explicitly
-deferred.
+v0.6 is merged and frozen as the managed Python and universal action
+foundation. v0.6.1 planning has not started, and neither Patch nor Project
+Command has been migrated to AgentFuse. Installer work is planned for v0.8,
+and the Stage 2 namespace-wide rename remains explicitly deferred.
 
 ---
 

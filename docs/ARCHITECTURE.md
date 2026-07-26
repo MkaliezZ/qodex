@@ -239,6 +239,10 @@ The package version is independent of the preserved DHMS historical evidence
 milestone `v3.5.2`; both continue using evidence schema
 `agentfuse-evidence-schema-v0.1`.
 
+This v0.6 foundation is merged and frozen. v0.6.1 has not started, and neither
+Patch nor Project Command has been migrated to the universal Action Runtime or
+AgentFuse boundary.
+
 ### 5. Diff Engine (`packages/diff-engine`)
 
 **Purpose:** Safe code modifications through patch proposals.
