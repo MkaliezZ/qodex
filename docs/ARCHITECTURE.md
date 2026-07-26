@@ -241,11 +241,16 @@ milestone `v3.5.2`; both continue using evidence schema
 
 This v0.6 foundation is merged and frozen. The source-grounded v0.6.1 Project
 Command adapter plan is ready for review; implementation has not started.
-The planned boundary keeps KerniQ as trusted catalog/risk/approval/native owner,
-uses AgentFuse for decision-only policy evaluation, persists command-linked
-`ACTION_DECIDED`, and retains `COMMAND_STARTED` / `COMMAND_COMPLETED` as the
-single physical command lifecycle. Rust catalog re-resolution and no-shell
-execution remain mandatory. Patch is not included.
+The planned boundary keeps KerniQ as trusted catalog/risk/approval/native owner.
+KerniQ Action Runtime validates proposal, digest, approval, expiry, generation,
+and action identity. The bridge maps validated context into an AgentFuse
+`ToolCallRequest`; AgentFuse evaluates configured policy and emits canonical
+`allow|block` evidence; the KerniQ adapter validates and maps that response to
+`allow|deny|error`. The canonical AgentFuse Project Command path does not emit
+`hold`. The plan persists command-linked `ACTION_DECIDED` and retains
+`COMMAND_STARTED` / `COMMAND_COMPLETED` as the single physical command
+lifecycle. Rust catalog re-resolution and no-shell execution remain mandatory.
+Patch is not included.
 
 Planning details:
 

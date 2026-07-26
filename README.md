@@ -241,12 +241,15 @@ is independent, and the evidence schema remains
 
 ## Project Command Adapter Planning v0.6.1
 
-The source-grounded v0.6.1 plan is ready for review. It preserves KerniQ as the
-trusted command-risk, approval, dispatch, and native-execution owner while DHMS
-provides policy-boundary evaluation and canonical decision evidence. The plan
-keeps Rust catalog re-resolution and no-shell execution, and selects
-`COMMAND_STARTED` / `COMMAND_COMPLETED` as the single physical command
-lifecycle. No adapter implementation or Project Command migration has started.
+The source-grounded v0.6.1 plan is ready for review. KerniQ owns trusted command
+risk, proposal and approval validation, request/response identity, dispatch,
+and native execution. The KerniQ bridge maps validated context into an
+AgentFuse `ToolCallRequest`; AgentFuse evaluates configured policy and returns
+canonical `allow|block` evidence; KerniQ maps that result to
+`allow|deny|error`. The plan keeps Rust catalog re-resolution and no-shell
+execution, and selects `COMMAND_STARTED` / `COMMAND_COMPLETED` as the single
+physical command lifecycle. No adapter implementation or Project Command
+migration has started.
 
 See the
 [Project Command adapter plan](docs/development/kerniq_project_command_action_runtime_adapter_planning_v0_6_1.md)

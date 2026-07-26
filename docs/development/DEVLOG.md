@@ -857,12 +857,15 @@ execution, timeout/cancellation/output bounds, settlement persistence, and
 restart recovery.
 
 The proposed adapter keeps KerniQ as the trusted risk-classification, approval,
-dispatch, and physical-execution owner. DHMS remains the decision-only policy
-and authorization boundary and does not classify command danger. Universal
-Action Runtime supplies proposal-digest/approval binding, durable
-`ACTION_DECIDED`, dispatch gating, and duplicate prevention. Session Runtime
-retains durable lifecycle, interruption, settlement uncertainty, and restart
-no-replay.
+request/response identity, dispatch, and physical-execution owner. Action
+Runtime validates the proposal, digest, approval, expiry, and generation. The
+KerniQ bridge maps validated context into `ToolCallRequest`; AgentFuse evaluates
+configured policy and returns canonical `allow|block` evidence; the KerniQ
+adapter maps that response to `allow|deny|error`. The canonical Project Command
+path does not support AgentFuse `hold`. Universal Action Runtime supplies
+durable `ACTION_DECIDED`, dispatch gating, and duplicate prevention. Session
+Runtime retains durable lifecycle, interruption, settlement uncertainty, and
+restart no-replay.
 
 The lifecycle decision is one physical command, one authoritative
 `COMMAND_STARTED`, and one `COMMAND_COMPLETED` or `SESSION_INTERRUPTED`

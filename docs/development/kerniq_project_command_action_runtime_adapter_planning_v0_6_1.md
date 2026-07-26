@@ -12,9 +12,11 @@ KerniQ already has two separately reviewed foundations:
    TypeScript catalog, pauses for explicit approval, commits
    `COMMAND_STARTED`, and invokes a Rust no-shell runner that independently
    resolves the same catalog ID.
-2. Universal Action Runtime binds a proposal digest to an expiring approval,
-   obtains a canonical AgentFuse allow/deny/hold/error decision, persists
-   `ACTION_DECIDED`, and blocks physical dispatch when any decision or
+2. Universal Action Runtime validates a proposal and digest-bound expiring
+   approval. The KerniQ bridge validates request identity and maps trusted
+   context into `ToolCallRequest`; AgentFuse returns canonical `allow|block`
+   evidence; the KerniQ adapter maps it to `allow|deny|error`. Action Runtime
+   persists `ACTION_DECIDED` and blocks physical dispatch when any decision or
    pre-dispatch evidence barrier fails.
 
 v0.6.1 should connect those foundations without replacing the reviewed native
@@ -32,10 +34,13 @@ model requests run_project_command
     -> trusted KerniQ risk classification
     -> durable COMMAND_PROPOSED
     -> explicit command approval
-    -> ActionProposal + ActionApproval mapping
-    -> DHMS RuntimeGuard.evaluate()
+    -> KerniQ validates approval/digest/expiry/generation
+    -> KerniQ bridge maps trusted request to ToolCallRequest
+    -> AgentFuse RuntimeGuard.evaluate()
+    -> AgentFuse allow/block
+    -> KerniQ maps to allow/deny or fail-closed error
     -> durable ACTION_DECIDED linked to the command
-    -> durable COMMAND_STARTED
+    -> durable COMMAND_STARTED only for valid allow
     -> existing Rust catalog re-resolution and no-shell execution
     -> COMMAND_COMPLETED
        or SESSION_INTERRUPTED / unknown_or_interrupted
@@ -52,6 +57,15 @@ TRUSTED_RISK_OWNER=KERNIQ
 MODEL_SUPPLIED_RISK_TRUSTED=false
 DHMS_DANGER_CLASSIFIER=false
 DHMS_POLICY_BOUNDARY=true
+AGENTFUSE_CORE_INPUT=ToolCallRequest
+AGENTFUSE_CORE_DECISIONS=allow|block
+AGENTFUSE_CORE_APPROVAL_CONTRACT=false
+AGENTFUSE_CORE_HOLD_DECISION=false
+KERNIQ_VALIDATES_ACTION_APPROVAL=true
+KERNIQ_BRIDGE_VALIDATES_REQUEST_IDENTITY=true
+KERNIQ_ADAPTER_VALIDATES_RESPONSE_IDENTITY=true
+KERNIQ_MAPPED_DECISIONS=allow|deny|error
+AGENTFUSE_HOLD_SUPPORTED=false
 ```
 
 ## Current Command-Path Audit
@@ -116,8 +130,8 @@ DHMS_POLICY_BOUNDARY=true
 | Native catalog | Same file - `resolve_command()`, `is_safe_script_name()` | Root, command ID, expected digest | Native `CommandDefinition`; Rust | TypeScript catalog claim to independent Rust truth | Error is returned as command result/failure | Unknown IDs, unsafe categories, changed scripts reject | Preserve independent reread and digest verification; add no general command input |
 | Native process | Same file - `execute_command()`, `copy_allowed_environment()`, `read_bounded()` | Native trusted definition | Bounded `ProjectCommandResult`; Rust | Rust to operating system | Result becomes `COMMAND_COMPLETED` | Spawn/status/read failures fail; timeout/cancel kill and reap child | Remain no-shell, fixed cwd/args/env policy, bounded output, and catalog-bounded timeout |
 | Action contracts | `packages/action-runtime/src/types.ts`, `validation.ts` - `ActionProposal`, `ActionApproval`, `createActionProposal()`, validators | KerniQ-owned proposal and approval | Digest-bound validated contracts; Action Runtime | Command adapter to policy runtime | Hook-driven evidence | Mismatch, expiry, stale generation, malformed JSON fail closed | Reuse contracts with `actionType=kerniq.project-command.run` and trusted process risk |
-| Dispatch gate | `packages/action-runtime/src/runtime.ts` - `ActionRuntime.propose()`, `approve()`, `execute()`, `executeOnce()` | Proposal, approval, decision provider, handler | At-most-once decision-gated handler | Universal Action Runtime to registered physical handler | Awaited decision and dispatch hooks | Deny/hold/error/barrier failure invokes no handler | Register one command handler that delegates to the existing runner; adapt its start/settlement hooks to command events |
-| DHMS adapter | `packages/agentfuse-adapter/src/adapter.ts` - `AgentFuseAdapter.decide` | Exact Action proposal and approval | Validated allow/deny/hold/error `ActionDecision` | TypeScript to managed Python/DHMS | Canonical evidence returned to durable hook | Protocol/identity/revision/schema/policy errors become fail-closed error decisions | Use a trusted KerniQ-selected Project Command policy profile; never infer risk or fixture in DHMS |
+| Dispatch gate | `packages/action-runtime/src/runtime.ts` - `ActionRuntime.propose()`, `approve()`, `execute()`, `executeOnce()` | Proposal, approval, decision provider, handler | At-most-once decision-gated handler | Universal Action Runtime to registered physical handler | Awaited decision and dispatch hooks | Any non-allow generic Action decision or barrier failure invokes no handler | Register one command handler that delegates to the existing runner; adapt its start/settlement hooks to command events |
+| AgentFuse bridge and adapter | `python/kerniq_agentfuse_bridge/service.py` - `AgentFuseRuntime.decide`; `packages/agentfuse-adapter/src/adapter.ts` - `AgentFuseAdapter.decide` | KerniQ-validated Action proposal, approval, and policy profile | Bridge maps to `ToolCallRequest`; AgentFuse emits `allow|block`; adapter maps to `allow|deny|error` | TypeScript to managed Python/AgentFuse | Canonical evidence returned to durable hook | Request/response identity, protocol, revision, schema, and policy errors become fail-closed error decisions; `hold` is unsupported | Use a trusted KerniQ-selected Project Command policy profile; never infer risk or fixture in AgentFuse |
 
 ### Exact source symbols
 
@@ -250,9 +264,10 @@ interface TrustedProjectCommandPolicy {
 }
 ```
 
-`policyProfileId` is application configuration, not model input. Its final DHMS
-fixture/profile name must be reviewed with the canonical DHMS public API before
-implementation; the current production profile is `NOT_CONFIRMED`.
+`policyProfileId` is application configuration, not model input. KerniQ must
+translate the reviewed profile into AgentFuse allowlist, denylist, and optional
+custom-policy configuration. The current production profile and its trusted
+`safe_metadata` fields are `NOT_CONFIRMED`.
 
 ## Approval Boundary
 
@@ -278,29 +293,71 @@ command requires fresh project authorization, catalog rediscovery, a new
 approval generation, a new Action proposal digest, and a new DHMS decision.
 Neither old approval nor old decision may be reused.
 
-## DHMS Decision Boundary
+## AgentFuse Decision Boundary
 
-DHMS receives only the exact KerniQ-created `ActionProposal`,
-`ActionApproval`, and trusted application-selected policy profile. It owns:
+KerniQ Action Runtime validates `ActionProposal` and `ActionApproval`, including
+proposal digest, approval identity, expiry, generation, and action/task
+identity. The KerniQ bridge validates request identity, then maps the validated
+proposal, approval, and trusted policy context into a provider-neutral
+AgentFuse `ToolCallRequest`.
 
-- policy and authorization-boundary evaluation;
-- exact action and approval identity validation;
-- deterministic allow, deny, hold, or error decision; and
-- canonical decision evidence.
+AgentFuse core owns:
 
-DHMS does not:
+- configured static or custom `ToolCallRequest` policy evaluation;
+- canonical `allow|block` evidence;
+- fail-closed policy exception handling; and
+- fail-closed malformed policy-result handling.
+
+AgentFuse core does not:
 
 - classify whether the command is dangerous;
+- define or universally validate KerniQ's `ActionProposal` or
+  `ActionApproval` schema;
+- validate proposal digest, approval expiry, or approval generation as a
+  universal built-in contract;
 - choose the command catalog entry;
 - authorize a private project root;
 - approve on behalf of the user;
 - spawn, cancel, time out, or settle the command; or
 - claim that allow means execution succeeded.
 
-Any DHMS deny, hold, error, timeout, protocol mismatch, source revision
-mismatch, malformed response, duplicate decision, or decision-persistence
-failure leaves `COMMAND_STARTED` absent and invokes the native runner zero
-times.
+A trusted custom policy may inspect fields that the KerniQ bridge places in
+`ToolCallRequest.safe_metadata`; those fields remain application-owned.
+
+The KerniQ adapter validates response identity, source commit, schema, policy
+revision, and protocol. It maps:
+
+```text
+AgentFuse allow -> KerniQ allow
+AgentFuse block -> KerniQ deny
+bridge or validation failure -> KerniQ error
+AgentFuse hold -> unsupported
+```
+
+The generic `ActionDecision` type retains `hold`, but the canonical AgentFuse
+3.6.0 Project Command path does not emit it. Adding a hold-producing decision
+provider or extending canonical policy semantics requires separate review and
+is outside v0.6.1.
+
+Any mapped deny or error, bridge timeout, protocol mismatch, source revision
+mismatch, malformed response, duplicate decision, unsupported value, or
+decision-persistence failure leaves `COMMAND_STARTED` absent and invokes the
+native runner zero times.
+
+## Responsibility Matrix
+
+| Responsibility | Owner |
+|:--|:--|
+| Trusted risk | KerniQ command catalog |
+| Approval contract | KerniQ Action Runtime |
+| Proposal digest, expiry, and generation | KerniQ Action Runtime |
+| Request identity mapping | KerniQ bridge |
+| Configured tool policy evaluation | AgentFuse core |
+| Canonical `allow|block` evidence | AgentFuse core |
+| Response, source, schema, and revision validation | KerniQ adapter |
+| Durable `ACTION_DECIDED` | KerniQ Session Runtime adapter |
+| Dispatch | KerniQ Universal Action Runtime |
+| Physical execution | KerniQ Rust runner |
 
 ## Proposed Typed Contracts
 
@@ -335,7 +392,7 @@ interface ProjectCommandDecisionLink {
   approvalId: string;
   approvalGeneration: number;
   decisionId: string;
-  decision: "allow" | "deny" | "hold" | "error";
+  decision: "allow" | "deny" | "error";
   policyVersion: string;
   decisionSchemaVersion: string;
   agentFuseCommit: string;
@@ -371,7 +428,7 @@ COMMAND_STARTED
 COMMAND_COMPLETED
 ```
 
-Deny/hold/error sequence:
+Deny/error sequence:
 
 ```text
 COMMAND_PROPOSED
@@ -380,9 +437,9 @@ ACTION_DECIDED
 ```
 
 The non-allow decision settles the pending command as blocked. No
-`COMMAND_DENIED` is required for a DHMS non-allow decision because the durable
-`ACTION_DECIDED` already records the reason. A user clicking Deny continues to
-use `COMMAND_DENIED` and does not call DHMS.
+`COMMAND_DENIED` is required for a mapped AgentFuse block or bridge/adapter
+error because the durable `ACTION_DECIDED` already records the reason. A user
+clicking Deny continues to use `COMMAND_DENIED` and does not call AgentFuse.
 
 Authoritative receipts:
 
@@ -416,7 +473,9 @@ project identity mismatch -> deny before dispatch
 model-supplied risk mismatch -> ignored or rejected
 missing or stale approval -> deny before dispatch
 proposal digest mismatch -> deny before dispatch
-DHMS deny / hold / error -> COMMAND_STARTED absent; native invocations=0
+AgentFuse block -> KerniQ deny; COMMAND_STARTED absent; native invocations=0
+bridge/adapter failure -> KerniQ error; native invocations=0
+AgentFuse hold -> unsupported; native invocations=0
 ACTION_DECIDED persistence failure -> native invocations=0
 COMMAND_STARTED persistence failure -> native invocations=0
 allow decision -> does not itself execute the command
@@ -520,7 +579,8 @@ Threats reviewed: **16**.
 - Select a fixed KerniQ-owned Project Command policy profile.
 - Call public `RuntimeGuard.evaluate()` through `AgentFuseAdapter.decide`.
 - Persist command-linked `ACTION_DECIDED`.
-- Prove deny/hold/error and persistence failure invoke no runner.
+- Prove mapped deny/error, unsupported values, and persistence failure invoke
+  no runner.
 
 ### v0.6.1.4 - COMMAND_STARTED dispatch gate and native binding
 
@@ -553,8 +613,9 @@ Threats reviewed: **16**.
   proposal.
 - Exact command definition and project binding produce a stable digest.
 - Duplicate approval shares one evaluation and one runner invocation.
-- User denial produces `COMMAND_DENIED`, no DHMS call, and no runner call.
-- Expired/stale/mismatched approval and digest fail before DHMS or dispatch.
+- User denial produces `COMMAND_DENIED`, no AgentFuse call, and no runner call.
+- Expired/stale/mismatched approval and digest fail before AgentFuse or
+  dispatch.
 - Cancellation before evaluation and after allow but before start invokes no
   runner.
 
@@ -562,9 +623,12 @@ Threats reviewed: **16**.
 
 - Command action proposal/approval validation reuses the existing strict
   validators.
-- DHMS allow remains a decision with zero mutation until the handler runs.
-- Deny, hold, error, malformed response, timeout, revision mismatch, duplicate
-  decision, and decision-persistence failure invoke no handler.
+- AgentFuse allow remains a decision with zero mutation until the handler runs.
+- Mapped deny/error, malformed response, timeout, revision mismatch, duplicate
+  decision, unsupported `hold`, and decision-persistence failure invoke no
+  handler.
+- Generic Action Runtime `hold` tests remain valid for its provider-neutral
+  contract but are not proof of AgentFuse hold behavior.
 - Duplicate `execute()` shares one execution.
 - `beforeDispatch` failure invokes no handler.
 - Settlement failure returns `Interrupted/unknown_or_interrupted` and duplicate
@@ -600,10 +664,12 @@ Threats reviewed: **16**.
 
 1. Model requests a known command; catalog risk and project identity are mapped
    into one Action proposal; UI pauses.
-2. User approves; the exact approval reaches DHMS; allow writes
-   `ACTION_DECIDED`, then `COMMAND_STARTED`, invokes runner once, and writes
-   `COMMAND_COMPLETED`.
-3. DHMS deny/hold/error writes `ACTION_DECIDED` only; runner count remains zero.
+2. User approves; KerniQ validates approval/digest/expiry/generation, the
+   bridge maps trusted context to `ToolCallRequest`, and AgentFuse allow maps to
+   KerniQ allow. `ACTION_DECIDED` then precedes `COMMAND_STARTED`, one runner
+   invocation, and `COMMAND_COMPLETED`.
+3. AgentFuse block maps to KerniQ deny; bridge or validation failure maps to
+   error. Either writes `ACTION_DECIDED` only and leaves runner count zero.
 4. Inject decision persistence failure; command start and runner invocation
    remain absent.
 5. Inject command start persistence failure; runner remains absent.
@@ -619,10 +685,10 @@ Threats reviewed: **16**.
 
 ## Desktop E2E Plan
 
-- Extend the deterministic command fixture with an AgentFuse decision fixture
-  whose allow/deny/hold/error is application-selected, not model-selected.
+- Extend the deterministic command fixture with KerniQ-owned AgentFuse
+  allow/block policy configuration and an induced bridge/validation error.
 - Assert trusted risk and exact command remain visible in the approval card.
-- Assert `starts=0` before approval, during deny/hold/error, and after any
+- Assert `starts=0` before approval, during mapped deny/error, and after any
   pre-dispatch persistence fault.
 - Assert allow produces event order
   `COMMAND_PROPOSED -> COMMAND_APPROVED -> ACTION_DECIDED ->
@@ -691,8 +757,12 @@ commands, arbitrary Python, and production claims beyond Project Command.
 
 ## Open Questions
 
-1. What fixed Project Command policy profile should canonical DHMS expose or
-   accept? The proof fixture is not a production command policy.
+1. Which KerniQ-owned Project Command policy profile should the bridge
+   translate into AgentFuse allowlist, denylist, and optional custom-policy
+   configuration? Which trusted `safe_metadata` fields should that custom
+   policy inspect? How will the profile remain explicit, versioned,
+   deterministic, and application-owned? The proof fixture is not a production
+   command policy.
 2. Should all current catalog commands remain risk `process`, or should a later
    KerniQ-owned taxonomy add deterministic severity/approval metadata while
    keeping Action Runtime's existing `process` risk?

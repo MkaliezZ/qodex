@@ -26,10 +26,12 @@ Command migration remains outside this proof milestone and has not started.
 
 The source audit, responsibility boundary, typed contracts, lifecycle decision,
 threat model, six implementation slices, automated test plan, and real Tauri
-proof plan are documented. The planned adapter preserves KerniQ-owned risk and
-physical execution, DHMS decision-only policy evaluation, native catalog
-re-resolution, no shell, one authoritative command start, honest settlement
-uncertainty, and restart no-replay.
+proof plan are documented. The planned adapter preserves KerniQ-owned risk,
+approval-contract validation, response validation, and physical execution.
+KerniQ maps trusted context to AgentFuse `ToolCallRequest`; AgentFuse returns
+canonical `allow|block` evidence; KerniQ maps it to `allow|deny|error`.
+Native catalog re-resolution, no shell, one authoritative command start, honest
+settlement uncertainty, and restart no-replay remain mandatory.
 
 Project Command has not been migrated. Patch migration remains a separate,
 future decision.
