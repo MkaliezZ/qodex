@@ -20,6 +20,7 @@ export const UNIVERSAL_EVENT_TYPES = [
   "TOOL_COMPLETED",
   "ACTION_PROPOSED",
   "ACTION_APPROVED",
+  "ACTION_DECIDED",
   "ACTION_DENIED",
   "ACTION_STARTED",
   "ACTION_COMPLETED",
@@ -66,6 +67,11 @@ export interface SafeMetadata {
   actionId?: string;
   approvalId?: string;
   approvalGeneration?: number;
+  decisionId?: string;
+  decision?: "allow" | "deny" | "hold" | "error";
+  policyVersion?: string;
+  decisionSchemaVersion?: string;
+  agentFuseCommit?: string;
   executionReceiptId?: string;
   artifactIds?: string[];
   executionStatus?: string;
@@ -164,6 +170,12 @@ export interface PendingActionProjection {
   settled: boolean;
   approvalId: string | null;
   approvalGeneration: number;
+  decisionRecorded: boolean;
+  decisionId: string | null;
+  decision: "allow" | "deny" | "hold" | "error" | null;
+  policyVersion: string | null;
+  decisionSchemaVersion: string | null;
+  agentFuseCommit: string | null;
   executionReceiptId: string | null;
   recoveryRequired: boolean;
   stale: boolean;

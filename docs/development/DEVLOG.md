@@ -699,3 +699,116 @@ Desktop unit tests (48), Desktop E2E (56 passed with four credential-gated
 real-provider scenarios skipped), Rust formatting/check/tests (14 native
 tests), debug Tauri build, fresh-browser console smoke, real macOS window smoke,
 and `git diff --check`.
+
+### KerniQ Managed Python and Universal Action Runtime v0.6.0
+
+**Date:** 2026-07-24  |  **Status:** Implementation, real smoke, and Draft PR CI complete; final review pending
+
+Added provider-neutral Action contracts with exact proposal-digest approval,
+pre-dispatch policy decisions, awaited durable dispatch evidence, at-most-once
+handler dispatch, and separate physical outcomes. The optional desktop proof
+records proposal, approval, decision, receipt, outcome, canonical source
+revision, and policy/schema identities through existing Session events.
+
+Added user-initiated private CPython provisioning in Tauri with an embedded
+cross-platform manifest, fixed HTTPS artifacts, SHA-256 verification, safe
+archive extraction, exclusive locks, interrupted-install recovery, verified
+rename promotion, integrity checks, and removal. Managed Python starts without a
+shell under a cleared allowlisted environment and does not use system Python,
+global pip, or project environments.
+
+The NDJSON bridge loads canonical DHMS AgentFuse source pinned to commit
+`8c6ae9875b3618a529d5150c96385da7461099c2`. The TypeScript adapter validates
+identity, revision, protocol, policy, schema, and evidence and fails closed.
+Exactly one trusted in-memory counter proof is available behind
+`VITE_KERNIQ_ENABLE_AGENTFUSE_PROOF=1`; ordinary production registration,
+Patch integration, and Command integration are not included.
+
+Local validation passed the frozen install, workspace build and 1,460 tests,
+Desktop unit tests (54), Desktop E2E (56 passed, four credential-gated
+scenarios skipped), canonical Python bridge tests (8), native Rust tests,
+verified production archive extraction, debug Tauri build, and
+`git diff --check`. A real isolated macOS x86_64 smoke installed the pinned
+runtime, completed canonical self-check, proved allow dispatch once and deny
+dispatch zero, persisted Session evidence, stopped without an orphan bridge,
+and reverified after app restart. The system Python remained unchanged.
+
+Draft PR CI run `30079631063` passed workspace build/test, canonical Python
+bridge validation, Desktop E2E, and native Rust checks on macOS and Windows.
+
+### KerniQ Decision Contract and Runtime Integrity Correction v0.6.0.1
+
+**Date:** 2026-07-24  |  **Status:** AgentFuse 3.6.0 repin and local validation complete; Draft PR CI pending
+
+The canonical Python package identity is corrected from the PR-only `3.5.1`
+value to the SemVer-minor release identity `dhms-agentfuse 3.6.0`. Historical
+DHMS evidence milestones `v3.5.1` and `v3.5.2` remain unchanged, as does
+evidence schema `agentfuse-evidence-schema-v0.1`. Public decision behavior is
+unchanged.
+
+Added strict validators for approval, decision, started, and outcome records.
+Malformed or duplicate allow decisions now become fail-closed decision errors
+before an execution receipt or physical handler. Generic Action evidence now
+persists `ACTION_DECIDED` independently before `ACTION_STARTED`; deny, hold,
+and error settle without dispatch, while legacy `ACTION_DENIED` remains
+readable. Patch and Command projection and execution behavior are unchanged.
+
+Normal physical outcomes are committed to Action Runtime only after durable
+settlement evidence succeeds. If settlement persistence fails after the handler
+runs, the runtime returns `Interrupted/unknown_or_interrupted` with
+`settlement_persistence_failed`, attempts durable interruption evidence, and
+does not replay on duplicate execution. If that secondary append also fails,
+restart recovery classifies the unmatched started receipt as Interrupted and
+does not offer reapproval.
+
+Managed runtime verification now compares full distribution, AgentFuse source,
+and embedded bridge trees against compile-time manifest digests. Mutable
+`installed-runtime.json` values are diagnostic metadata rather than trust
+anchors. Source verification also requires AgentFuse package 3.6.0, the expected
+evidence schema, and the public decision API before process launch.
+
+The canonical pin advances to DHMS commit
+`ec4b5842339dccfba0db62df7541920759203bc9`. The Python bridge calls public
+`RuntimeGuard.evaluate()` and has no private policy resolver dependency. Its
+one-shot hello/request/shutdown process enforces one 15-second bridge-session
+deadline; separate startup and request deadlines are not claimed.
+
+The verified canonical archive SHA-256 is
+`1659d81d39aab382d550c33c3b6a42b24254f584055eb15d8168f17200e323c3`,
+the promoted AgentFuse source tree SHA-256 is
+`9a51121ec6a719bc7c79db428d522f3c4430d99d5f176b9e62a939bf004d32e9`,
+and the normalized embedded bridge tree SHA-256 is
+`52bd2dfd5fdd7eb183ed30d4fad56666cd19363fcce381a94ef77b3ac4a4a8dc`.
+
+Local validation passed the frozen install, workspace build, 1,486 workspace
+tests, Desktop unit tests (56), Desktop E2E (56 passed with four
+credential-gated real-provider scenarios skipped), Action Runtime tests (35),
+Session Runtime tests (73), Python Runtime tests (15), AgentFuse Adapter tests
+(15), canonical bridge tests (8), and DHMS tests (89). Native validation passed
+formatting, check, 35 Rust tests with two explicit maintenance tests ignored,
+trusted-profile preparation from verified archives, and the debug Tauri build.
+The workspace lint command completed successfully and reported that no selected
+package defines a lint script. The private AgentFuse API source audit and
+`git diff --check` both returned no matches or errors.
+
+A real isolated macOS x86_64 Tauri smoke verified Ready state and canonical
+self-check against AgentFuse commit
+`ec4b5842339dccfba0db62df7541920759203bc9`. The allow proof durably wrote
+`ACTION_DECIDED` before `ACTION_STARTED`, invoked and mutated exactly once, and
+did not replay. Deny durably wrote `ACTION_DECIDED` with no start, handler, or
+mutation. Injected settlement persistence failure left
+`ACTION_COMPLETED` absent, returned `Interrupted/unknown_or_interrupted`, and
+retained one invocation, one mutation, and zero replay. The SQLite ledger
+retained the interrupted sequence and no replay occurred.
+
+After stopping the bridge, the smoke modified canonical `runtime_guard.py` and
+recalculated the mutable installed record. Restart still reported Broken and
+withheld the proof dispatch surface. Two explicit Settings Repair attempts were
+environment-blocked when the fixed CPython archive download was interrupted;
+both left the Broken profile unchanged and promoted no temporary directory.
+For restart verification, the single tampered file was restored from the
+independently hash-verified DHMS archive whose extracted tree matched the
+compile-time trusted source digest. The full app then reverified Ready and
+passed canonical self-check. The initial user-initiated production install had
+already completed against the same trusted manifest. Full app stop left zero
+KerniQ or managed Python processes.

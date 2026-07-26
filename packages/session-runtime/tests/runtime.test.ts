@@ -123,12 +123,28 @@ describe("universal session runtime", () => {
       safeMetadata: { actionId: "research-1", approvalId: "approval-1", approvalGeneration: 0 },
     });
     await runtime.appendEntry(session.id, {
+      type: "ACTION_DECIDED",
+      payload: { actionId: "research-1", decision: "allow" },
+      safeMetadata: {
+        actionId: "research-1",
+        taskId: "task-1",
+        approvalId: "approval-1",
+        approvalGeneration: 0,
+        decisionId: "decision-1",
+        decision: "allow",
+        policyVersion: "policy-1",
+        decisionSchemaVersion: "schema-1",
+        agentFuseCommit: "commit-1",
+      },
+    });
+    await runtime.appendEntry(session.id, {
       type: "ACTION_STARTED",
       payload: { actionId: "research-1" },
       safeMetadata: {
         actionId: "research-1",
         approvalId: "approval-1",
         approvalGeneration: 0,
+        decisionId: "decision-1",
         executionReceiptId: "receipt-1",
       },
     });

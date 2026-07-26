@@ -16,6 +16,7 @@ export class SessionProjector {
     }
     const seen = new Set<string>();
     const approvalIds = new Set<string>();
+    const decisionIds = new Set<string>();
     let status: SessionStatus = "Active";
     let pendingAction: PendingActionProjection | null = null;
     let recoveryRequirement: RecoveryRequirement | null = null;
@@ -85,6 +86,40 @@ export class SessionProjector {
           status = "Active";
           break;
         }
+        case "ACTION_DECIDED": {
+          const decided = requirePending(pendingAction, entry);
+          requireKind(decided, entry);
+          if (decided.kind !== "action") {
+            throw new Error("ACTION_DECIDED requires a generic action.");
+          }
+          if (!decided.approved) throw new Error("An action cannot be decided without approval.");
+          if (decided.started || decided.settled) {
+            throw new Error("A started or settled action cannot receive a decision.");
+          }
+          if (decided.decisionRecorded) throw new Error("An action cannot be decided twice.");
+          requireApprovalBinding(decided, entry);
+          requiredMetadataText(entry, "taskId");
+          const decisionId = requiredMetadataText(entry, "decisionId");
+          if (decisionIds.has(decisionId)) throw new Error("A decision ID cannot be reused.");
+          const decision = decisionOf(entry);
+          if (!decision) throw new Error("ACTION_DECIDED requires a supported decision.");
+          const policyVersion = requiredMetadataText(entry, "policyVersion");
+          const decisionSchemaVersion = requiredMetadataText(entry, "decisionSchemaVersion");
+          const agentFuseCommit = requiredMetadataText(entry, "agentFuseCommit");
+          decisionIds.add(decisionId);
+          decided.decisionRecorded = true;
+          decided.decisionId = decisionId;
+          decided.decision = decision;
+          decided.policyVersion = policyVersion;
+          decided.decisionSchemaVersion = decisionSchemaVersion;
+          decided.agentFuseCommit = agentFuseCommit;
+          if (decision !== "allow") {
+            decided.settled = true;
+            pendingAction = null;
+            recoveryRequirement = null;
+          }
+          break;
+        }
         case "ACTION_DENIED":
         case "PATCH_REJECTED":
         case "COMMAND_DENIED": {
@@ -104,15 +139,15 @@ export class SessionProjector {
           if (!pendingAction.approved) throw new Error("An action cannot start without approval.");
           if (pendingAction.started) throw new Error("An action cannot start twice.");
           if (pendingAction.settled) throw new Error("A settled action cannot start.");
-          const startApprovalId = approvalIdOf(entry);
-          if (!startApprovalId) throw new Error(`${entry.type} requires an approvalId.`);
-          if (startApprovalId !== pendingAction.approvalId) {
-            throw new Error("Started evidence targets a different approval.");
-          }
-          const startGeneration = approvalGenerationOf(entry);
-          if (startGeneration === null) throw new Error(`${entry.type} requires an approvalGeneration.`);
-          if (startGeneration !== pendingAction.approvalGeneration) {
-            throw new Error("Started evidence targets a different approval generation.");
+          requireApprovalBinding(pendingAction, entry);
+          if (pendingAction.kind === "action") {
+            if (!pendingAction.decisionRecorded || pendingAction.decision !== "allow") {
+              throw new Error("A generic action cannot start without a prior allow decision.");
+            }
+            const startDecisionId = requiredMetadataText(entry, "decisionId");
+            if (startDecisionId !== pendingAction.decisionId) {
+              throw new Error("Started evidence targets a different decision.");
+            }
           }
           const executionReceiptId = executionReceiptIdOf(entry);
           if (!executionReceiptId) throw new Error(`${entry.type} requires an executionReceiptId.`);
@@ -169,7 +204,7 @@ export class SessionProjector {
                 throw new Error("Recovery generation does not match the pending action.");
               }
             }
-            pendingAction.recoveryRequired = true;
+            pendingAction.recoveryRequired = !pendingAction.started;
             pendingAction.approved = false;
             pendingAction.approvalId = null;
           }
@@ -185,7 +220,7 @@ export class SessionProjector {
           status = "Interrupted";
           recoveryRequirement = { reason: "interrupted", executionStatus: "unknown_or_interrupted" };
           if (pendingAction) {
-            pendingAction.recoveryRequired = true;
+            pendingAction.recoveryRequired = !pendingAction.started;
             pendingAction.approved = false;
             pendingAction.approvalId = null;
           }
@@ -258,6 +293,12 @@ function proposed(entry: SessionEntry, kind: PendingActionProjection["kind"]): P
     settled: false,
     approvalId: null,
     approvalGeneration: 0,
+    decisionRecorded: false,
+    decisionId: null,
+    decision: null,
+    policyVersion: null,
+    decisionSchemaVersion: null,
+    agentFuseCommit: null,
     executionReceiptId: null,
     recoveryRequired: false,
     stale: false,
@@ -310,6 +351,40 @@ function executionReceiptIdOf(entry: SessionEntry): string | null {
     && entry.safeMetadata.executionReceiptId.trim()
     ? entry.safeMetadata.executionReceiptId
     : null;
+}
+
+function requiredMetadataText(entry: SessionEntry, field: keyof SessionEntry["safeMetadata"]): string {
+  const value = entry.safeMetadata[field];
+  if (typeof value !== "string" || value.trim() === "") {
+    throw new Error(`${entry.type} requires ${String(field)}.`);
+  }
+  return value;
+}
+
+function decisionOf(entry: SessionEntry): PendingActionProjection["decision"] {
+  const decision = entry.safeMetadata.decision;
+  return decision === "allow"
+    || decision === "deny"
+    || decision === "hold"
+    || decision === "error"
+    ? decision
+    : null;
+}
+
+function requireApprovalBinding(
+  pending: PendingActionProjection,
+  entry: SessionEntry,
+): void {
+  const approvalId = approvalIdOf(entry);
+  if (!approvalId) throw new Error(`${entry.type} requires an approvalId.`);
+  if (approvalId !== pending.approvalId) {
+    throw new Error(`${entry.type} targets a different approval.`);
+  }
+  const generation = approvalGenerationOf(entry);
+  if (generation === null) throw new Error(`${entry.type} requires an approvalGeneration.`);
+  if (generation !== pending.approvalGeneration) {
+    throw new Error(`${entry.type} targets a different approval generation.`);
+  }
 }
 
 function requireKind(pending: PendingActionProjection, entry: SessionEntry): void {

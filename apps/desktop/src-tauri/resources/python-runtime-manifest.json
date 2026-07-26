@@ -1,0 +1,76 @@
+{
+  "manifestVersion": "kerniq.python-runtime-manifest.v1",
+  "runtimeVersion": "20260718-cpython-3.12.13-agentfuse-ec4b584",
+  "pythonVersion": "3.12.13",
+  "distribution": {
+    "publisher": "astral-sh/python-build-standalone",
+    "release": "20260718",
+    "license": "MPL-2.0 build tooling; PSF-2.0 CPython distribution",
+    "artifacts": [
+      {
+        "platform": "macos",
+        "architecture": "x86_64",
+        "url": "https://github.com/astral-sh/python-build-standalone/releases/download/20260718/cpython-3.12.13%2B20260718-x86_64-apple-darwin-install_only.tar.gz",
+        "archiveSha256": "10b47148de86f9d87ba6e96a3db606ced90a206a3454d7d6d8fa68536a05d81f",
+        "installedTreeSha256": "c1bab0aa3f5231259ff2c304a3fe88026d7fa33880f68a177c5cf366c067058f",
+        "archiveFormat": "tar.gz",
+        "expectedExecutable": "python/bin/python3"
+      },
+      {
+        "platform": "macos",
+        "architecture": "aarch64",
+        "url": "https://github.com/astral-sh/python-build-standalone/releases/download/20260718/cpython-3.12.13%2B20260718-aarch64-apple-darwin-install_only.tar.gz",
+        "archiveSha256": "62aeee6161d57303a71a138b75fd5cc6fb8c89c4b1d9c7f0a052d89fa0b6652b",
+        "installedTreeSha256": "3faf6313ee6caccf8785237e485b6304d74b4c2edc1616b2dced3fa307a45b03",
+        "archiveFormat": "tar.gz",
+        "expectedExecutable": "python/bin/python3"
+      },
+      {
+        "platform": "windows",
+        "architecture": "x86_64",
+        "url": "https://github.com/astral-sh/python-build-standalone/releases/download/20260718/cpython-3.12.13%2B20260718-x86_64-pc-windows-msvc-install_only.tar.gz",
+        "archiveSha256": "56c9dd9681c4810cb8bfdec277ee2606d8ab17e678e5bc2bd138eb8098e330b6",
+        "installedTreeSha256": "7bfbdd28132767824a04c499d1187a1ffab172cb2d147c1607cce9710519acb4",
+        "archiveFormat": "tar.gz",
+        "expectedExecutable": "python/python.exe"
+      },
+      {
+        "platform": "linux",
+        "architecture": "x86_64",
+        "url": "https://github.com/astral-sh/python-build-standalone/releases/download/20260718/cpython-3.12.13%2B20260718-x86_64-unknown-linux-gnu-install_only.tar.gz",
+        "archiveSha256": "7eea0959fa425c8aff3ea0a1352ee7d01d794b51439ed8f5fcfa017dbc0ec661",
+        "installedTreeSha256": "831c3932ce3602d22a9f5dd672d1ebb39ac26645c103c80d3913d0ab9e279c4f",
+        "archiveFormat": "tar.gz",
+        "expectedExecutable": "python/bin/python3"
+      },
+      {
+        "platform": "linux",
+        "architecture": "aarch64",
+        "url": "https://github.com/astral-sh/python-build-standalone/releases/download/20260718/cpython-3.12.13%2B20260718-aarch64-unknown-linux-gnu-install_only.tar.gz",
+        "archiveSha256": "53fb0a17442cd03bcfbc21df8d82e739b4901b87844934e36e54ab5122a55dfa",
+        "installedTreeSha256": "8700b9da2aed7c43674ec0bdc991b82a004fb721e8d44771dcab2e3608a65fbd",
+        "archiveFormat": "tar.gz",
+        "expectedExecutable": "python/bin/python3"
+      }
+    ]
+  },
+  "agentFuse": {
+    "repository": "MkaliezZ/dhms-engine",
+    "commit": "ec4b5842339dccfba0db62df7541920759203bc9",
+    "packageVersion": "3.6.0",
+    "url": "https://codeload.github.com/MkaliezZ/dhms-engine/tar.gz/ec4b5842339dccfba0db62df7541920759203bc9",
+    "archiveSha256": "1659d81d39aab382d550c33c3b6a42b24254f584055eb15d8168f17200e323c3",
+    "installedTreeSha256": "9a51121ec6a719bc7c79db428d522f3c4430d99d5f176b9e62a939bf004d32e9",
+    "archiveFormat": "tar.gz",
+    "expectedModule": "dhms_agentfuse/runtime_guard.py"
+  },
+  "bridge": {
+    "installedTreeSha256": "52bd2dfd5fdd7eb183ed30d4fad56666cd19363fcce381a94ef77b3ac4a4a8dc"
+  },
+  "bridgeProtocolVersion": "kerniq.agentfuse.bridge.v1",
+  "decisionSchemaVersion": "agentfuse-evidence-schema-v0.1",
+  "installedPackageLock": {
+    "mode": "verified-source-no-site-packages",
+    "packages": []
+  }
+}

@@ -1,5 +1,7 @@
+mod managed_python;
 mod session_database;
 
+use managed_python::ManagedPythonState;
 use serde::{Deserialize, Serialize};
 use session_database::{
     AppendEntryRequest, CreateSessionRequest, PersistenceInfo, ProjectBinding,
@@ -247,6 +249,7 @@ fn session_persistence_info(state: tauri::State<'_, SessionDatabase>) -> Persist
 pub fn run() {
     tauri::Builder::default()
         .manage(CommandRunState::default())
+        .manage(ManagedPythonState::default())
         .setup(|app| {
             let database = SessionDatabase::open(app.handle())
                 .map_err(|error| -> Box<dyn std::error::Error> { error.into() })?;
@@ -268,7 +271,13 @@ pub fn run() {
             session_binding_upsert,
             session_binding_get,
             session_binding_verify,
-            session_persistence_info
+            session_persistence_info,
+            managed_python::managed_python_inspect,
+            managed_python::managed_python_provision,
+            managed_python::managed_python_verify,
+            managed_python::managed_python_remove,
+            managed_python::managed_python_self_check,
+            managed_python::agentfuse_decide
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

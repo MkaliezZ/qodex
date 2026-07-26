@@ -55,8 +55,29 @@ function evidence(actionId: string, suffix = "1") {
     actionId,
     approvalId: `approval-${suffix}`,
     approvalGeneration: 0,
+    decisionId: `decision-${suffix}`,
     executionReceiptId: `receipt-${suffix}`,
   };
+}
+
+async function decideAllow(
+  instance: SessionRuntime,
+  sessionId: string,
+  actionId: string,
+  suffix = "1",
+) {
+  await instance.appendEntry(sessionId, {
+    type: "ACTION_DECIDED",
+    payload: { actionId, decision: "allow" },
+    safeMetadata: {
+      ...evidence(actionId, suffix),
+      taskId: "task-1",
+      decision: "allow",
+      policyVersion: "dhms-agentfuse-runtime-guard@3.6.0",
+      decisionSchemaVersion: "agentfuse-evidence-schema-v0.1",
+      agentFuseCommit: "ec4b5842339dccfba0db62df7541920759203bc9",
+    },
+  });
 }
 
 describe("session lifecycle integrity", () => {
@@ -72,6 +93,7 @@ describe("session lifecycle integrity", () => {
         payload: { actionId },
         safeMetadata: evidence(actionId),
       });
+      if (kind === "action") await decideAllow(instance, session.id, actionId);
       await instance.appendEntry(session.id, {
         type: EVENTS[kind].started,
         payload: { actionId },
@@ -120,6 +142,169 @@ describe("session lifecycle integrity", () => {
       type: "COMMAND_COMPLETED",
       payload: { actionId: "command-1" },
       safeMetadata: evidence("command-1"),
+    })).rejects.toThrow("started evidence");
+  });
+
+  it("requires a durable allow decision before a generic action can start", async () => {
+    const instance = runtime();
+    const session = await instance.createSession({ title: "Decision invariant" });
+    await propose(instance, session.id, "action", "action-1");
+    await instance.appendEntry(session.id, {
+      type: "ACTION_APPROVED",
+      payload: { actionId: "action-1" },
+      safeMetadata: evidence("action-1"),
+    });
+    await expect(instance.appendEntry(session.id, {
+      type: "ACTION_STARTED",
+      payload: { actionId: "action-1", decision: "allow" },
+      safeMetadata: evidence("action-1"),
+    })).rejects.toThrow("prior allow decision");
+    await decideAllow(instance, session.id, "action-1");
+    await expect(instance.appendEntry(session.id, {
+      type: "ACTION_STARTED",
+      payload: { actionId: "action-1" },
+      safeMetadata: { ...evidence("action-1"), decisionId: "wrong-decision" },
+    })).rejects.toThrow("different decision");
+  });
+
+  it("rejects a generic decision before approval", async () => {
+    const instance = runtime();
+    const session = await instance.createSession({ title: "Decision before approval" });
+    await propose(instance, session.id, "action", "action-1");
+    await expect(decideAllow(instance, session.id, "action-1"))
+      .rejects.toThrow("without approval");
+  });
+
+  it.each(["deny", "hold", "error"] as const)(
+    "records %s as a terminal decision without started evidence",
+    async (decision) => {
+      const instance = runtime();
+      const session = await instance.createSession({ title: `${decision} decision` });
+      const actionId = `action-${decision}`;
+      await propose(instance, session.id, "action", actionId);
+      await instance.appendEntry(session.id, {
+        type: "ACTION_APPROVED",
+        payload: { actionId },
+        safeMetadata: evidence(actionId),
+      });
+      await instance.appendEntry(session.id, {
+        type: "ACTION_DECIDED",
+        payload: { actionId, decision },
+        safeMetadata: {
+          ...evidence(actionId),
+          taskId: "task-1",
+          decision,
+          policyVersion: "dhms-agentfuse-runtime-guard@3.6.0",
+          decisionSchemaVersion: "agentfuse-evidence-schema-v0.1",
+          agentFuseCommit: "ec4b5842339dccfba0db62df7541920759203bc9",
+        },
+      });
+      expect((await instance.projectCurrentState(session.id)).pendingAction).toBeNull();
+      await expect(instance.appendEntry(session.id, {
+        type: "ACTION_STARTED",
+        payload: { actionId },
+        safeMetadata: evidence(actionId),
+      })).rejects.toThrow("no pending action");
+    },
+  );
+
+  it("rejects malformed and reused decision evidence", async () => {
+    const instance = runtime();
+    const session = await instance.createSession({ title: "Decision identity" });
+    await propose(instance, session.id, "action", "action-1");
+    await instance.appendEntry(session.id, {
+      type: "ACTION_APPROVED",
+      payload: { actionId: "action-1" },
+      safeMetadata: evidence("action-1"),
+    });
+    await expect(instance.appendEntry(session.id, {
+      type: "ACTION_DECIDED",
+      payload: { actionId: "action-1", decision: "allow" },
+      safeMetadata: {
+        ...evidence("action-1"),
+        taskId: "task-1",
+        decision: "allow",
+        policyVersion: "",
+        decisionSchemaVersion: "schema-1",
+        agentFuseCommit: "commit-1",
+      },
+    })).rejects.toThrow("policyVersion");
+    await expect(instance.appendEntry(session.id, {
+      type: "ACTION_DECIDED",
+      payload: { actionId: "action-1", decision: "allow" },
+      safeMetadata: {
+        ...evidence("action-1"),
+        taskId: "task-1",
+        decisionId: "",
+        decision: "allow",
+        policyVersion: "policy-1",
+        decisionSchemaVersion: "schema-1",
+        agentFuseCommit: "commit-1",
+      },
+    })).rejects.toThrow("decisionId");
+    await decideAllow(instance, session.id, "action-1");
+    await instance.appendEntry(session.id, {
+      type: "ACTION_STARTED",
+      payload: { actionId: "action-1" },
+      safeMetadata: evidence("action-1"),
+    });
+    await instance.appendEntry(session.id, {
+      type: "ACTION_COMPLETED",
+      payload: { actionId: "action-1" },
+      safeMetadata: evidence("action-1"),
+    });
+    await propose(instance, session.id, "action", "action-2");
+    await instance.appendEntry(session.id, {
+      type: "ACTION_APPROVED",
+      payload: { actionId: "action-2" },
+      safeMetadata: evidence("action-2", "2"),
+    });
+    await expect(instance.appendEntry(session.id, {
+      type: "ACTION_DECIDED",
+      payload: { actionId: "action-2", decision: "allow" },
+      safeMetadata: {
+        ...evidence("action-2", "2"),
+        taskId: "task-1",
+        decisionId: "decision-1",
+        decision: "allow",
+        policyVersion: "policy-1",
+        decisionSchemaVersion: "schema-1",
+        agentFuseCommit: "commit-1",
+      },
+    })).rejects.toThrow("cannot be reused");
+  });
+
+  it("keeps legacy ACTION_DENIED ledgers readable", async () => {
+    const instance = runtime();
+    const session = await instance.createSession({ title: "Legacy denied" });
+    await propose(instance, session.id, "action", "legacy-action");
+    await instance.appendEntry(session.id, {
+      type: "ACTION_APPROVED",
+      payload: { actionId: "legacy-action" },
+      safeMetadata: evidence("legacy-action"),
+    });
+    await instance.appendEntry(session.id, {
+      type: "ACTION_DENIED",
+      payload: { actionId: "legacy-action" },
+      safeMetadata: { actionId: "legacy-action" },
+    });
+    expect((await instance.projectCurrentState(session.id)).pendingAction).toBeNull();
+  });
+
+  it("rejects generic settlement without matching started evidence", async () => {
+    const instance = runtime();
+    const session = await instance.createSession({ title: "Settlement before start" });
+    await propose(instance, session.id, "action", "action-1");
+    await instance.appendEntry(session.id, {
+      type: "ACTION_APPROVED",
+      payload: { actionId: "action-1" },
+      safeMetadata: evidence("action-1"),
+    });
+    await decideAllow(instance, session.id, "action-1");
+    await expect(instance.appendEntry(session.id, {
+      type: "ACTION_COMPLETED",
+      payload: { actionId: "action-1" },
+      safeMetadata: evidence("action-1"),
     })).rejects.toThrow("started evidence");
   });
 
@@ -279,6 +464,7 @@ describe("session lifecycle integrity", () => {
       payload: { actionId },
       safeMetadata: evidence(actionId),
     });
+    if (kind === "action") await decideAllow(instance, session.id, actionId);
     await instance.appendEntry(session.id, {
       type: EVENTS[kind].started,
       payload: { actionId },
@@ -304,6 +490,7 @@ describe("session lifecycle integrity", () => {
       payload: { actionId },
       safeMetadata: evidence(actionId),
     });
+    if (kind === "action") await decideAllow(instance, session.id, actionId);
     await instance.appendEntry(session.id, {
       type: EVENTS[kind].started,
       payload: { actionId },
@@ -319,5 +506,38 @@ describe("session lifecycle integrity", () => {
       payload: { reason: "action settlement is durable" },
     });
     expect((await instance.projectCurrentState(session.id)).status).toBe(expectedStatus);
+  });
+
+  it("does not make an interrupted started action reapprovable", async () => {
+    const instance = runtime();
+    const session = await instance.createSession({ title: "Interrupted action" });
+    await propose(instance, session.id, "action", "action-interrupted");
+    await instance.appendEntry(session.id, {
+      type: "ACTION_APPROVED",
+      payload: { actionId: "action-interrupted" },
+      safeMetadata: evidence("action-interrupted"),
+    });
+    await decideAllow(instance, session.id, "action-interrupted");
+    await instance.appendEntry(session.id, {
+      type: "ACTION_STARTED",
+      payload: { actionId: "action-interrupted" },
+      safeMetadata: evidence("action-interrupted"),
+    });
+    await instance.appendEntry(session.id, {
+      type: "SESSION_INTERRUPTED",
+      payload: { reason: "settlement_persistence_failed" },
+      safeMetadata: {
+        actionId: "action-interrupted",
+        executionStatus: "unknown_or_interrupted",
+      },
+    });
+    const projection = await instance.projectCurrentState(session.id);
+    expect(projection.status).toBe("Interrupted");
+    expect(projection.pendingAction).toMatchObject({
+      actionId: "action-interrupted",
+      started: true,
+      recoveryRequired: false,
+      approved: false,
+    });
   });
 });

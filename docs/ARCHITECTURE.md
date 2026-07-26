@@ -198,6 +198,47 @@ same rules again to session metadata, project display names, entries, and patch
 summaries. This deterministic scanner intentionally does not claim to detect
 every possible secret or private identifier.
 
+### Universal Action Runtime (`packages/action-runtime`)
+
+**Purpose:** Provider-neutral approval and dispatch contracts for future
+non-coding capabilities.
+
+`ActionProposal`, `ActionApproval`, `ActionDecision`, and `ActionOutcome` remain
+separate records. Approval binds a canonical SHA-256 proposal digest and expiry.
+Deny, hold, decision error, unknown action, stale approval, and dispatch-evidence
+failure all block the physical handler. A successful decision creates no
+outcome; only a dispatched handler can settle one.
+
+The optional v0.6 proof maps lifecycle facts into existing Session Runtime
+events without changing its schema. `ACTION_DECIDED` is committed independently
+before `ACTION_STARTED`; generic Action start requires the matching durable
+allow decision. A settlement persistence failure after dispatch produces
+`Interrupted` with an unknown physical outcome and cannot replay the handler.
+Patch and Command paths remain unchanged.
+
+### Managed Python and AgentFuse
+
+`packages/python-runtime` defines managed-runtime contracts and deterministic
+manifest/protocol policies. Tauri owns provisioning below its private
+application-data root, verifies pinned archive and installed-tree hashes,
+rejects unsafe archive entries, promotes only verified profiles, and starts the
+fixed interpreter without a shell under a cleared environment. Distribution,
+AgentFuse source, and bridge tree truth comes from the compile-time embedded
+manifest rather than the mutable installed profile record.
+
+`packages/agentfuse-adapter` maps an exact Action proposal and approval to
+`kerniq.agentfuse.bridge.v1`, then validates decision identity, policy/schema
+versions, evidence, and the pinned canonical source revision. The Python bridge
+loads canonical DHMS AgentFuse 3.6.0 source at commit
+`ec4b5842339dccfba0db62df7541920759203bc9` and calls its public
+`RuntimeGuard.evaluate()` decision-only API; TypeScript does not implement its
+policy. The one-shot bridge process has one enforced 15-second session deadline.
+The development proof is excluded unless its dedicated build flag is enabled.
+
+The package version is independent of the preserved DHMS historical evidence
+milestone `v3.5.2`; both continue using evidence schema
+`agentfuse-evidence-schema-v0.1`.
+
 ### 5. Diff Engine (`packages/diff-engine`)
 
 **Purpose:** Safe code modifications through patch proposals.

@@ -1,7 +1,7 @@
 {
   "name": "@qodex/desktop",
   "private": true,
-  "version": "0.2.0-beta.2",
+  "version": "0.6.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -12,12 +12,15 @@
     "tauri": "tauri"
   },
   "dependencies": {
+    "@qodex/action-runtime": "workspace:*",
     "@qodex/agent-runtime": "workspace:*",
+    "@qodex/agentfuse-adapter": "workspace:*",
     "@qodex/context-engine": "workspace:*",
     "@qodex/diff-engine": "workspace:*",
     "@qodex/marketplace-runtime": "workspace:^",
     "@qodex/project-runtime": "workspace:*",
     "@qodex/provider-sdk": "workspace:*",
+    "@qodex/python-runtime": "workspace:*",
     "@qodex/session-runtime": "workspace:*",
     "@tauri-apps/api": "^2.0.0",
     "@tauri-apps/plugin-dialog": "^2.7.2",

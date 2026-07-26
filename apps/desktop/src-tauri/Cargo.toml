@@ -1,6 +1,6 @@
 [package]
 name = "qodex-desktop"
-version = "0.2.0-beta.2"
+version = "0.6.0"
 description = "KerniQ Desktop Shell"
 authors = ["KerniQ"]
 edition = "2021"
@@ -18,5 +18,9 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 rusqlite = { version = "0.32", features = ["bundled"] }
 sha2 = "0.10"
+flate2 = "1"
+fs2 = "0.4"
+reqwest = { version = "0.12", default-features = false, features = ["blocking", "rustls-tls"] }
+tar = "0.4"
 tauri-plugin-dialog = "2"
 tauri-plugin-fs = "2"
