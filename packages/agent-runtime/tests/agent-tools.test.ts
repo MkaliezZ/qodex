@@ -1,6 +1,15 @@
 import { describe, expect, it } from "vitest";
-import { AgentToolRegistry } from "../src/agent-loop/tools.js";
-import type { AgentProjectAccess } from "../src/agent-loop/types.js";
+import {
+  AGENT_TOOLS,
+  AgentToolRegistry,
+  createProjectCommandActionParameters,
+  PROJECT_COMMAND_POLICY,
+  serializeTrustedProjectCommandPolicy,
+} from "../src/index.js";
+import type {
+  AgentProjectAccess,
+  TrustedProjectCommandDefinition,
+} from "../src/index.js";
 
 function project(files: Record<string, string>, commandExecutionAvailable = true): AgentProjectAccess {
   return {
@@ -92,7 +101,8 @@ describe("AgentToolRegistry", () => {
       "Cargo.toml": "[package]\nname='fixture'",
     }));
     const result = await registry.executeReadTool({ id: "commands", name: "list_project_commands", arguments: {} });
-    const commands = (result.data as { commands: Array<{ id: string }> }).commands.map((command) => command.id);
+    const trustedCommands = (result.data as { commands: TrustedProjectCommandDefinition[] }).commands;
+    const commands = trustedCommands.map((command) => command.id);
     expect(commands).toEqual([
       "package-script:build",
       "package-script:test",
@@ -102,6 +112,11 @@ describe("AgentToolRegistry", () => {
     ]);
     expect(commands).not.toContain("package-script:deploy");
     expect(commands).not.toContain("package-script:publish");
+    expect(trustedCommands.every((command) => command.policy === PROJECT_COMMAND_POLICY)).toBe(true);
+    expect(trustedCommands.find((command) => command.id === "cargo:test")?.catalogDigest)
+      .toBe("sha256:e028ed42b3fd293042eb5d844b258b77041e773ea835eed28b3b0d3b2b8cdec1");
+    expect(trustedCommands.find((command) => command.id === "cargo:check")?.catalogDigest)
+      .toBe("sha256:5bdbb4d8a3cbd4e1c33456766931c4e4944702c8060dfff4eb63d6bca1947a04");
   });
 
   it("resolves commands only by catalog ID", async () => {
@@ -114,7 +129,175 @@ describe("AgentToolRegistry", () => {
     const unknown = await registry.resolveCommand({
       id: "run-2", name: "run_project_command", arguments: { commandId: "raw:rm" },
     });
-    expect(resolved.command).toMatchObject({ executable: "pnpm", args: ["run", "test"], cwd: "." });
+    expect(resolved.command).toMatchObject({
+      id: "package-script:test",
+      label: "pnpm test",
+      executable: "pnpm",
+      args: ["run", "test"],
+      cwd: ".",
+      source: "package.json",
+      category: "test",
+      catalogDigest: "sha256:ae6d762cb7a719a1dce25ddc6dc186a432f6f201fca512b63a40242ce83d0ea5",
+      policy: PROJECT_COMMAND_POLICY,
+    });
+    expect(unknown.result).toMatchObject({ ok: false, code: "unknown_command_id" });
+  });
+
+  it("uses immutable KerniQ policy metadata that project metadata cannot override", async () => {
+    const registry = new AgentToolRegistry(project({
+      "package.json": JSON.stringify({
+        risk: "read",
+        approval: "automatic",
+        policyProfileId: "project-selected-policy",
+        executable: "sh",
+        scripts: { test: "vitest" },
+        kerniqProjectCommands: {
+          test: {
+            risk: "read",
+            approval: "automatic",
+            policyProfileId: "project-selected-policy",
+          },
+        },
+      }),
+    }));
+    const result = await registry.executeReadTool({
+      id: "commands-policy",
+      name: "list_project_commands",
+      arguments: {},
+    });
+    const command = (result.data as { commands: TrustedProjectCommandDefinition[] }).commands[0];
+
+    expect(command.policy).toBe(PROJECT_COMMAND_POLICY);
+    expect(command.policy).toEqual({
+      actionType: "kerniq.project-command.run",
+      risk: "process",
+      approval: "explicit_once",
+      maxTimeoutMs: 120_000,
+      policyProfileId: "kerniq-project-command-v1",
+    });
+    expect(Object.isFrozen(command.policy)).toBe(true);
+    expect(() => {
+      (command.policy as unknown as { risk: string }).risk = "read";
+    }).toThrow(TypeError);
+    expect(command.policy.risk).toBe("process");
+  });
+
+  it("serializes trusted policy metadata deterministically", () => {
+    const expected =
+      "{\"actionType\":\"kerniq.project-command.run\",\"risk\":\"process\",\"approval\":\"explicit_once\",\"maxTimeoutMs\":120000,\"policyProfileId\":\"kerniq-project-command-v1\"}";
+
+    expect(serializeTrustedProjectCommandPolicy()).toBe(expected);
+    expect(serializeTrustedProjectCommandPolicy(PROJECT_COMMAND_POLICY)).toBe(expected);
+  });
+
+  it("keeps the model command schema strict and rejects policy or process fields", async () => {
+    const commandTool = AGENT_TOOLS.find((tool) => tool.name === "run_project_command");
+    expect(commandTool?.inputSchema).toEqual({
+      type: "object",
+      additionalProperties: false,
+      required: ["commandId"],
+      properties: { commandId: { type: "string", minLength: 1 } },
+    });
+
+    const registry = new AgentToolRegistry(project({
+      "package.json": JSON.stringify({ scripts: { test: "vitest" } }),
+    }));
+    const result = await registry.resolveCommand({
+      id: "model-policy-override",
+      name: "run_project_command",
+      arguments: {
+        commandId: "package-script:test",
+        risk: "read",
+        approval: "automatic",
+        policyProfileId: "model-selected-policy",
+        executable: "sh",
+      },
+    });
+
+    expect(result.command).toBeUndefined();
+    expect(result.result).toMatchObject({ ok: false, code: "invalid_arguments" });
+  });
+
+  it("constructs narrow immutable action parameters without invoking execution", async () => {
+    let nativeRunnerInvocations = 0;
+    const nativeRunner = () => {
+      nativeRunnerInvocations += 1;
+    };
+    const registry = new AgentToolRegistry(project({
+      "package.json": JSON.stringify({ scripts: { test: "vitest" } }),
+    }));
+    const resolved = await registry.resolveCommand({
+      id: "contract-only",
+      name: "run_project_command",
+      arguments: { commandId: "package-script:test" },
+    });
+    const parameters = createProjectCommandActionParameters({
+      command: resolved.command!,
+      projectBindingId: "project-0123456789abcdef01234567",
+      projectFingerprint: `sha256:${"a".repeat(64)}`,
+    });
+
+    expect(parameters).toEqual({
+      commandId: "package-script:test",
+      catalogDigest: "sha256:ae6d762cb7a719a1dce25ddc6dc186a432f6f201fca512b63a40242ce83d0ea5",
+      commandCategory: "test",
+      projectBindingId: "project-0123456789abcdef01234567",
+      projectFingerprint: `sha256:${"a".repeat(64)}`,
+    });
+    expect(Object.keys(parameters)).toEqual([
+      "commandId",
+      "catalogDigest",
+      "commandCategory",
+      "projectBindingId",
+      "projectFingerprint",
+    ]);
+    expect(Object.isFrozen(parameters)).toBe(true);
+    expect(parameters).not.toHaveProperty("executable");
+    expect(parameters).not.toHaveProperty("args");
+    expect(parameters).not.toHaveProperty("environment");
+    expect(parameters).not.toHaveProperty("cwd");
+    expect(parameters).not.toHaveProperty("timeout");
+    expect(parameters).not.toHaveProperty("approval");
+    expect(nativeRunner).toBeTypeOf("function");
+    expect(nativeRunnerInvocations).toBe(0);
+
+    expect(() => createProjectCommandActionParameters({
+      command: {
+        ...resolved.command!,
+        policy: { ...PROJECT_COMMAND_POLICY },
+      } as TrustedProjectCommandDefinition,
+      projectBindingId: "project-0123456789abcdef01234567",
+      projectFingerprint: `sha256:${"a".repeat(64)}`,
+    })).toThrow("trusted KerniQ catalog");
+  });
+
+  it("does not attach trusted policy to malformed or unknown catalog entries", async () => {
+    const registry = new AgentToolRegistry(project({
+      "package.json": JSON.stringify({
+        scripts: {
+          test: {
+            commandId: "test",
+            risk: "read",
+            approval: "automatic",
+            policyProfileId: "model-selected-policy",
+            executable: "sh",
+          },
+        },
+      }),
+    }));
+    const list = await registry.executeReadTool({
+      id: "malformed-catalog",
+      name: "list_project_commands",
+      arguments: {},
+    });
+    const unknown = await registry.resolveCommand({
+      id: "unknown-catalog",
+      name: "run_project_command",
+      arguments: { commandId: "package-script:test" },
+    });
+
+    expect((list.data as { commands: TrustedProjectCommandDefinition[] }).commands).toEqual([]);
+    expect(unknown.command).toBeUndefined();
     expect(unknown.result).toMatchObject({ ok: false, code: "unknown_command_id" });
   });
 

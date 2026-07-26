@@ -1,6 +1,6 @@
 # ADR-021
 
-**Status:** Proposed for v0.6.1; implementation not started
+**Status:** Accepted plan; v0.6.1.1 implementation in Draft PR
 **Date:** 2026-07-26
 
 ## Context
@@ -100,6 +100,23 @@ Risk cannot be derived from LLM arguments, provider metadata, prompt text,
 command output, or DHMS inference. For the initial adapter, every admitted
 command maps deterministically to Action risk `process`. A trusted
 KerniQ-owned catalog policy may later add finer metadata.
+
+### v0.6.1.1 implementation boundary
+
+The v0.6.1.1 Draft PR implements only the immutable KerniQ-owned policy
+metadata and pure future action-parameter contract. Every trusted discovered
+command receives the same source-defined policy. Unknown or malformed entries
+receive no guessed policy. The model schema remains limited to `commandId`.
+
+The existing TypeScript/Rust catalog digest is unchanged. Policy metadata has a
+separate deterministic representation; a future `ActionProposal` digest will
+bind command identity and policy metadata without weakening native
+re-resolution.
+
+No Action Runtime or AgentFuse call, `ACTION_DECIDED` persistence, dispatch
+change, approval UI change, Session schema change, native-runner change, Rust
+catalog change, or command migration is included. Project Command is not yet
+AgentFuse-protected. v0.6.1.2 and later slices have not started.
 
 ### Target lifecycle
 
@@ -309,17 +326,18 @@ started work is uncertain and cannot be replayed or reapproved.
 
 ## Compatibility and Non-Goals
 
-This proposed decision does not:
+The v0.6.1.1 implementation does not:
 
-- start implementation;
 - migrate Project Command or Patch;
+- connect Action Runtime or AgentFuse;
+- persist `ACTION_DECIDED` or alter command lifecycle events;
 - change Session or SQLite schema versions;
 - change managed Python or AgentFuse identity;
 - add arbitrary shell, executable, arguments, environment, cwd, or timeout;
 - add automatic approval or Git push;
 - add MCP or browser execution;
-- change package names/exports, bundle identity, local paths, or provider
-  behavior; or
+- change package names, bundle identity, local paths, or provider behavior;
+- remove or incompatibly change existing exports; or
 - claim production-wide AgentFuse protection.
 
 The full source audit, threat model, typed-contract proposal, test plan, and

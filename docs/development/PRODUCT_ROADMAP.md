@@ -22,7 +22,7 @@ Command migration remains outside this proof milestone and has not started.
 
 ### v0.6.1 - Project Command Action Runtime Adapter
 
-**Status:** Planning ready for review; implementation not started
+**Status:** v0.6.1.1 implementation in Draft PR; later slices not started
 
 The source audit, responsibility boundary, typed contracts, lifecycle decision,
 threat model, six implementation slices, automated test plan, and real Tauri
@@ -35,6 +35,12 @@ settlement uncertainty, and restart no-replay remain mandatory.
 
 Project Command has not been migrated. Patch migration remains a separate,
 future decision.
+
+The v0.6.1.1 Draft PR adds only immutable KerniQ-owned policy metadata and pure
+future action-parameter contracts. It does not connect Action Runtime, call
+AgentFuse, persist `ACTION_DECIDED`, or change dispatch, approval UI, Session
+schema, native execution, Rust catalog behavior, or the existing catalog
+digest. Project Command is not yet AgentFuse-protected.
 
 - [v0.6.1 planning document](kerniq_project_command_action_runtime_adapter_planning_v0_6_1.md)
 - [ADR-021](../../qodex-config/adr/ADR-021-Project-Command-Action-Runtime-Adapter.md)

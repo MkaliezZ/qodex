@@ -1,8 +1,11 @@
 import type { ModelTool, ModelToolCall } from "@qodex/provider-sdk";
 import {
+  createTrustedProjectCommandDefinition,
+  type TrustedProjectCommandDefinition,
+} from "./project-command-policy.js";
+import {
   type AgentProjectAccess,
   type ProjectCommandCategory,
-  type ProjectCommandDefinition,
 } from "./types.js";
 
 const MAX_FILES_SCANNED = 500;
@@ -84,7 +87,7 @@ export const AGENT_TOOLS: ModelTool[] = [
 ];
 
 export class AgentToolRegistry {
-  private commandCatalog = new Map<string, ProjectCommandDefinition>();
+  private commandCatalog = new Map<string, TrustedProjectCommandDefinition>();
 
   constructor(private readonly project: AgentProjectAccess) {}
 
@@ -117,7 +120,7 @@ export class AgentToolRegistry {
 
   async resolveCommand(call: ModelToolCall): Promise<{
     result?: AgentToolResult;
-    command?: ProjectCommandDefinition;
+    command?: TrustedProjectCommandDefinition;
   }> {
     const startedAt = Date.now();
     if (call.name !== "run_project_command") {
@@ -269,7 +272,7 @@ export class AgentToolRegistry {
             if (!safeScriptName(script) || typeof packageJson.scripts[script] !== "string") continue;
             const category = commandCategory(script);
             const scriptSource = packageJson.scripts[script] as string;
-            this.commandCatalog.set(`package-script:${script}`, {
+            const definition = createTrustedProjectCommandDefinition({
               id: `package-script:${script}`,
               label: `pnpm ${script}`,
               executable: "pnpm",
@@ -279,6 +282,7 @@ export class AgentToolRegistry {
               category,
               catalogDigest: await catalogDigest(`package.json\0${script}\0${scriptSource}`),
             });
+            this.commandCatalog.set(definition.id, definition);
           }
         }
       } catch {
@@ -287,7 +291,7 @@ export class AgentToolRegistry {
     }
     if (paths.has("Cargo.toml")) {
       for (const name of ["test", "check"] as const) {
-        this.commandCatalog.set(`cargo:${name}`, {
+        const definition = createTrustedProjectCommandDefinition({
           id: `cargo:${name}`,
           label: `cargo ${name}`,
           executable: "cargo",
@@ -297,6 +301,7 @@ export class AgentToolRegistry {
           category: name,
           catalogDigest: await catalogDigest(`cargo\0${name}`),
         });
+        this.commandCatalog.set(definition.id, definition);
       }
     }
   }

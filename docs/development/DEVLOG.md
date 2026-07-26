@@ -883,3 +883,26 @@ Planning artifacts:
 
 - [`kerniq_project_command_action_runtime_adapter_planning_v0_6_1.md`](kerniq_project_command_action_runtime_adapter_planning_v0_6_1.md)
 - [`ADR-021`](../../qodex-config/adr/ADR-021-Project-Command-Action-Runtime-Adapter.md)
+
+### KerniQ v0.6.1.1 Trusted Project Command Policy Contracts
+
+**Date:** 2026-07-26  |  **Status:** Implementation in Draft PR; not merged or frozen
+
+Added KerniQ-owned immutable policy metadata to every successfully discovered
+trusted Project Command. The policy fixes action type
+`kerniq.project-command.run`, risk `process`, approval `explicit_once`, maximum
+timeout `120000`, and profile `kerniq-project-command-v1`. Project metadata,
+model arguments, provider metadata, and command output cannot replace these
+values.
+
+Added a pure narrow `ProjectCommandActionParameters` contract and factory for
+future Action proposal mapping. It carries only command ID, the unchanged
+native catalog digest, command category, project binding ID, and project
+fingerprint. It does not carry executable, arbitrary arguments, environment,
+private root, cwd, caller timeout, model risk, or approval data.
+
+This slice does not connect Action Runtime or AgentFuse, persist
+`ACTION_DECIDED`, change `COMMAND_STARTED`, modify the native runner or Rust
+catalog, change approval UI or Session schema, or migrate Project Command.
+Project Command is not yet AgentFuse-protected. v0.6.1.2 and later slices have
+not started.
