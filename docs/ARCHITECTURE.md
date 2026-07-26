@@ -239,9 +239,23 @@ The package version is independent of the preserved DHMS historical evidence
 milestone `v3.5.2`; both continue using evidence schema
 `agentfuse-evidence-schema-v0.1`.
 
-This v0.6 foundation is merged and frozen. v0.6.1 has not started, and neither
-Patch nor Project Command has been migrated to the universal Action Runtime or
-AgentFuse boundary.
+This v0.6 foundation is merged and frozen. The source-grounded v0.6.1 Project
+Command adapter plan is ready for review; implementation has not started.
+The planned boundary keeps KerniQ as trusted catalog/risk/approval/native owner.
+KerniQ Action Runtime validates proposal, digest, approval, expiry, generation,
+and action identity. The bridge maps validated context into an AgentFuse
+`ToolCallRequest`; AgentFuse evaluates configured policy and emits canonical
+`allow|block` evidence; the KerniQ adapter validates and maps that response to
+`allow|deny|error`. The canonical AgentFuse Project Command path does not emit
+`hold`. The plan persists command-linked `ACTION_DECIDED` and retains
+`COMMAND_STARTED` / `COMMAND_COMPLETED` as the single physical command
+lifecycle. Rust catalog re-resolution and no-shell execution remain mandatory.
+Patch is not included.
+
+Planning details:
+
+- [`kerniq_project_command_action_runtime_adapter_planning_v0_6_1.md`](development/kerniq_project_command_action_runtime_adapter_planning_v0_6_1.md)
+- [`ADR-021`](../qodex-config/adr/ADR-021-Project-Command-Action-Runtime-Adapter.md)
 
 ### 5. Diff Engine (`packages/diff-engine`)
 

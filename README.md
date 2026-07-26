@@ -239,6 +239,22 @@ The DHMS historical evidence milestone remains `v3.5.2`; the package version
 is independent, and the evidence schema remains
 `agentfuse-evidence-schema-v0.1`.
 
+## Project Command Adapter Planning v0.6.1
+
+The source-grounded v0.6.1 plan is ready for review. KerniQ owns trusted command
+risk, proposal and approval validation, request/response identity, dispatch,
+and native execution. The KerniQ bridge maps validated context into an
+AgentFuse `ToolCallRequest`; AgentFuse evaluates configured policy and returns
+canonical `allow|block` evidence; KerniQ maps that result to
+`allow|deny|error`. The plan keeps Rust catalog re-resolution and no-shell
+execution, and selects `COMMAND_STARTED` / `COMMAND_COMPLETED` as the single
+physical command lifecycle. No adapter implementation or Project Command
+migration has started.
+
+See the
+[Project Command adapter plan](docs/development/kerniq_project_command_action_runtime_adapter_planning_v0_6_1.md)
+and [ADR-021](qodex-config/adr/ADR-021-Project-Command-Action-Runtime-Adapter.md).
+
 ---
 
 ## Roadmap
@@ -246,9 +262,10 @@ is independent, and the evidence schema remains
 The authoritative roadmap is maintained in
 [PRODUCT_ROADMAP.md](docs/development/PRODUCT_ROADMAP.md). v0.4.1 is frozen;
 v0.6 is merged and frozen as the managed Python and universal action
-foundation. v0.6.1 planning has not started, and neither Patch nor Project
-Command has been migrated to AgentFuse. Installer work is planned for v0.8,
-and the Stage 2 namespace-wide rename remains explicitly deferred.
+foundation. v0.6.1 Project Command adapter planning is ready for review, but
+implementation and migration have not started. Patch remains outside the
+planned scope. Installer work is planned for v0.8, and the Stage 2
+namespace-wide rename remains explicitly deferred.
 
 ---
 
