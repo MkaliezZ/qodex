@@ -845,3 +845,38 @@ The final verdict is
 started. Patch migration and Project Command migration have not started. The
 full evidence record is
 [`kerniq_v0_6_0_result_review_and_freeze.md`](kerniq_v0_6_0_result_review_and_freeze.md).
+
+### KerniQ Project Command Action Runtime Adapter Planning v0.6.1
+
+**Date:** 2026-07-26  |  **Status:** Planning ready for review; implementation not started
+
+Audited the live Project Command path from provider tool declarations through
+TypeScript catalog resolution, explicit Desktop approval, durable Session
+receipts, Tauri invocation, Rust catalog re-resolution, direct no-shell process
+execution, timeout/cancellation/output bounds, settlement persistence, and
+restart recovery.
+
+The proposed adapter keeps KerniQ as the trusted risk-classification, approval,
+dispatch, and physical-execution owner. DHMS remains the decision-only policy
+and authorization boundary and does not classify command danger. Universal
+Action Runtime supplies proposal-digest/approval binding, durable
+`ACTION_DECIDED`, dispatch gating, and duplicate prevention. Session Runtime
+retains durable lifecycle, interruption, settlement uncertainty, and restart
+no-replay.
+
+The lifecycle decision is one physical command, one authoritative
+`COMMAND_STARTED`, and one `COMMAND_COMPLETED` or `SESSION_INTERRUPTED`
+settlement. Generic `ACTION_STARTED` / `ACTION_COMPLETED` are not planned for
+the same command. Rust continues to independently resolve the command ID and
+catalog digest and accepts no arbitrary executable, arguments, environment,
+working directory, shell command, or caller-selected timeout.
+
+The plan defines six future implementation slices, a 16-item threat model,
+unit/integration/Desktop E2E coverage, and an isolated real Tauri proof.
+Project Command migration, Patch migration, Session schema changes, managed
+Python identity changes, and runtime implementation remain explicitly false.
+
+Planning artifacts:
+
+- [`kerniq_project_command_action_runtime_adapter_planning_v0_6_1.md`](kerniq_project_command_action_runtime_adapter_planning_v0_6_1.md)
+- [`ADR-021`](../../qodex-config/adr/ADR-021-Project-Command-Action-Runtime-Adapter.md)

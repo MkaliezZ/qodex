@@ -17,17 +17,25 @@ mature Capability Pack, not the product boundary.
 **Status:** Merged and frozen
 
 Private managed CPython provisioning, universal action contracts, and one
-development-only canonical AgentFuse proof are frozen. v0.6.1 has not started;
-Patch and Project Command migration remains explicitly outside this proof
-milestone and has not started.
+development-only canonical AgentFuse proof are frozen. Patch and Project
+Command migration remains outside this proof milestone and has not started.
 
-Recommended next milestone:
+### v0.6.1 - Project Command Action Runtime Adapter
 
-```text
-KerniQ v0.6.1 — Project Command Action Runtime Adapter Planning
-```
+**Status:** Planning ready for review; implementation not started
 
-This is a planning recommendation only; implementation has not started.
+The source audit, responsibility boundary, typed contracts, lifecycle decision,
+threat model, six implementation slices, automated test plan, and real Tauri
+proof plan are documented. The planned adapter preserves KerniQ-owned risk and
+physical execution, DHMS decision-only policy evaluation, native catalog
+re-resolution, no shell, one authoritative command start, honest settlement
+uncertainty, and restart no-replay.
+
+Project Command has not been migrated. Patch migration remains a separate,
+future decision.
+
+- [v0.6.1 planning document](kerniq_project_command_action_runtime_adapter_planning_v0_6_1.md)
+- [ADR-021](../../qodex-config/adr/ADR-021-Project-Command-Action-Runtime-Adapter.md)
 
 ### v0.7 - Coding Pack Product Integration
 
