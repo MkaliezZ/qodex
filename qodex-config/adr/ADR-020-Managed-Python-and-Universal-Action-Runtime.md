@@ -1,6 +1,6 @@
 # ADR-020
 
-**Status:** Accepted for v0.6 foundation
+**Status:** Accepted and frozen for v0.6 foundation
 **Date:** 2026-07-24
 
 ## Context
@@ -231,3 +231,7 @@ an explicit bridge compatibility review and a new source pin.
 No claim is made that all KerniQ actions are protected by AgentFuse, that
 cancellation erases side effects, that SQLite and external actions are atomic,
 or that the managed runtime is a malware sandbox.
+
+The v0.6 foundation is merged and frozen. v0.6.1 has not started. Patch and
+Project Command migration have not started and remain subject to separate
+planning and review.

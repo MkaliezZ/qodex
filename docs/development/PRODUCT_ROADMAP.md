@@ -14,11 +14,20 @@ mature Capability Pack, not the product boundary.
 
 ### v0.6 - Managed Python Runtime, Universal Action Runtime, and DHMS / AgentFuse Integration
 
-**Status:** Implementation, real smoke, and Draft PR CI complete; final review pending
+**Status:** Merged and frozen
 
 Private managed CPython provisioning, universal action contracts, and one
-development-only canonical AgentFuse proof are implemented. Patch and Command
-integration remains explicitly outside this proof milestone.
+development-only canonical AgentFuse proof are frozen. v0.6.1 has not started;
+Patch and Project Command migration remains explicitly outside this proof
+milestone and has not started.
+
+Recommended next milestone:
+
+```text
+KerniQ v0.6.1 — Project Command Action Runtime Adapter Planning
+```
+
+This is a planning recommendation only; implementation has not started.
 
 ### v0.7 - Coding Pack Product Integration
 

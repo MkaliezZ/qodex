@@ -702,7 +702,7 @@ and `git diff --check`.
 
 ### KerniQ Managed Python and Universal Action Runtime v0.6.0
 
-**Date:** 2026-07-24  |  **Status:** Implementation, real smoke, and Draft PR CI complete; final review pending
+**Date:** 2026-07-24  |  **Status:** Merged and frozen through the v0.6.0.1 correction
 
 Added provider-neutral Action contracts with exact proposal-digest approval,
 pre-dispatch policy decisions, awaited durable dispatch evidence, at-most-once
@@ -738,7 +738,7 @@ bridge validation, Desktop E2E, and native Rust checks on macOS and Windows.
 
 ### KerniQ Decision Contract and Runtime Integrity Correction v0.6.0.1
 
-**Date:** 2026-07-24  |  **Status:** AgentFuse 3.6.0 repin and local validation complete; Draft PR CI pending
+**Date:** 2026-07-24  |  **Status:** Merged and frozen
 
 The canonical Python package identity is corrected from the PR-only `3.5.1`
 value to the SemVer-minor release identity `dhms-agentfuse 3.6.0`. Historical
@@ -812,3 +812,36 @@ compile-time trusted source digest. The full app then reverified Ready and
 passed canonical self-check. The initial user-initiated production install had
 already completed against the same trusted manifest. Full app stop left zero
 KerniQ or managed Python processes.
+
+### KerniQ v0.6.0 Result Review and Freeze
+
+**Date:** 2026-07-26  |  **Status:** Completed
+
+DHMS PR #3 was merged first with merge commit
+`e7ca9a0848497906b95047a0fe46640d27b32144`, followed by KerniQ PR #6 with
+merge commit `3d333a30e4507e796aa97ddc0142606ad2e42587`. The pinned DHMS commit remains
+`ec4b5842339dccfba0db62df7541920759203bc9`, package `3.6.0`, policy
+`dhms-agentfuse-runtime-guard@3.6.0`, and schema
+`agentfuse-evidence-schema-v0.1`.
+
+Post-merge validation passed 89 DHMS tests, 1,486 KerniQ workspace tests, 35
+Action Runtime tests, 73 Session Runtime tests, 15 Python Runtime tests, 15
+AgentFuse Adapter tests, 8 Python bridge tests, 56 Desktop unit tests, 56
+Desktop E2E scenarios with four credential-gated scenarios skipped, and 35
+native Rust tests with two maintenance tests ignored. Ordinary and
+proof-enabled debug Tauri builds passed. DHMS CI run `30191818461` and KerniQ
+CI run `30192158944` passed.
+
+A fresh isolated macOS Tauri smoke repeated user-initiated installation,
+canonical self-check, allow, deny, settlement-fault, restart, and tamper
+verification. The mutable installed record could not bless source tampering,
+no temporary profile was promoted, and full shutdown left zero orphan
+processes. Earlier environment-interrupted Repair attempts remain a documented
+caveat; successful Repair under that interrupted network condition is not
+claimed.
+
+The final verdict is
+`KERNIQ_V0_6_0_MANAGED_ACTION_RUNTIME_FOUNDATION_FROZEN`. v0.6.1 has not
+started. Patch migration and Project Command migration have not started. The
+full evidence record is
+[`kerniq_v0_6_0_result_review_and_freeze.md`](kerniq_v0_6_0_result_review_and_freeze.md).
