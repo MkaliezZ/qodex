@@ -231,11 +231,18 @@ describe("AgentToolRegistry", () => {
       name: "run_project_command",
       arguments: { commandId: "package-script:test" },
     });
-    const parameters = createProjectCommandActionParameters({
+    const parameters = await createProjectCommandActionParameters({
       command: resolved.command!,
       projectBindingId: "project-0123456789abcdef01234567",
       projectFingerprint: `sha256:${"a".repeat(64)}`,
     });
+    const policyDigestBytes = await crypto.subtle.digest(
+      "SHA-256",
+      new TextEncoder().encode(serializeTrustedProjectCommandPolicy()),
+    );
+    const expectedPolicyDigest = `sha256:${[...new Uint8Array(policyDigestBytes)]
+      .map((byte) => byte.toString(16).padStart(2, "0"))
+      .join("")}`;
 
     expect(parameters).toEqual({
       commandId: "package-script:test",
@@ -243,13 +250,18 @@ describe("AgentToolRegistry", () => {
       commandCategory: "test",
       projectBindingId: "project-0123456789abcdef01234567",
       projectFingerprint: `sha256:${"a".repeat(64)}`,
+      policyProfileId: "kerniq-project-command-v1",
+      policyDigest: expectedPolicyDigest,
     });
+    expect(parameters.policyDigest).toMatch(/^sha256:[0-9a-f]{64}$/);
     expect(Object.keys(parameters)).toEqual([
       "commandId",
       "catalogDigest",
       "commandCategory",
       "projectBindingId",
       "projectFingerprint",
+      "policyProfileId",
+      "policyDigest",
     ]);
     expect(Object.isFrozen(parameters)).toBe(true);
     expect(parameters).not.toHaveProperty("executable");
@@ -261,14 +273,14 @@ describe("AgentToolRegistry", () => {
     expect(nativeRunner).toBeTypeOf("function");
     expect(nativeRunnerInvocations).toBe(0);
 
-    expect(() => createProjectCommandActionParameters({
+    await expect(createProjectCommandActionParameters({
       command: {
         ...resolved.command!,
         policy: { ...PROJECT_COMMAND_POLICY },
       } as TrustedProjectCommandDefinition,
       projectBindingId: "project-0123456789abcdef01234567",
       projectFingerprint: `sha256:${"a".repeat(64)}`,
-    })).toThrow("trusted KerniQ catalog");
+    })).rejects.toThrow("trusted KerniQ catalog");
   });
 
   it("does not attach trusted policy to malformed or unknown catalog entries", async () => {

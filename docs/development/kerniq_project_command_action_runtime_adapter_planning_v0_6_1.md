@@ -1,9 +1,12 @@
 # KerniQ v0.6.1 Project Command Action Runtime Adapter Planning
 
 **Date:** 2026-07-26
-**Status:** v0.6.1.1 implementation in Draft PR; v0.6.1.2 and later not started
+**Updated:** 2026-07-27
+**Status:** v0.6.1.1 merged; v0.6.1.2 implementation in Draft PR; v0.6.1.3 not started
 **Source baseline:** `c7a0b0adf7a0dab4729a2db1a77a58d8c2366beb`
 **v0.6.1.1 implementation baseline:** `7be4a7d69699eeac7498be1d75e17c7c1dc599ad`
+**v0.6.1.1 merge:** `be32ca0caa764aa86e3de341557fedbc2acba0a5`
+**v0.6.1.2 implementation baseline:** `be32ca0caa764aa86e3de341557fedbc2acba0a5`
 
 ## Executive Summary
 
@@ -189,7 +192,8 @@ COMMAND_COMPLETED
 ### Current implementation state
 
 ```text
-Project Command carries KerniQ-owned trusted policy metadata=V0_6_1_1_DRAFT
+Project Command carries KerniQ-owned trusted policy metadata=V0_6_1_1_MERGED
+Project Command has pure proposal and approval mapping=V0_6_1_2_DRAFT
 Project Command currently enters ActionRuntime=NOT_CONFIRMED
 Project Command currently calls AgentFuse=NOT_CONFIRMED
 Project Command currently persists ACTION_DECIDED=NOT_CONFIRMED
@@ -198,9 +202,9 @@ ActionRuntime restores live process-local records after restart=NOT_CONFIRMED
 Native request accepts caller-selected arguments/environment/cwd/timeout=NOT_CONFIRMED
 ```
 
-Only the first line changes in v0.6.1.1. The remaining items are later
-implementation gaps or intentionally absent surfaces, not defects in the
-frozen v0.6 foundation.
+The first line changed in v0.6.1.1 and the second changes in v0.6.1.2. The
+remaining items are later implementation gaps or intentionally absent
+surfaces, not defects in the frozen v0.6 foundation.
 
 ### Audited test evidence
 
@@ -214,6 +218,7 @@ frozen v0.6 foundation.
 | `packages/session-runtime/tests/projection-recovery.test.ts` | Pending command reapproval, unmatched start interruption, approval generation, and no process on projection |
 | `packages/action-runtime/tests/runtime.test.ts` | Proposal digest, approval expiry/generation, decision barrier, duplicate dispatch, cancellation, uncertain settlement, and no replay |
 | `packages/agentfuse-adapter/tests/adapter.test.ts` | Protocol, action, policy/schema/revision, response, timeout/error, and duplicate-decision validation |
+| `apps/desktop/src/session/projectCommandActionMapping.test.ts` | Proposal determinism and identity, trusted policy digest binding, explicit generation conversion, exact approval binding, expiry rejection, excluded process fields, and dependency/import side-effect boundary |
 | `apps/desktop/src/session/agentSessionRecorder.test.ts` | Exact command event IDs, output redaction/bounds projection, settlement failure, and unmatched-start recovery |
 | `apps/desktop/src/platform/tauriProjectCommandRunner.test.ts` | Narrow native invoke shape and dedicated cancellation command |
 | `apps/desktop/src/platform/tauriCapability.test.ts` | Absence of Tauri shell permissions |
@@ -562,7 +567,8 @@ Threats reviewed: **16**.
 
 ### v0.6.1.1 - Trusted command risk metadata and action contracts
 
-**Status:** Implementation in Draft PR; not merged or frozen.
+**Status:** Merged through `be32ca0caa764aa86e3de341557fedbc2acba0a5`;
+not frozen.
 
 - Adds deterministic immutable KerniQ-owned command policy metadata.
 - Defines a narrow pure command Action parameter contract and factory.
@@ -573,12 +579,17 @@ Threats reviewed: **16**.
 
 ### v0.6.1.2 - Command proposal and approval mapping
 
+**Status:** Implementation in Draft PR; not merged or frozen.
+
 - Create one digest-bound `ActionProposal` from the resolved command and
   project binding.
 - Map the existing explicit command approval to one expiring
   `ActionApproval`.
-- Keep user denial on the existing `COMMAND_DENIED` path.
-- Add UI copy for trusted risk and policy-boundary scope.
+- Bind the fixed policy profile and deterministic policy digest without
+  changing the native catalog digest.
+- Convert Session's 0-based approval generation explicitly to Action Runtime's
+  positive generation.
+- Keep user denial and all command dispatch behavior unchanged.
 
 ### v0.6.1.3 - DHMS decision-only integration and durable ACTION_DECIDED
 
@@ -744,8 +755,9 @@ SQLite and the process, or safety of arbitrary project scripts.
 ## Explicit Non-Goals
 
 ```text
-v0.6.1.1 implementation in Draft PR=true
-v0.6.1.2 and later implementation started=false
+v0.6.1.1 merged=true
+v0.6.1.2 implementation in Draft PR=true
+v0.6.1.3 and later implementation started=false
 Project Command migrated=false
 Patch migrated=false
 arbitrary shell added=false
@@ -776,8 +788,9 @@ commands, arbitrary Python, and production claims beyond Project Command.
 3. Should command-linked `ACTION_DECIDED` extend the existing projector rule or
    use a new command-specific decision event? Reusing `ACTION_DECIDED` is
    preferred for canonical evidence, but its command binding must be explicit.
-4. How should Action Runtime's 1-based approval generation map to Session
-   Runtime's current 0-based initial generation outside the proof helper?
+4. Resolved in v0.6.1.2: one named and tested conversion maps Session
+   generation `n` to Action generation `n + 1`; invalid Session generations
+   fail closed.
 5. Should native timeout stay fixed at 120 seconds for v0.6.1 or become
    per-catalog metadata with a Rust-owned upper bound? Caller/model selection
    remains prohibited either way.
@@ -790,11 +803,12 @@ commands, arbitrary Python, and production claims beyond Project Command.
 ## Final Planning Verdict
 
 The current source supports a bounded adapter plan without altering the native
-runner or introducing a duplicate lifecycle. Only v0.6.1.1 trusted metadata and
-pure contracts are implemented in a Draft PR. Project Command is not connected
-to Action Runtime or AgentFuse and is not yet AgentFuse-protected. v0.6.1.2 and
-later slices remain ready for separate architecture, security, policy-profile,
-and test-plan review.
+runner or introducing a duplicate lifecycle. v0.6.1.1 trusted metadata and
+contracts are merged; v0.6.1.2 pure proposal and approval mapping is
+implemented in a Draft PR. Project Command does not enter Action Runtime state,
+does not call AgentFuse, and is not yet AgentFuse-protected. v0.6.1.3 and later
+slices remain ready for separate architecture, security, policy-profile, and
+test-plan review.
 
 ```text
 KERNIQ_V0_6_1_PROJECT_COMMAND_ADAPTER_PLAN_READY_FOR_REVIEW

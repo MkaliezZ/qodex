@@ -32,6 +32,8 @@ export interface ProjectCommandActionParameters {
   readonly commandCategory: ProjectCommandCategory;
   readonly projectBindingId: string;
   readonly projectFingerprint: string;
+  readonly policyProfileId: string;
+  readonly policyDigest: string;
 }
 
 export interface ProjectCommandActionParameterInput {
@@ -53,9 +55,9 @@ export function serializeTrustedProjectCommandPolicy(
   });
 }
 
-export function createProjectCommandActionParameters(
+export async function createProjectCommandActionParameters(
   input: ProjectCommandActionParameterInput,
-): Readonly<ProjectCommandActionParameters> {
+): Promise<Readonly<ProjectCommandActionParameters>> {
   if (input.command.policy !== PROJECT_COMMAND_POLICY) {
     throw new TypeError("Project Command policy metadata must come from the trusted KerniQ catalog.");
   }
@@ -81,7 +83,20 @@ export function createProjectCommandActionParameters(
     commandCategory: input.command.category,
     projectBindingId: input.projectBindingId,
     projectFingerprint: input.projectFingerprint,
+    policyProfileId: PROJECT_COMMAND_POLICY.policyProfileId,
+    policyDigest: await computeTrustedProjectCommandPolicyDigest(),
   });
+}
+
+async function computeTrustedProjectCommandPolicyDigest(): Promise<string> {
+  const serialized = serializeTrustedProjectCommandPolicy();
+  const digest = await globalThis.crypto.subtle.digest(
+    "SHA-256",
+    new TextEncoder().encode(serialized),
+  );
+  return `sha256:${[...new Uint8Array(digest)]
+    .map((byte) => byte.toString(16).padStart(2, "0"))
+    .join("")}`;
 }
 
 export function createTrustedProjectCommandDefinition(

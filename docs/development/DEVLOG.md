@@ -886,7 +886,7 @@ Planning artifacts:
 
 ### KerniQ v0.6.1.1 Trusted Project Command Policy Contracts
 
-**Date:** 2026-07-26  |  **Status:** Implementation in Draft PR; not merged or frozen
+**Date:** 2026-07-26  |  **Status:** Merged; not frozen
 
 Added KerniQ-owned immutable policy metadata to every successfully discovered
 trusted Project Command. The policy fixes action type
@@ -904,5 +904,28 @@ private root, cwd, caller timeout, model risk, or approval data.
 This slice does not connect Action Runtime or AgentFuse, persist
 `ACTION_DECIDED`, change `COMMAND_STARTED`, modify the native runner or Rust
 catalog, change approval UI or Session schema, or migrate Project Command.
-Project Command is not yet AgentFuse-protected. v0.6.1.2 and later slices have
-not started.
+Project Command is not yet AgentFuse-protected. PR #9 merged through merge
+commit `be32ca0caa764aa86e3de341557fedbc2acba0a5`.
+
+### KerniQ v0.6.1.2 Project Command Proposal and Approval Mapping
+
+**Date:** 2026-07-27  |  **Status:** Implementation in Draft PR; not merged or frozen
+
+Added a pure Desktop integration mapper that creates one digest-bound
+`ActionProposal` from a resolved trusted command, provider tool-call ID, Agent
+task and Session identities, project binding, project fingerprint, and trusted
+timestamp. The proposal binds the unchanged native catalog digest plus the
+fixed policy profile and a SHA-256 digest of the exact deterministic
+KerniQ-owned policy serialization.
+
+Added explicit Session-to-Action approval-generation conversion. Session
+generation `0` maps to Action generation `1`; invalid negative or fractional
+generations fail closed. The approval mapper binds the exact action, task, and
+proposal digest and reuses Action Runtime's public approval validator for
+generation and expiry validation.
+
+This slice does not instantiate or mutate Action Runtime state, call
+AgentFuse, persist `ACTION_DECIDED`, write Session events, invoke Tauri or the
+native runner, change command dispatch, change `COMMAND_STARTED`, migrate
+Project Command, or alter the Session schema. v0.6.1.3 has not started and
+Project Command is not yet AgentFuse-protected.
