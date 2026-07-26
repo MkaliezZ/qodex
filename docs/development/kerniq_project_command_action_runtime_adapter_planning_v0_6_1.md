@@ -1,8 +1,9 @@
 # KerniQ v0.6.1 Project Command Action Runtime Adapter Planning
 
 **Date:** 2026-07-26
-**Status:** Planning ready for review; implementation not started
+**Status:** v0.6.1.1 implementation in Draft PR; v0.6.1.2 and later not started
 **Source baseline:** `c7a0b0adf7a0dab4729a2db1a77a58d8c2366beb`
+**v0.6.1.1 implementation baseline:** `7be4a7d69699eeac7498be1d75e17c7c1dc599ad`
 
 ## Executive Summary
 
@@ -185,10 +186,10 @@ COMMAND_COMPLETED
   SessionRecoveryService.findUnmatchedStartedAction
 ```
 
-### Claims not confirmed by current source
+### Current implementation state
 
 ```text
-Project Command currently carries trusted ActionRisk metadata=NOT_CONFIRMED
+Project Command carries KerniQ-owned trusted policy metadata=V0_6_1_1_DRAFT
 Project Command currently enters ActionRuntime=NOT_CONFIRMED
 Project Command currently calls AgentFuse=NOT_CONFIRMED
 Project Command currently persists ACTION_DECIDED=NOT_CONFIRMED
@@ -197,14 +198,15 @@ ActionRuntime restores live process-local records after restart=NOT_CONFIRMED
 Native request accepts caller-selected arguments/environment/cwd/timeout=NOT_CONFIRMED
 ```
 
-These are implementation gaps or intentionally absent surfaces, not defects in
-the frozen v0.6 foundation.
+Only the first line changes in v0.6.1.1. The remaining items are later
+implementation gaps or intentionally absent surfaces, not defects in the
+frozen v0.6 foundation.
 
 ### Audited test evidence
 
 | File | Current evidence inspected |
 |:--|:--|
-| `packages/agent-runtime/tests/agent-tools.test.ts` | Safe discovery, exact catalog-ID resolution, unknown ID, and browser unavailability |
+| `packages/agent-runtime/tests/agent-tools.test.ts` | Safe discovery, immutable policy ownership, deterministic serialization, exact unchanged catalog IDs/digests/preview, strict model schema, narrow pure parameters, unknown ID, and browser unavailability |
 | `packages/agent-runtime/tests/minimal-agent-loop.test.ts` | Command approval, exact tool-call result, denial, and zero process start |
 | `packages/agent-runtime/tests/agent-loop-boundaries.test.ts` | Timeout result, running-command cancellation, provider stop, and command limits |
 | `packages/agent-runtime/tests/agent-loop-state-safety.test.ts` | Pre-dispatch persistence barrier, causal lifecycle order, settlement failure, stale/duplicate approval, cancellation, and at-most-once run |
@@ -560,10 +562,14 @@ Threats reviewed: **16**.
 
 ### v0.6.1.1 - Trusted command risk metadata and action contracts
 
-- Add deterministic KerniQ-owned command policy metadata.
-- Define the narrow command Action parameter/result mappings.
-- Reject missing/unknown policy metadata.
-- Do not connect dispatch yet.
+**Status:** Implementation in Draft PR; not merged or frozen.
+
+- Adds deterministic immutable KerniQ-owned command policy metadata.
+- Defines a narrow pure command Action parameter contract and factory.
+- Rejects missing, malformed, unknown, or caller-forged policy inputs.
+- Preserves existing command IDs, native catalog digest, command preview,
+  browser behavior, and strict model schema.
+- Does not connect dispatch, Action Runtime, AgentFuse, or Session evidence.
 
 ### v0.6.1.2 - Command proposal and approval mapping
 
@@ -738,7 +744,8 @@ SQLite and the process, or safety of arbitrary project scripts.
 ## Explicit Non-Goals
 
 ```text
-implementation started=false
+v0.6.1.1 implementation in Draft PR=true
+v0.6.1.2 and later implementation started=false
 Project Command migrated=false
 Patch migrated=false
 arbitrary shell added=false
@@ -783,9 +790,11 @@ commands, arbitrary Python, and production claims beyond Project Command.
 ## Final Planning Verdict
 
 The current source supports a bounded adapter plan without altering the native
-runner or introducing a duplicate lifecycle. Implementation is not started.
-The plan is ready for architecture, security, DHMS policy-profile, and test-plan
-review.
+runner or introducing a duplicate lifecycle. Only v0.6.1.1 trusted metadata and
+pure contracts are implemented in a Draft PR. Project Command is not connected
+to Action Runtime or AgentFuse and is not yet AgentFuse-protected. v0.6.1.2 and
+later slices remain ready for separate architecture, security, policy-profile,
+and test-plan review.
 
 ```text
 KERNIQ_V0_6_1_PROJECT_COMMAND_ADAPTER_PLAN_READY_FOR_REVIEW

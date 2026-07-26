@@ -52,11 +52,22 @@ export type { MockProviderOptions } from "./providers/mock.js";
 export { AgentLoopRuntime } from "./agent-loop/runtime.js";
 export { AgentToolRegistry, AGENT_TOOLS } from "./agent-loop/tools.js";
 export {
+  createProjectCommandActionParameters,
+  PROJECT_COMMAND_POLICY,
+  serializeTrustedProjectCommandPolicy,
+} from "./agent-loop/project-command-policy.js";
+export {
   isSettlementPersistenceError,
   SETTLEMENT_PERSISTENCE_ERROR_MESSAGE,
   SettlementPersistenceError,
 } from "./agent-loop/types.js";
 export type { AgentToolErrorCode, AgentToolResult } from "./agent-loop/tools.js";
+export type {
+  ProjectCommandActionParameterInput,
+  ProjectCommandActionParameters,
+  TrustedProjectCommandDefinition,
+  TrustedProjectCommandPolicy,
+} from "./agent-loop/project-command-policy.js";
 export type {
   AgentLoopStatus,
   AgentTimelineKind,
