@@ -4,13 +4,12 @@ import type {
   AgentFuseBridgeClient,
   AgentFuseDecisionRequest,
 } from "@qodex/agentfuse-adapter";
-import {
-  PROJECT_COMMAND_POLICY,
-} from "@qodex/agent-runtime";
+import { PROJECT_COMMAND_POLICY } from "@qodex/agent-runtime";
 import {
   InMemorySessionStore,
   SessionRecorder,
   SessionRuntime,
+  type PendingActionProjection,
 } from "@qodex/session-runtime";
 import {
   AGENTFUSE_COMMIT,
@@ -23,12 +22,16 @@ import {
 } from "./projectCommandActionMapping";
 import {
   createProjectCommandAgentFuseAdapter,
+  ProjectCommandApprovalExpiredDuringDecisionError,
   ProjectCommandDecisionCoordinator,
   ProjectCommandDecisionPersistenceError,
-  type DurableProjectCommandDecisionRecorder,
+  ProjectCommandDecisionTimeError,
+  ProjectCommandDurableApprovalError,
+  SessionProjectCommandDecisionLedger,
 } from "./projectCommandDecisionCoordinator";
 
 const NOW = new Date("2026-07-27T00:00:00.000Z");
+const EXPIRES_AT = "2026-07-27T00:10:00.000Z";
 const PROJECT_POLICY_DIGEST =
   "sha256:9c01df377b0cfd8db8392dc8966a2f12b38ad1b2ab9c89780ac049ac0eed38ad";
 
@@ -41,19 +44,14 @@ describe("ProjectCommandDecisionCoordinator", () => {
     async (coreDecision, expectedDecision, settled) => {
       const prepared = await prepare(coreDecision);
       const [first, duplicate] = await Promise.all([
-        prepared.coordinator.decideAndPersist(
-          prepared.proposal,
-          prepared.approval,
-          new AbortController().signal,
-        ),
-        prepared.coordinator.decideAndPersist(
-          prepared.proposal,
-          prepared.approval,
-          new AbortController().signal,
-        ),
+        decide(prepared),
+        decide(prepared),
       ]);
+      const completedDuplicate = await decide(prepared);
+
       expect(first.decision).toBe(expectedDecision);
       expect(duplicate).toEqual(first);
+      expect(completedDuplicate).toEqual(first);
       expect(prepared.bridge.requestDecision).toHaveBeenCalledTimes(1);
       expect(prepared.recordDurably).toHaveBeenCalledTimes(1);
 
@@ -102,15 +100,144 @@ describe("ProjectCommandDecisionCoordinator", () => {
     },
   );
 
-  it("persists one fail-closed error decision when the bridge fails", async () => {
-    const prepared = await prepare("allow", async () => {
-      throw new Error("bridge process exited");
-    });
-    const decision = await prepared.coordinator.decideAndPersist(
-      prepared.proposal,
-      prepared.approval,
-      new AbortController().signal,
+  it("requires durable COMMAND_APPROVED before requesting AgentFuse", async () => {
+    const prepared = await prepare("allow", { recordApproval: false });
+
+    await expect(decide(prepared)).rejects.toBeInstanceOf(
+      ProjectCommandDurableApprovalError,
     );
+    expect(prepared.bridge.requestDecision).not.toHaveBeenCalled();
+    expect(prepared.recordDurably).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ["actionId", (pending: PendingActionProjection) => ({
+      ...pending,
+      actionId: "another-action",
+    })],
+    ["taskId", (pending: PendingActionProjection) => ({
+      ...pending,
+      taskId: "another-task",
+    })],
+    ["proposalDigest", (pending: PendingActionProjection) => ({
+      ...pending,
+      proposalDigest: `sha256:${"c".repeat(64)}`,
+    })],
+    ["approvalId", (pending: PendingActionProjection) => ({
+      ...pending,
+      approvalId: "another-approval",
+    })],
+    ["approval generation", (pending: PendingActionProjection) => ({
+      ...pending,
+      approvalGeneration: 1,
+    })],
+    ["started state", (pending: PendingActionProjection) => ({
+      ...pending,
+      started: true,
+    })],
+    ["settled state", (pending: PendingActionProjection) => ({
+      ...pending,
+      settled: true,
+    })],
+    ["prior decision", (pending: PendingActionProjection) => ({
+      ...pending,
+      decisionRecorded: true,
+    })],
+  ] as const)(
+    "rejects the wrong durable %s before requesting AgentFuse",
+    async (_field, changePending) => {
+      const prepared = await prepare("allow");
+      prepared.coordinator = await coordinatorWithPending(
+        prepared,
+        changePending,
+      );
+
+      await expect(decide(prepared)).rejects.toBeInstanceOf(
+        ProjectCommandDurableApprovalError,
+      );
+      expect(prepared.bridge.requestDecision).not.toHaveBeenCalled();
+      expect(prepared.recordDurably).not.toHaveBeenCalled();
+    },
+  );
+
+  it("rejects a durable approval from another Session", async () => {
+    const prepared = await prepare("allow");
+    const other = await proposalAndApproval({ sessionId: "session-2" });
+    const coordinator = new ProjectCommandDecisionCoordinator({
+      adapter: prepared.adapter,
+      ledger: new SessionProjectCommandDecisionLedger(
+        prepared.runtime,
+        prepared.recorder,
+      ),
+      clock: () => NOW,
+    });
+
+    await expect(coordinator.decideAndPersist(
+      other.proposal,
+      other.approval,
+      new AbortController().signal,
+    )).rejects.toBeInstanceOf(ProjectCommandDurableApprovalError);
+    expect(prepared.bridge.requestDecision).not.toHaveBeenCalled();
+    expect(prepared.recordDurably).not.toHaveBeenCalled();
+  });
+
+  it("revalidates approval expiry after AgentFuse and discards allow", async () => {
+    let trustedNow = NOW;
+    const prepared = await prepare("allow", {
+      clock: () => trustedNow,
+      respond: async (response) => {
+        trustedNow = new Date(EXPIRES_AT);
+        return response;
+      },
+    });
+
+    await expect(decide(prepared)).rejects.toBeInstanceOf(
+      ProjectCommandApprovalExpiredDuringDecisionError,
+    );
+    expect(prepared.bridge.requestDecision).toHaveBeenCalledTimes(1);
+    expect(prepared.recordDurably).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ["before approval", "2026-07-26T23:59:59.999Z"],
+    ["at expiry", EXPIRES_AT],
+    ["after expiry", "2026-07-27T00:10:00.001Z"],
+  ])(
+    "rejects a decision timestamp %s",
+    async (_position, decidedAt) => {
+      const prepared = await prepare("allow", {
+        respond: async (response) => withDecidedAt(response, decidedAt),
+      });
+
+      await expect(decide(prepared)).rejects.toBeInstanceOf(
+        ProjectCommandDecisionTimeError,
+      );
+      expect(prepared.bridge.requestDecision).toHaveBeenCalledTimes(1);
+      expect(prepared.recordDurably).not.toHaveBeenCalled();
+    },
+  );
+
+  it("persists a decision timestamp inside the approval window once", async () => {
+    const prepared = await prepare("allow", {
+      respond: async (response) => withDecidedAt(
+        response,
+        "2026-07-27T00:05:00.000Z",
+      ),
+    });
+
+    await expect(decide(prepared)).resolves.toMatchObject({ decision: "allow" });
+    expect(prepared.bridge.requestDecision).toHaveBeenCalledTimes(1);
+    expect(prepared.recordDurably).toHaveBeenCalledTimes(1);
+  });
+
+  it("persists one fail-closed error decision when the bridge fails", async () => {
+    const prepared = await prepare("allow", {
+      respond: async () => {
+        throw new Error("bridge process exited");
+      },
+    });
+    const decision = await decide(prepared);
+
     expect(decision).toMatchObject({
       decision: "error",
       reasonCode: "bridge_process_exit",
@@ -130,84 +257,45 @@ describe("ProjectCommandDecisionCoordinator", () => {
       .toBeNull();
   });
 
-  it("fails closed when durable decision persistence fails", async () => {
-    const prepared = await proposalAndApproval();
-    const bridge = bridgeFor(prepared.proposal.actionId, "allow");
-    const adapter = await createProjectCommandAgentFuseAdapter(bridge, {
-      messageIdFactory: () => "message-1",
-      clock: () => NOW,
+  it("does not cache an allow when durable persistence fails", async () => {
+    const prepared = await prepare("allow");
+    prepared.recordDurably.mockRejectedValueOnce(new Error("storage unavailable"));
+
+    await expect(decide(prepared)).rejects.toBeInstanceOf(
+      ProjectCommandDecisionPersistenceError,
+    );
+    await expect(decide(prepared)).resolves.toMatchObject({ decision: "allow" });
+    expect(prepared.bridge.requestDecision).toHaveBeenCalledTimes(2);
+    expect(prepared.recordDurably).toHaveBeenCalledTimes(2);
+  });
+
+  it("does not cache a cancelled operation as a completed decision", async () => {
+    const controller = new AbortController();
+    const prepared = await prepare("allow", {
+      respond: async (response) => {
+        controller.abort();
+        return response;
+      },
     });
-    const recorder: DurableProjectCommandDecisionRecorder = {
-      recordDurably: vi.fn(async () => {
-        throw new Error("storage unavailable");
-      }),
-    };
-    const coordinator = new ProjectCommandDecisionCoordinator({
-      adapter,
-      recorder,
-      clock: () => NOW,
+
+    await expect(decide(prepared, controller.signal)).rejects.toMatchObject({
+      name: "AbortError",
     });
-    await expect(coordinator.decideAndPersist(
-      prepared.proposal,
-      prepared.approval,
-      new AbortController().signal,
-    )).rejects.toBeInstanceOf(ProjectCommandDecisionPersistenceError);
-    expect(bridge.requestDecision).toHaveBeenCalledTimes(1);
-    expect(recorder.recordDurably).toHaveBeenCalledTimes(1);
+    await expect(decide(prepared)).resolves.toMatchObject({ decision: "allow" });
+    expect(prepared.bridge.requestDecision).toHaveBeenCalledTimes(2);
+    expect(prepared.recordDurably).toHaveBeenCalledTimes(1);
   });
 
   it("does not request or persist a decision when already cancelled", async () => {
-    const prepared = await proposalAndApproval();
-    const bridge = bridgeFor(prepared.proposal.actionId, "allow");
-    const adapter = await createProjectCommandAgentFuseAdapter(bridge, {
-      messageIdFactory: () => "message-1",
-      clock: () => NOW,
-    });
-    const recorder: DurableProjectCommandDecisionRecorder = {
-      recordDurably: vi.fn(async () => {}),
-    };
-    const coordinator = new ProjectCommandDecisionCoordinator({
-      adapter,
-      recorder,
-      clock: () => NOW,
-    });
+    const prepared = await prepare("allow");
     const controller = new AbortController();
     controller.abort();
-    await expect(coordinator.decideAndPersist(
-      prepared.proposal,
-      prepared.approval,
-      controller.signal,
-    )).rejects.toMatchObject({ name: "AbortError" });
-    expect(bridge.requestDecision).not.toHaveBeenCalled();
-    expect(recorder.recordDurably).not.toHaveBeenCalled();
-  });
 
-  it("fails closed when cancelled after decision but before persistence", async () => {
-    const prepared = await proposalAndApproval();
-    const controller = new AbortController();
-    const bridge = bridgeFor(prepared.proposal.actionId, "allow", async (response) => {
-      controller.abort();
-      return response;
+    await expect(decide(prepared, controller.signal)).rejects.toMatchObject({
+      name: "AbortError",
     });
-    const adapter = await createProjectCommandAgentFuseAdapter(bridge, {
-      messageIdFactory: () => "message-1",
-      clock: () => NOW,
-    });
-    const recorder: DurableProjectCommandDecisionRecorder = {
-      recordDurably: vi.fn(async () => {}),
-    };
-    const coordinator = new ProjectCommandDecisionCoordinator({
-      adapter,
-      recorder,
-      clock: () => NOW,
-    });
-    await expect(coordinator.decideAndPersist(
-      prepared.proposal,
-      prepared.approval,
-      controller.signal,
-    )).rejects.toMatchObject({ name: "AbortError" });
-    expect(bridge.requestDecision).toHaveBeenCalledTimes(1);
-    expect(recorder.recordDurably).not.toHaveBeenCalled();
+    expect(prepared.bridge.requestDecision).not.toHaveBeenCalled();
+    expect(prepared.recordDurably).not.toHaveBeenCalled();
   });
 
   it("contains no dispatch, native runner, Tauri, or command-start dependency", async () => {
@@ -230,9 +318,15 @@ describe("ProjectCommandDecisionCoordinator", () => {
   });
 });
 
+interface PrepareOptions {
+  respond?: (response: unknown) => Promise<unknown>;
+  clock?: () => Date;
+  recordApproval?: boolean;
+}
+
 async function prepare(
   coreDecision: "allow" | "block",
-  respond?: () => Promise<unknown>,
+  options: PrepareOptions = {},
 ) {
   const prepared = await proposalAndApproval();
   const runtime = new SessionRuntime(
@@ -258,40 +352,80 @@ async function prepare(
       proposalDigest: prepared.proposal.proposalDigest,
     },
   });
-  await runtime.appendEntry(session.id, {
-    type: "COMMAND_APPROVED",
-    payload: { actionId: prepared.proposal.actionId },
-    safeMetadata: {
-      actionId: prepared.proposal.actionId,
-      taskId: prepared.proposal.taskId,
-      approvalId: prepared.approval.approvalId,
-      approvalGeneration: 0,
-    },
-  });
+  if (options.recordApproval !== false) {
+    await runtime.appendEntry(session.id, {
+      type: "COMMAND_APPROVED",
+      payload: { actionId: prepared.proposal.actionId },
+      safeMetadata: {
+        actionId: prepared.proposal.actionId,
+        taskId: prepared.proposal.taskId,
+        approvalId: prepared.approval.approvalId,
+        approvalGeneration: 0,
+      },
+    });
+  }
   const recorder = new SessionRecorder(runtime, session.id);
   const recordDurably = vi.spyOn(recorder, "recordDurably");
-  const bridge = respond
-    ? { requestDecision: vi.fn(respond) }
-    : bridgeFor(prepared.proposal.actionId, coreDecision);
+  const bridge = bridgeFor(
+    prepared.proposal.actionId,
+    coreDecision,
+    options.respond,
+  );
   const adapter = await createProjectCommandAgentFuseAdapter(bridge, {
-    messageIdFactory: () => "message-1",
+    messageIdFactory: sequenceIds("message"),
     clock: () => NOW,
   });
-  return {
+  const result = {
     ...prepared,
     runtime,
     sessionId: session.id,
-    bridge,
+    recorder,
     recordDurably,
+    bridge,
+    adapter,
     coordinator: new ProjectCommandDecisionCoordinator({
       adapter,
-      recorder,
-      clock: () => NOW,
+      ledger: new SessionProjectCommandDecisionLedger(runtime, recorder),
+      clock: options.clock ?? (() => NOW),
     }),
   };
+  return result;
 }
 
-async function proposalAndApproval() {
+async function coordinatorWithPending(
+  prepared: Awaited<ReturnType<typeof prepare>>,
+  changePending: (pending: PendingActionProjection) => PendingActionProjection,
+): Promise<ProjectCommandDecisionCoordinator> {
+  const projection = await prepared.runtime.projectCurrentState(prepared.sessionId);
+  if (!projection.pendingAction) throw new Error("Test requires a pending command.");
+  const projected = {
+    ...projection,
+    pendingAction: changePending({ ...projection.pendingAction }),
+  };
+  return new ProjectCommandDecisionCoordinator({
+    adapter: prepared.adapter,
+    ledger: new SessionProjectCommandDecisionLedger(
+      { projectCurrentState: vi.fn(async () => projected) },
+      prepared.recorder,
+    ),
+    clock: () => NOW,
+  });
+}
+
+function decide(
+  prepared: Awaited<ReturnType<typeof prepare>>,
+  signal = new AbortController().signal,
+) {
+  return prepared.coordinator.decideAndPersist(
+    prepared.proposal,
+    prepared.approval,
+    signal,
+  );
+}
+
+async function proposalAndApproval(
+  overrides: { sessionId?: string } = {},
+) {
   const proposal = await createProjectCommandActionProposal({
     command: {
       id: "package:test",
@@ -306,7 +440,7 @@ async function proposalAndApproval() {
     },
     toolCallId: "command-action-1",
     taskId: "task-1",
-    sessionId: "session-1",
+    sessionId: overrides.sessionId ?? "session-1",
     projectBindingId: "project-1",
     projectFingerprint: `sha256:${"b".repeat(64)}`,
     requestedAt: NOW.toISOString(),
@@ -316,7 +450,7 @@ async function proposalAndApproval() {
     approvalId: "approval-1",
     sessionApprovalGeneration: 0,
     approvedAt: NOW.toISOString(),
-    expiresAt: "2026-07-27T00:10:00.000Z",
+    expiresAt: EXPIRES_AT,
     now: NOW,
   });
   return { proposal, approval };
@@ -333,7 +467,7 @@ function bridgeFor(
       messageId: request.messageId,
       messageType: "decision_result",
       payload: {
-        decisionId: `decision-${decision}`,
+        decisionId: `decision-${decision}-${request.messageId}`,
         actionId,
         decision,
         reasonCode: decision === "allow" ? "allowed" : "policy_denied",
@@ -344,12 +478,25 @@ function bridgeFor(
         policyProfileId: "kerniq-project-command-v1",
         policyDigest: PROJECT_POLICY_DIGEST,
         evidence: {
-          record_id: `record-${decision}`,
+          record_id: `record-${decision}-${request.messageId}`,
           boundary_decision: { decision },
         },
         decidedAt: NOW.toISOString(),
       },
     })),
+  };
+}
+
+function withDecidedAt(response: unknown, decidedAt: string): unknown {
+  const envelope = response as {
+    payload: Record<string, unknown>;
+  };
+  return {
+    ...envelope,
+    payload: {
+      ...envelope.payload,
+      decidedAt,
+    },
   };
 }
 

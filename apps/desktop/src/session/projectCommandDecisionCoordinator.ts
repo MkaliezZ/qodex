@@ -16,7 +16,9 @@ import {
 } from "@qodex/agentfuse-adapter";
 import type {
   AppendEntryInput,
+  ProjectedSessionState,
   SafeJson,
+  SessionRuntime,
 } from "@qodex/session-runtime";
 import {
   AGENTFUSE_COMMIT,
@@ -26,13 +28,24 @@ import {
 } from "../platform/agentFuseIdentity";
 import { validateProjectCommandActionProposal } from "./projectCommandActionMapping";
 
-export interface DurableProjectCommandDecisionRecorder {
+const MAX_COMPLETED_DECISIONS = 128;
+
+export interface DurableProjectCommandDecisionLedger {
+  assertApproved(
+    proposal: ActionProposal,
+    approval: ActionApproval,
+  ): Promise<void>;
+  recordDurably(entry: AppendEntryInput): Promise<void>;
+}
+
+export interface ProjectCommandDecisionRecorder {
+  readonly sessionId: string;
   recordDurably(entry: AppendEntryInput): Promise<void>;
 }
 
 export interface ProjectCommandDecisionCoordinatorOptions {
   adapter: AgentFuseAdapter;
-  recorder: DurableProjectCommandDecisionRecorder;
+  ledger: DurableProjectCommandDecisionLedger;
   clock?: () => Date;
 }
 
@@ -48,9 +61,75 @@ export class ProjectCommandDecisionPersistenceError extends Error {
   }
 }
 
+export class ProjectCommandDurableApprovalError extends Error {
+  constructor() {
+    super("The exact durable Project Command approval is not active.");
+    this.name = "ProjectCommandDurableApprovalError";
+  }
+}
+
+export class ProjectCommandApprovalExpiredDuringDecisionError extends Error {
+  constructor() {
+    super("The Project Command approval expired during policy evaluation.");
+    this.name = "ProjectCommandApprovalExpiredDuringDecisionError";
+  }
+}
+
+export class ProjectCommandDecisionTimeError extends Error {
+  constructor() {
+    super("The Project Command decision time is outside the approval window.");
+    this.name = "ProjectCommandDecisionTimeError";
+  }
+}
+
+export class SessionProjectCommandDecisionLedger
+implements DurableProjectCommandDecisionLedger {
+  constructor(
+    private readonly runtime: Pick<SessionRuntime, "projectCurrentState">,
+    private readonly recorder: ProjectCommandDecisionRecorder,
+  ) {}
+
+  async assertApproved(
+    proposal: ActionProposal,
+    approval: ActionApproval,
+  ): Promise<void> {
+    if (proposal.sessionId !== this.recorder.sessionId) {
+      throw new ProjectCommandDurableApprovalError();
+    }
+    let projected: ProjectedSessionState;
+    try {
+      projected = await this.runtime.projectCurrentState(this.recorder.sessionId);
+    } catch {
+      throw new ProjectCommandDurableApprovalError();
+    }
+    const pending = projected.pendingAction;
+    const approvalGeneration = toSessionApprovalGeneration(approval.generation);
+    if (
+      !pending
+      || pending.kind !== "command"
+      || pending.actionId !== proposal.actionId
+      || pending.taskId !== proposal.taskId
+      || pending.proposalDigest !== proposal.proposalDigest
+      || !pending.approved
+      || pending.approvalId !== approval.approvalId
+      || pending.approvalGeneration !== approvalGeneration
+      || pending.started
+      || pending.settled
+      || pending.decisionRecorded
+    ) {
+      throw new ProjectCommandDurableApprovalError();
+    }
+  }
+
+  recordDurably(entry: AppendEntryInput): Promise<void> {
+    return this.recorder.recordDurably(entry);
+  }
+}
+
 export class ProjectCommandDecisionCoordinator {
-  private readonly decisions = new Map<string, Promise<ActionDecision>>();
-  private readonly clock;
+  private readonly inFlightDecisions = new Map<string, Promise<ActionDecision>>();
+  private readonly completedDecisions = new Map<string, ActionDecision>();
+  private readonly clock: () => Date;
 
   constructor(private readonly options: ProjectCommandDecisionCoordinatorOptions) {
     this.clock = options.clock ?? (() => new Date());
@@ -62,16 +141,35 @@ export class ProjectCommandDecisionCoordinator {
     signal: AbortSignal,
   ): Promise<ActionDecision> {
     const key = JSON.stringify([
+      proposal.sessionId,
       proposal.actionId,
       approval.approvalId,
       approval.generation,
       proposal.proposalDigest,
     ]);
-    const existing = this.decisions.get(key);
-    if (existing) return existing;
-    const operation = this.decideAndPersistOnce(proposal, approval, signal);
-    this.decisions.set(key, operation);
-    return operation;
+    const completed = this.completedDecisions.get(key);
+    if (completed) {
+      throwIfAborted(signal);
+      this.completedDecisions.delete(key);
+      this.completedDecisions.set(key, completed);
+      return Promise.resolve(completed);
+    }
+    const inFlight = this.inFlightDecisions.get(key);
+    if (inFlight) return inFlight;
+
+    let tracked: Promise<ActionDecision>;
+    tracked = this.decideAndPersistOnce(proposal, approval, signal)
+      .then((decision) => {
+        this.cacheCompleted(key, decision);
+        return decision;
+      })
+      .finally(() => {
+        if (this.inFlightDecisions.get(key) === tracked) {
+          this.inFlightDecisions.delete(key);
+        }
+      });
+    this.inFlightDecisions.set(key, tracked);
+    return tracked;
   }
 
   private async decideAndPersistOnce(
@@ -80,17 +178,26 @@ export class ProjectCommandDecisionCoordinator {
     signal: AbortSignal,
   ): Promise<ActionDecision> {
     await validateProjectCommandActionProposal(proposal);
-    validateActionApproval(approval, proposal, approval.generation, this.clock());
-    const sessionApprovalGeneration = toSessionApprovalGeneration(approval.generation);
+    validateActionApproval(
+      approval,
+      proposal,
+      approval.generation,
+      this.trustedNow(),
+    );
+    await this.options.ledger.assertApproved(proposal, approval);
     throwIfAborted(signal);
 
     const decision = await this.options.adapter.decide(proposal, approval, signal);
+    throwIfAborted(signal);
     validateActionDecision(decision, proposal);
     if (decision.decision === "hold") {
       throw new TypeError("Project Command AgentFuse decisions do not support hold.");
     }
+    this.revalidateApprovalAfterDecision(proposal, approval);
+    validateDecisionTimeWithinApproval(decision, approval);
     throwIfAborted(signal);
 
+    const sessionApprovalGeneration = toSessionApprovalGeneration(approval.generation);
     const evidence = decisionEvidence(decision.evidence);
     const entry: AppendEntryInput = {
       type: "ACTION_DECIDED",
@@ -120,7 +227,7 @@ export class ProjectCommandDecisionCoordinator {
       createdAt: decision.decidedAt,
     };
     try {
-      await this.options.recorder.recordDurably(entry);
+      await this.options.ledger.recordDurably(entry);
     } catch (cause) {
       throw new ProjectCommandDecisionPersistenceError(
         proposal.actionId,
@@ -128,6 +235,42 @@ export class ProjectCommandDecisionCoordinator {
       );
     }
     return decision;
+  }
+
+  private revalidateApprovalAfterDecision(
+    proposal: ActionProposal,
+    approval: ActionApproval,
+  ): void {
+    try {
+      validateActionApproval(
+        approval,
+        proposal,
+        approval.generation,
+        this.trustedNow(),
+      );
+    } catch (error) {
+      if (isErrorWithCode(error, "approval_expired")) {
+        throw new ProjectCommandApprovalExpiredDuringDecisionError();
+      }
+      throw error;
+    }
+  }
+
+  private trustedNow(): Date {
+    const now = this.clock();
+    if (!(now instanceof Date) || Number.isNaN(now.getTime())) {
+      throw new TypeError("Project Command decision validation requires a trusted current time.");
+    }
+    return now;
+  }
+
+  private cacheCompleted(key: string, decision: ActionDecision): void {
+    this.completedDecisions.set(key, decision);
+    while (this.completedDecisions.size > MAX_COMPLETED_DECISIONS) {
+      const oldest = this.completedDecisions.keys().next().value as string | undefined;
+      if (oldest === undefined) break;
+      this.completedDecisions.delete(oldest);
+    }
   }
 }
 
@@ -166,6 +309,24 @@ function decisionEvidence(value: JsonValue): {
     agentFuseCommit: requiredText(value.agentFuseCommit, "agentFuseCommit"),
     schemaVersion: requiredText(value.schemaVersion, "schemaVersion"),
   };
+}
+
+function isErrorWithCode(error: unknown, code: string): boolean {
+  return error instanceof Error
+    && "code" in error
+    && error.code === code;
+}
+
+function validateDecisionTimeWithinApproval(
+  decision: ActionDecision,
+  approval: ActionApproval,
+): void {
+  const decidedAt = Date.parse(decision.decidedAt);
+  const approvedAt = Date.parse(approval.approvedAt);
+  const expiresAt = Date.parse(approval.expiresAt);
+  if (decidedAt < approvedAt || decidedAt >= expiresAt) {
+    throw new ProjectCommandDecisionTimeError();
+  }
 }
 
 function isRecord(value: JsonValue): value is Record<string, JsonValue> {
