@@ -65,13 +65,16 @@ export interface SafeMetadata {
   pythonVersion?: string;
   dependencyLockDigest?: string;
   actionId?: string;
+  proposalDigest?: string;
   approvalId?: string;
   approvalGeneration?: number;
   decisionId?: string;
   decision?: "allow" | "deny" | "hold" | "error";
+  reasonCode?: string;
   policyVersion?: string;
   decisionSchemaVersion?: string;
   agentFuseCommit?: string;
+  decidedAt?: string;
   executionReceiptId?: string;
   artifactIds?: string[];
   executionStatus?: string;
@@ -163,6 +166,8 @@ export interface PersistenceInfo {
 export interface PendingActionProjection {
   kind: "patch" | "command" | "action";
   actionId: string;
+  taskId: string | null;
+  proposalDigest: string | null;
   proposalEntryId: string;
   payload: SafeJson;
   approved: boolean;
@@ -173,6 +178,8 @@ export interface PendingActionProjection {
   decisionRecorded: boolean;
   decisionId: string | null;
   decision: "allow" | "deny" | "hold" | "error" | null;
+  reasonCode: string | null;
+  decidedAt: string | null;
   policyVersion: string | null;
   decisionSchemaVersion: string | null;
   agentFuseCommit: string | null;

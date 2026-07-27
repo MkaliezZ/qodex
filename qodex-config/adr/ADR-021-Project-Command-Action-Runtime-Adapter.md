@@ -1,6 +1,6 @@
 # ADR-021
 
-**Status:** Accepted plan; v0.6.1.1 merged; v0.6.1.2 implementation in Draft PR
+**Status:** Accepted plan; v0.6.1.1 and v0.6.1.2 merged; v0.6.1.3 implemented in Draft PR
 **Date:** 2026-07-26
 **Updated:** 2026-07-27
 
@@ -121,7 +121,7 @@ AgentFuse-protected.
 
 ### v0.6.1.2 implementation boundary
 
-The v0.6.1.2 Draft PR adds a pure Desktop integration mapper because Desktop
+The merged v0.6.1.2 slice adds a pure Desktop integration mapper because Desktop
 already depends on both Agent Runtime and Action Runtime. Agent Runtime does
 not gain an Action Runtime dependency. The mapper reuses
 `createActionProposal()` and `validateActionApproval()` without creating or
@@ -137,7 +137,28 @@ existing validator enforces identity, positive generation, and expiry.
 This slice does not call AgentFuse, persist `ACTION_DECIDED`, write Session
 events, invoke the native runner or Tauri, change dispatch or
 `COMMAND_STARTED`, alter the Session schema, or migrate Project Command.
-v0.6.1.3 has not started and Project Command is not yet AgentFuse-protected.
+PR #10 merged through `c201e32ec1dcb342e9b1fbbeace6315cb422bc99`.
+
+### v0.6.1.3 implementation boundary
+
+The v0.6.1.3 Draft PR fixes the application-owned policy profile at
+`kerniq-project-command-v1` and binds it to policy digest
+`sha256:9c01df377b0cfd8db8392dc8966a2f12b38ad1b2ab9c89780ac049ac0eed38ad`.
+The bridge validates the bounded Project Command proposal and approval,
+constructs `ToolCallRequest` with safe identity metadata, and calls only public
+`RuntimeGuard.evaluate()`. AgentFuse `allow|block` maps to KerniQ
+`allow|deny`; invalid or unavailable canonical evidence maps to `error`.
+
+A Desktop decision coordinator validates the proposal and approval, obtains and
+validates one decision, then durably records command-linked `ACTION_DECIDED`.
+Session Runtime additively binds that decision to the pending command's action,
+task, approval ID/generation, and proposal digest. No Session schema or SQLite
+migration is required.
+
+This slice does not call `ActionRuntime.execute`, write `COMMAND_STARTED` or
+`COMMAND_COMPLETED`, invoke Tauri or the native runner, or physically execute a
+command. v0.6.1.4 has not started. The decision path is durably proven, but
+Project Command physical execution is not yet AgentFuse-protected.
 
 ### Target lifecycle
 
@@ -307,10 +328,12 @@ The integration adds a managed-Python availability dependency to approved
 Project Command execution. The product must fail closed and explain that no
 process started when the trusted runtime or policy decision is unavailable.
 
-The current Project Command policy profile is not yet confirmed. KerniQ must
-define which allowlist, denylist, optional custom policy, and trusted
-`safe_metadata` fields the bridge uses. That profile must remain explicit,
-versioned, deterministic, and application-owned.
+The Project Command policy profile is fixed at
+`kerniq-project-command-v1`. It uses exact action/risk/profile/digest identity,
+trusted catalog categories, bounded command and project identities, valid
+catalog/project SHA-256 values, and approval identity metadata. The model,
+provider, project metadata, prompt, and command output cannot select or alter
+the profile.
 
 ## Rejected Alternatives
 
@@ -347,11 +370,12 @@ started work is uncertain and cannot be replayed or reapproved.
 
 ## Compatibility and Non-Goals
 
-The v0.6.1.1 and v0.6.1.2 implementations do not:
+The v0.6.1.1 through v0.6.1.3 implementations do not:
 
 - migrate Project Command or Patch;
-- connect Action Runtime or AgentFuse;
-- persist `ACTION_DECIDED` or alter command lifecycle events;
+- dispatch through Action Runtime or connect physical command execution;
+- write `COMMAND_STARTED`, `COMMAND_COMPLETED`, `ACTION_STARTED`, or
+  `ACTION_COMPLETED` for the new decision path;
 - change Session or SQLite schema versions;
 - change managed Python or AgentFuse identity;
 - add arbitrary shell, executable, arguments, environment, cwd, or timeout;

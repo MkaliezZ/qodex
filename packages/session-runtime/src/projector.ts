@@ -8,6 +8,7 @@ import type {
 } from "./types.js";
 
 const TERMINAL = new Set<SessionStatus>(["Completed", "Failed", "Cancelled", "LimitReached"]);
+const SHA256_PATTERN = /^sha256:[0-9a-f]{64}$/;
 
 export class SessionProjector {
   project(entries: SessionEntry[]): ProjectedSessionState {
@@ -88,9 +89,8 @@ export class SessionProjector {
         }
         case "ACTION_DECIDED": {
           const decided = requirePending(pendingAction, entry);
-          requireKind(decided, entry);
-          if (decided.kind !== "action") {
-            throw new Error("ACTION_DECIDED requires a generic action.");
+          if (decided.kind !== "action" && decided.kind !== "command") {
+            throw new Error("ACTION_DECIDED requires a generic action or Project Command.");
           }
           if (!decided.approved) throw new Error("An action cannot be decided without approval.");
           if (decided.started || decided.settled) {
@@ -98,18 +98,48 @@ export class SessionProjector {
           }
           if (decided.decisionRecorded) throw new Error("An action cannot be decided twice.");
           requireApprovalBinding(decided, entry);
-          requiredMetadataText(entry, "taskId");
+          const taskId = requiredMetadataText(entry, "taskId");
+          if (decided.kind === "command" && !decided.taskId) {
+            throw new Error("Project Command proposal requires a task identity.");
+          }
+          if (decided.taskId && taskId !== decided.taskId) {
+            throw new Error("ACTION_DECIDED targets a different task.");
+          }
           const decisionId = requiredMetadataText(entry, "decisionId");
           if (decisionIds.has(decisionId)) throw new Error("A decision ID cannot be reused.");
           const decision = decisionOf(entry);
           if (!decision) throw new Error("ACTION_DECIDED requires a supported decision.");
+          if (decided.kind === "command" && decision === "hold") {
+            throw new Error("Project Command ACTION_DECIDED does not support hold.");
+          }
           const policyVersion = requiredMetadataText(entry, "policyVersion");
           const decisionSchemaVersion = requiredMetadataText(entry, "decisionSchemaVersion");
           const agentFuseCommit = requiredMetadataText(entry, "agentFuseCommit");
+          let reasonCode: string | null = null;
+          let decidedAt: string | null = null;
+          if (decided.kind === "command") {
+            const proposalDigest = requiredMetadataText(entry, "proposalDigest");
+            if (
+              !decided.proposalDigest
+              || !SHA256_PATTERN.test(decided.proposalDigest)
+              || !SHA256_PATTERN.test(proposalDigest)
+              || proposalDigest !== decided.proposalDigest
+            ) {
+              throw new Error("ACTION_DECIDED targets a different proposal digest.");
+            }
+            reasonCode = requiredMetadataText(entry, "reasonCode");
+            decidedAt = requiredMetadataText(entry, "decidedAt");
+            if (Number.isNaN(Date.parse(decidedAt))) {
+              throw new Error("ACTION_DECIDED requires a valid decidedAt.");
+            }
+            requireCommandDecisionPayload(entry, proposalDigest, reasonCode, decidedAt);
+          }
           decisionIds.add(decisionId);
           decided.decisionRecorded = true;
           decided.decisionId = decisionId;
           decided.decision = decision;
+          decided.reasonCode = reasonCode;
+          decided.decidedAt = decidedAt;
           decided.policyVersion = policyVersion;
           decided.decisionSchemaVersion = decisionSchemaVersion;
           decided.agentFuseCommit = agentFuseCommit;
@@ -286,6 +316,8 @@ function proposed(entry: SessionEntry, kind: PendingActionProjection["kind"]): P
   return {
     kind,
     actionId,
+    taskId: metadataText(entry, "taskId"),
+    proposalDigest: proposalDigestOf(entry),
     proposalEntryId: entry.id,
     payload: entry.payload,
     approved: false,
@@ -296,6 +328,8 @@ function proposed(entry: SessionEntry, kind: PendingActionProjection["kind"]): P
     decisionRecorded: false,
     decisionId: null,
     decision: null,
+    reasonCode: null,
+    decidedAt: null,
     policyVersion: null,
     decisionSchemaVersion: null,
     agentFuseCommit: null,
@@ -359,6 +393,14 @@ function requiredMetadataText(entry: SessionEntry, field: keyof SessionEntry["sa
     throw new Error(`${entry.type} requires ${String(field)}.`);
   }
   return value;
+}
+
+function metadataText(
+  entry: SessionEntry,
+  field: keyof SessionEntry["safeMetadata"],
+): string | null {
+  const value = entry.safeMetadata[field];
+  return typeof value === "string" && value.trim() ? value : null;
 }
 
 function decisionOf(entry: SessionEntry): PendingActionProjection["decision"] {
@@ -442,4 +484,38 @@ function recoveryReason(payload: SafeJson): RecoveryRequirement["reason"] {
 
 function isRecord(value: SafeJson): value is Record<string, SafeJson> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function proposalDigestOf(entry: SessionEntry): string | null {
+  const metadataDigest = metadataText(entry, "proposalDigest");
+  if (metadataDigest) return metadataDigest;
+  if (
+    isRecord(entry.payload)
+    && typeof entry.payload.proposalDigest === "string"
+    && entry.payload.proposalDigest.trim()
+  ) {
+    return entry.payload.proposalDigest;
+  }
+  return null;
+}
+
+function requireCommandDecisionPayload(
+  entry: SessionEntry,
+  proposalDigest: string,
+  reasonCode: string,
+  decidedAt: string,
+): void {
+  if (!isRecord(entry.payload)) {
+    throw new Error("Project Command ACTION_DECIDED requires an evidence payload.");
+  }
+  if (
+    entry.payload.actionId !== entry.safeMetadata.actionId
+    || entry.payload.proposalDigest !== proposalDigest
+    || entry.payload.decision !== entry.safeMetadata.decision
+    || entry.payload.reasonCode !== reasonCode
+    || entry.payload.decidedAt !== decidedAt
+    || !isRecord(entry.payload.evidence)
+  ) {
+    throw new Error("Project Command ACTION_DECIDED payload identity is invalid.");
+  }
 }

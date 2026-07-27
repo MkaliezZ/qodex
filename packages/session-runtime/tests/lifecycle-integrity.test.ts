@@ -33,6 +33,8 @@ const EVENTS: Record<ActionKind, {
   },
 };
 
+const PROJECT_COMMAND_PROPOSAL_DIGEST = `sha256:${"a".repeat(64)}`;
+
 function runtime() {
   let id = 0;
   return new SessionRuntime(
@@ -78,6 +80,75 @@ async function decideAllow(
       agentFuseCommit: "ec4b5842339dccfba0db62df7541920759203bc9",
     },
   });
+}
+
+async function proposeApprovedProjectCommand(
+  instance: SessionRuntime,
+  sessionId: string,
+  actionId = "command-action-1",
+) {
+  await instance.appendEntry(sessionId, {
+    type: "COMMAND_PROPOSED",
+    payload: {
+      actionId,
+      proposalDigest: PROJECT_COMMAND_PROPOSAL_DIGEST,
+      commandId: "package:test",
+    },
+    safeMetadata: {
+      actionId,
+      taskId: "task-1",
+      proposalDigest: PROJECT_COMMAND_PROPOSAL_DIGEST,
+    },
+  });
+  await instance.appendEntry(sessionId, {
+    type: "COMMAND_APPROVED",
+    payload: { actionId },
+    safeMetadata: {
+      actionId,
+      taskId: "task-1",
+      approvalId: "approval-1",
+      approvalGeneration: 0,
+    },
+  });
+}
+
+function commandDecisionEntry(
+  decision: "allow" | "deny" | "hold" | "error",
+  overrides: Record<string, unknown> = {},
+) {
+  const actionId = "command-action-1";
+  const decidedAt = "2026-04-01T00:01:00.000Z";
+  return {
+    type: "ACTION_DECIDED" as const,
+    payload: {
+      actionId,
+      proposalDigest: PROJECT_COMMAND_PROPOSAL_DIGEST,
+      decision,
+      reasonCode: `${decision}_fixture`,
+      summary: `${decision} Project Command decision.`,
+      decidedAt,
+      evidence: {
+        agentFuseCommit: "ec4b5842339dccfba0db62df7541920759203bc9",
+        schemaVersion: "agentfuse-evidence-schema-v0.1",
+        canonical: { record_id: `record-${decision}` },
+      },
+    },
+    safeMetadata: {
+      actionId,
+      taskId: "task-1",
+      proposalDigest: PROJECT_COMMAND_PROPOSAL_DIGEST,
+      approvalId: "approval-1",
+      approvalGeneration: 0,
+      decisionId: `decision-${decision}`,
+      decision,
+      reasonCode: `${decision}_fixture`,
+      policyVersion: "dhms-agentfuse-runtime-guard@3.6.0",
+      decisionSchemaVersion: "agentfuse-evidence-schema-v0.1",
+      agentFuseCommit: "ec4b5842339dccfba0db62df7541920759203bc9",
+      decidedAt,
+      ...overrides,
+    },
+  };
 }
 
 describe("session lifecycle integrity", () => {
@@ -289,6 +360,109 @@ describe("session lifecycle integrity", () => {
       safeMetadata: { actionId: "legacy-action" },
     });
     expect((await instance.projectCurrentState(session.id)).pendingAction).toBeNull();
+  });
+
+  it("accepts a durable command-linked allow decision without starting", async () => {
+    const instance = runtime();
+    const session = await instance.createSession({ title: "Command decision" });
+    await proposeApprovedProjectCommand(instance, session.id);
+    await instance.appendEntry(session.id, commandDecisionEntry("allow"));
+    const projected = await instance.projectCurrentState(session.id);
+    expect(projected.pendingAction).toMatchObject({
+      kind: "command",
+      actionId: "command-action-1",
+      taskId: "task-1",
+      proposalDigest: PROJECT_COMMAND_PROPOSAL_DIGEST,
+      approved: true,
+      started: false,
+      decisionRecorded: true,
+      decision: "allow",
+      decisionId: "decision-allow",
+      reasonCode: "allow_fixture",
+    });
+    expect((await instance.loadActivePath(session.id)).map(({ type }) => type)).toEqual([
+      "SESSION_CREATED",
+      "COMMAND_PROPOSED",
+      "COMMAND_APPROVED",
+      "ACTION_DECIDED",
+    ]);
+  });
+
+  it("rejects a command decision before approval", async () => {
+    const instance = runtime();
+    const session = await instance.createSession({ title: "Early command decision" });
+    await instance.appendEntry(session.id, {
+      type: "COMMAND_PROPOSED",
+      payload: {
+        actionId: "command-action-1",
+        proposalDigest: PROJECT_COMMAND_PROPOSAL_DIGEST,
+      },
+      safeMetadata: {
+        actionId: "command-action-1",
+        taskId: "task-1",
+        proposalDigest: PROJECT_COMMAND_PROPOSAL_DIGEST,
+      },
+    });
+    await expect(instance.appendEntry(session.id, commandDecisionEntry("allow")))
+      .rejects.toThrow("without approval");
+  });
+
+  it.each([
+    ["action", { actionId: "other" }, "different action"],
+    ["task", { taskId: "other" }, "different task"],
+    ["approval", { approvalId: "other" }, "different approval"],
+    ["generation", { approvalGeneration: 1 }, "approval generation"],
+    ["proposal digest", { proposalDigest: `sha256:${"b".repeat(64)}` }, "proposal digest"],
+  ] as const)("rejects a command decision with wrong %s identity", async (
+    _name,
+    overrides,
+    expected,
+  ) => {
+    const instance = runtime();
+    const session = await instance.createSession({ title: "Command decision mismatch" });
+    await proposeApprovedProjectCommand(instance, session.id);
+    await expect(instance.appendEntry(
+      session.id,
+      commandDecisionEntry("allow", overrides),
+    )).rejects.toThrow(expected);
+  });
+
+  it("rejects duplicate command decisions", async () => {
+    const instance = runtime();
+    const session = await instance.createSession({ title: "Duplicate command decision" });
+    await proposeApprovedProjectCommand(instance, session.id);
+    await instance.appendEntry(session.id, commandDecisionEntry("allow"));
+    await expect(instance.appendEntry(session.id, {
+      ...commandDecisionEntry("allow"),
+      safeMetadata: {
+        ...commandDecisionEntry("allow").safeMetadata,
+        decisionId: "decision-second",
+      },
+    })).rejects.toThrow("decided twice");
+  });
+
+  it.each(["deny", "error"] as const)(
+    "records Project Command %s as blocked without start",
+    async (decision) => {
+      const instance = runtime();
+      const session = await instance.createSession({ title: `${decision} command decision` });
+      await proposeApprovedProjectCommand(instance, session.id);
+      await instance.appendEntry(session.id, commandDecisionEntry(decision));
+      expect((await instance.projectCurrentState(session.id)).pendingAction).toBeNull();
+      await expect(instance.appendEntry(session.id, {
+        type: "COMMAND_STARTED",
+        payload: { actionId: "command-action-1" },
+        safeMetadata: evidence("command-action-1"),
+      })).rejects.toThrow("no pending action");
+    },
+  );
+
+  it("rejects hold for the canonical Project Command path", async () => {
+    const instance = runtime();
+    const session = await instance.createSession({ title: "Command hold" });
+    await proposeApprovedProjectCommand(instance, session.id);
+    await expect(instance.appendEntry(session.id, commandDecisionEntry("hold")))
+      .rejects.toThrow("does not support hold");
   });
 
   it("rejects generic settlement without matching started evidence", async () => {

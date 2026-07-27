@@ -8,6 +8,7 @@ import hashlib
 import importlib
 import json
 import os
+import re
 import sys
 import types
 from dataclasses import dataclass
@@ -24,6 +25,24 @@ MESSAGE_LIMIT = 64 * 1024
 _ALLOWED_FIXTURE = "kerniq-proof-allow-v1"
 _DENIED_FIXTURE = "kerniq-proof-deny-v1"
 _PROOF_ACTION = "kerniq.proof.increment-counter"
+_PROJECT_COMMAND_PROFILE = "kerniq-project-command-v1"
+_PROJECT_COMMAND_ACTION = "kerniq.project-command.run"
+_PROJECT_COMMAND_POLICY_DIGEST = (
+    "sha256:9c01df377b0cfd8db8392dc8966a2f12"
+    "b38ad1b2ab9c89780ac049ac0eed38ad"
+)
+_PROJECT_COMMAND_RISK = "process"
+_PROJECT_COMMAND_CATEGORIES = {"test", "check", "lint", "typecheck", "build"}
+_PROJECT_COMMAND_PARAMETER_KEYS = {
+    "commandId",
+    "catalogDigest",
+    "commandCategory",
+    "projectBindingId",
+    "projectFingerprint",
+    "policyProfileId",
+    "policyDigest",
+}
+_SHA256_PATTERN = re.compile(r"^sha256:[0-9a-f]{64}$")
 
 
 class ProtocolFailure(Exception):
@@ -79,15 +98,15 @@ class CanonicalAgentFuse:
     def decide(self, payload: dict[str, Any]) -> dict[str, Any]:
         proposal = require_mapping(payload.get("proposal"), "proposal")
         approval = require_mapping(payload.get("approval"), "approval")
-        fixture_id = require_text(payload.get("policyFixtureId"), "policyFixtureId")
+        has_fixture = "policyFixtureId" in payload
+        has_profile = "policyProfileId" in payload
+        if has_fixture == has_profile:
+            raise ProtocolFailure("policy_selection_invalid")
         action_id = require_text(proposal.get("actionId"), "proposal.actionId")
         action_type = require_text(proposal.get("actionType"), "proposal.actionType")
         task_id = require_text(proposal.get("taskId"), "proposal.taskId")
         parameters = require_mapping(proposal.get("parameters"), "proposal.parameters")
         approval_id = require_text(approval.get("approvalId"), "approval.approvalId")
-
-        if action_type != _PROOF_ACTION:
-            raise ProtocolFailure("unsupported_action_type")
         if (
             approval.get("actionId") != action_id
             or approval.get("taskId") != task_id
@@ -95,6 +114,42 @@ class CanonicalAgentFuse:
         ):
             raise ProtocolFailure("approval_identity_mismatch")
 
+        if has_profile:
+            return self._decide_project_command(
+                payload,
+                proposal,
+                approval,
+                parameters,
+                action_id,
+                action_type,
+                task_id,
+                approval_id,
+            )
+        return self._decide_proof(
+            payload,
+            proposal,
+            approval,
+            parameters,
+            action_id,
+            action_type,
+            task_id,
+            approval_id,
+        )
+
+    def _decide_proof(
+        self,
+        payload: dict[str, Any],
+        proposal: dict[str, Any],
+        approval: dict[str, Any],
+        parameters: dict[str, Any],
+        action_id: str,
+        action_type: str,
+        task_id: str,
+        approval_id: str,
+    ) -> dict[str, Any]:
+        fixture_id = require_text(payload.get("policyFixtureId"), "policyFixtureId")
+        if action_type != _PROOF_ACTION:
+            raise ProtocolFailure("unsupported_action_type")
         tool_call = self.runtime_guard.ToolCallRequest(
             tool_call_id=action_id,
             tool_name=action_type,
@@ -140,6 +195,106 @@ class CanonicalAgentFuse:
             "policyVersion": f"dhms-agentfuse-runtime-guard@{self.package_version}",
             "schemaVersion": self.evidence_schema.SCHEMA_VERSION,
             "agentFuseCommit": self.source_commit,
+            "evidence": evidence,
+        }
+
+    def _decide_project_command(
+        self,
+        payload: dict[str, Any],
+        proposal: dict[str, Any],
+        approval: dict[str, Any],
+        parameters: dict[str, Any],
+        action_id: str,
+        action_type: str,
+        task_id: str,
+        approval_id: str,
+    ) -> dict[str, Any]:
+        profile_id = require_text(payload.get("policyProfileId"), "policyProfileId")
+        expected_digest = require_text(
+            payload.get("expectedPolicyDigest"),
+            "expectedPolicyDigest",
+        )
+        if profile_id != _PROJECT_COMMAND_PROFILE:
+            raise ProtocolFailure("unsupported_policy_profile")
+        if expected_digest != _PROJECT_COMMAND_POLICY_DIGEST:
+            raise ProtocolFailure("policy_digest_mismatch")
+        if action_type != _PROJECT_COMMAND_ACTION:
+            raise ProtocolFailure("unsupported_action_type")
+        session_id = require_text(proposal.get("sessionId"), "proposal.sessionId")
+        for name, value in (
+            ("proposal.actionId", action_id),
+            ("proposal.taskId", task_id),
+            ("proposal.sessionId", session_id),
+            ("approval.approvalId", approval_id),
+        ):
+            if not bounded_text(value, 256):
+                raise ProtocolFailure(f"{name}_is_not_bounded")
+        proposal_digest = require_sha256(
+            proposal.get("proposalDigest"),
+            "proposal.proposalDigest",
+        )
+        if set(parameters) != _PROJECT_COMMAND_PARAMETER_KEYS:
+            raise ProtocolFailure("project_command_parameter_shape_mismatch")
+        if parameters.get("policyProfileId") != profile_id:
+            raise ProtocolFailure("proposal_policy_profile_mismatch")
+        if parameters.get("policyDigest") != expected_digest:
+            raise ProtocolFailure("proposal_policy_digest_mismatch")
+        generation = approval.get("generation")
+        if (
+            isinstance(generation, bool)
+            or not isinstance(generation, int)
+            or generation <= 0
+            or generation > 9_007_199_254_740_991
+        ):
+            raise ProtocolFailure("approval_generation_invalid")
+
+        tool_call = self.runtime_guard.ToolCallRequest(
+            tool_call_id=action_id,
+            tool_name=action_type,
+            arguments=dict(parameters),
+            safe_metadata={
+                "task_id": task_id,
+                "session_id": session_id,
+                "approval_id": approval_id,
+                "approval_generation": generation,
+                "proposal_digest": proposal_digest,
+                "risk": proposal.get("risk"),
+                "policy_profile_id": profile_id,
+                "policy_digest": expected_digest,
+            },
+        )
+        guard = self.runtime_guard.RuntimeGuard(
+            allow_tools={_PROJECT_COMMAND_ACTION},
+            default_action="block",
+            policy=project_command_policy,
+        )
+        resolved = guard.evaluate(tool_call)
+        if resolved.action not in {"allow", "block"}:
+            raise ProtocolFailure("canonical_decision_invalid")
+        evidence = resolved.evidence.to_dict()
+        decision_id = stable_id(
+            "decision",
+            action_id,
+            approval_id,
+            profile_id,
+            expected_digest,
+            evidence["record_id"],
+        )
+        return {
+            "decisionId": decision_id,
+            "actionId": action_id,
+            "decision": resolved.action,
+            "reasonCode": resolved.reason_code,
+            "summary": (
+                "Canonical AgentFuse allowed the bounded Project Command request."
+                if resolved.action == "allow"
+                else "Canonical AgentFuse blocked the bounded Project Command request."
+            ),
+            "policyVersion": f"dhms-agentfuse-runtime-guard@{self.package_version}",
+            "schemaVersion": self.evidence_schema.SCHEMA_VERSION,
+            "agentFuseCommit": self.source_commit,
+            "policyProfileId": profile_id,
+            "policyDigest": expected_digest,
             "evidence": evidence,
         }
 
@@ -235,7 +390,7 @@ def stable_id(prefix: str, *parts: str) -> str:
 
 
 def require_text(value: Any, name: str) -> str:
-    if not isinstance(value, str) or not value:
+    if not isinstance(value, str) or not value.strip():
         raise ProtocolFailure(f"{name}_must_be_non_empty")
     return value
 
@@ -244,6 +399,48 @@ def require_mapping(value: Any, name: str) -> dict[str, Any]:
     if not isinstance(value, dict):
         raise ProtocolFailure(f"{name}_must_be_object")
     return value
+
+
+def require_sha256(value: Any, name: str) -> str:
+    text = require_text(value, name)
+    if not _SHA256_PATTERN.fullmatch(text):
+        raise ProtocolFailure(f"{name}_must_be_sha256")
+    return text
+
+
+def project_command_policy(tool_call: Any) -> str:
+    arguments = tool_call.arguments
+    metadata = tool_call.safe_metadata
+    valid = (
+        tool_call.tool_name == _PROJECT_COMMAND_ACTION
+        and set(arguments) == _PROJECT_COMMAND_PARAMETER_KEYS
+        and bounded_text(arguments.get("commandId"), 160)
+        and sha256(arguments.get("catalogDigest"))
+        and arguments.get("commandCategory") in _PROJECT_COMMAND_CATEGORIES
+        and bounded_text(arguments.get("projectBindingId"), 256)
+        and sha256(arguments.get("projectFingerprint"))
+        and arguments.get("policyProfileId") == _PROJECT_COMMAND_PROFILE
+        and arguments.get("policyDigest") == _PROJECT_COMMAND_POLICY_DIGEST
+        and bounded_text(metadata.get("task_id"), 256)
+        and bounded_text(metadata.get("session_id"), 256)
+        and bounded_text(metadata.get("approval_id"), 256)
+        and isinstance(metadata.get("approval_generation"), int)
+        and not isinstance(metadata.get("approval_generation"), bool)
+        and metadata.get("approval_generation") > 0
+        and sha256(metadata.get("proposal_digest"))
+        and metadata.get("risk") == _PROJECT_COMMAND_RISK
+        and metadata.get("policy_profile_id") == _PROJECT_COMMAND_PROFILE
+        and metadata.get("policy_digest") == _PROJECT_COMMAND_POLICY_DIGEST
+    )
+    return "allow" if valid else "block"
+
+
+def bounded_text(value: Any, maximum: int) -> bool:
+    return isinstance(value, str) and bool(value.strip()) and len(value) <= maximum
+
+
+def sha256(value: Any) -> bool:
+    return isinstance(value, str) and bool(_SHA256_PATTERN.fullmatch(value))
 
 
 def main(argv: list[str] | None = None) -> int:
