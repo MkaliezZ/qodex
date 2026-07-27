@@ -943,6 +943,13 @@ policy identity, maps only safe fields into `ToolCallRequest`, and calls public
 KerniQ `allow|deny`; bridge or validation failure maps to fail-closed `error`.
 The canonical Project Command path does not support `hold`.
 
+Because the managed bridge source is embedded and integrity-checked, its
+trusted installed-tree SHA-256 advances from
+`52bd2dfd5fdd7eb183ed30d4fad56666cd19363fcce381a94ef77b3ac4a4a8dc` to
+`34e0633e303a0e2b5107832d42486503f7c1f55a0e717001d176345ecfbe9ef3`.
+The managed Python runtime version, AgentFuse package/commit, bridge protocol,
+and evidence schema remain unchanged.
+
 Added a decision-only Desktop coordinator that validates proposal and approval,
 requests one AgentFuse decision, validates it, and durably records one
 command-linked `ACTION_DECIDED`. Session projection now binds that event to the

@@ -148,6 +148,10 @@ The bridge validates the bounded Project Command proposal and approval,
 constructs `ToolCallRequest` with safe identity metadata, and calls only public
 `RuntimeGuard.evaluate()`. AgentFuse `allow|block` maps to KerniQ
 `allow|deny`; invalid or unavailable canonical evidence maps to `error`.
+The embedded bridge installed-tree integrity digest is updated to
+`34e0633e303a0e2b5107832d42486503f7c1f55a0e717001d176345ecfbe9ef3`;
+the managed Python runtime version, AgentFuse package/commit, protocol, and
+evidence schema remain unchanged.
 
 A Desktop decision coordinator validates the proposal and approval, obtains and
 validates one decision, then durably records command-linked `ACTION_DECIDED`.

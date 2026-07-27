@@ -46,7 +46,7 @@ The trusted manifest is
 - canonical AgentFuse 3.6.0 installed-tree SHA-256
   `9a51121ec6a719bc7c79db428d522f3c4430d99d5f176b9e62a939bf004d32e9`
 - embedded bridge installed-tree SHA-256
-  `52bd2dfd5fdd7eb183ed30d4fad56666cd19363fcce381a94ef77b3ac4a4a8dc`
+  `34e0633e303a0e2b5107832d42486503f7c1f55a0e717001d176345ecfbe9ef3`
 - bridge protocol and evidence schema versions
 
 Downloads use fixed HTTPS URLs from the embedded manifest. Model or provider

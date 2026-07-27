@@ -603,6 +603,9 @@ not frozen.
 - Persist command-linked `ACTION_DECIDED`.
 - Prove mapped deny/error, unsupported values, and persistence failure invoke
   no runner.
+- Advance only the embedded bridge installed-tree integrity digest required by
+  the reviewed bridge source; preserve the managed Python runtime version,
+  AgentFuse package/commit, protocol, and evidence schema.
 
 ### v0.6.1.4 - COMMAND_STARTED dispatch gate and native binding
 
@@ -775,6 +778,7 @@ MCP integration added=false
 browser execution added=false
 DHMS danger classification added=false
 managed Python identity changed=false
+embedded bridge tree digest updated=true
 Session schema migration added=false
 ```
 
