@@ -1,7 +1,11 @@
 import {
+  AgentCommandDecisionGateError,
   SettlementPersistenceError,
-  type AgentCommandLifecycleInput,
+  type AgentCommandDecisionLifecycleInput,
+  type AgentCommandDecisionReceipt,
   type AgentCommandResultLifecycleInput,
+  type AgentCommandStartReceipt,
+  type AgentCommandStartLifecycleInput,
   type AgentLoopTask,
   type AgentPatchLifecycleInput,
   type AgentPatchProposal,
@@ -12,6 +16,7 @@ import {
   type PendingCommandApproval,
   type ProjectCommandResult,
 } from "@qodex/agent-runtime";
+import type { AgentFuseAdapter } from "@qodex/agentfuse-adapter";
 import {
   inspectSensitiveText,
   sanitizeSensitiveText,
@@ -20,11 +25,23 @@ import {
   type SafeJson,
   type SessionRuntime,
 } from "@qodex/session-runtime";
+import {
+  ProjectCommandDecisionPersistenceError,
+} from "./projectCommandDecisionCoordinator";
+import {
+  ProjectCommandLiveDecisionGate,
+  type LiveProjectCommandDecision,
+  type LiveProjectCommandProposal,
+} from "./projectCommandLiveDecisionGate";
 
 export interface AgentSessionRecorderOptions {
   runtime: SessionRuntime;
   sessionId: string;
   onRecorded?: () => void | Promise<void>;
+  commandDecisionAdapter?: AgentFuseAdapter;
+  projectBindingId?: string;
+  projectFingerprint?: string;
+  clock?: () => Date;
 }
 
 export class AgentSessionLedgerRecorder implements AgentSideEffectLifecycle {
@@ -35,9 +52,39 @@ export class AgentSessionLedgerRecorder implements AgentSideEffectLifecycle {
   private pendingPatch: AgentPatchProposal | null = null;
   private pendingCommand: PendingCommandApproval | null = null;
   private settlementEvidenceUncertain = false;
+  private readonly clock: () => Date;
+  private readonly commandDecisionGate: ProjectCommandLiveDecisionGate | null;
+  private readonly liveProposalOperations = new Map<
+    string,
+    Promise<LiveProjectCommandProposal>
+  >();
+  private readonly liveDecisions = new Map<string, LiveProjectCommandDecision>();
 
   constructor(options: AgentSessionRecorderOptions) {
     this.recorder = new SessionRecorder(options.runtime, options.sessionId, options.onRecorded);
+    this.clock = options.clock ?? (() => new Date());
+    const gateValues = [
+      options.commandDecisionAdapter,
+      options.projectBindingId,
+      options.projectFingerprint,
+    ];
+    if (gateValues.some(Boolean) && !gateValues.every(Boolean)) {
+      throw new TypeError(
+        "Project Command decision integration requires adapter, binding ID, and fingerprint.",
+      );
+    }
+    this.commandDecisionGate = options.commandDecisionAdapter
+      && options.projectBindingId
+      && options.projectFingerprint
+      ? new ProjectCommandLiveDecisionGate({
+        runtime: options.runtime,
+        recorder: this.recorder,
+        adapter: options.commandDecisionAdapter,
+        projectBindingId: options.projectBindingId,
+        projectFingerprint: options.projectFingerprint,
+        ...(options.clock ? { clock: options.clock } : {}),
+      })
+      : null;
   }
 
   recordUserMessage(text: string): void {
@@ -63,8 +110,9 @@ export class AgentSessionLedgerRecorder implements AgentSideEffectLifecycle {
     }
   }
 
-  flush(): Promise<void> {
-    return this.recorder.flush();
+  async flush(): Promise<void> {
+    await Promise.all(this.liveProposalOperations.values());
+    await this.recorder.flush();
   }
 
   async beforePatchApply(input: AgentPatchLifecycleInput): Promise<void> {
@@ -121,8 +169,84 @@ export class AgentSessionLedgerRecorder implements AgentSideEffectLifecycle {
     });
   }
 
-  async beforeCommandStart(input: AgentCommandLifecycleInput): Promise<void> {
+  async beforeCommandDecision(
+    input: AgentCommandDecisionLifecycleInput,
+  ): Promise<AgentCommandDecisionReceipt> {
+    if (!this.commandDecisionGate) {
+      throw new AgentCommandDecisionGateError("project_command_policy_error");
+    }
+    try {
+      const proposed = await this.ensureLiveProposal(
+        input.taskId,
+        input.pending,
+        this.clock().toISOString(),
+      );
+      const context = await this.commandDecisionGate.approveAndDecide(
+        proposed,
+        input.approvalId,
+        input.signal,
+      );
+      if (context.decision.decision === "hold") {
+        throw new AgentCommandDecisionGateError("project_command_policy_error");
+      }
+      if (context.decision.decision === "allow") {
+        this.liveDecisions.set(context.proposal.actionId, context);
+      }
+      return {
+        decisionId: context.decision.decisionId,
+        decision: context.decision.decision,
+        reasonCode: context.decision.reasonCode,
+        summary: context.decision.summary,
+      };
+    } catch (error) {
+      if (error instanceof AgentCommandDecisionGateError) throw error;
+      if (isAbortError(error)) {
+        throw new AgentCommandDecisionGateError(
+          "project_command_decision_cancelled",
+        );
+      }
+      if (error instanceof ProjectCommandDecisionPersistenceError) {
+        throw new AgentCommandDecisionGateError(
+          "project_command_decision_persistence_failed",
+        );
+      }
+      throw new AgentCommandDecisionGateError("project_command_policy_error");
+    }
+  }
+
+  async beforeCommandStart(
+    input: AgentCommandStartLifecycleInput,
+  ): Promise<AgentCommandStartReceipt | void> {
     const actionId = input.pending.toolCall.id;
+    if (this.commandDecisionGate) {
+      const context = this.liveDecisions.get(actionId);
+      if (
+        !context
+        || context.decision.decision !== "allow"
+        || context.decision.decisionId !== input.decision.decisionId
+      ) {
+        throw new AgentCommandDecisionGateError(
+          "project_command_start_persistence_failed",
+        );
+      }
+      try {
+        return await this.commandDecisionGate.recordStarted(
+          context,
+          input.pending,
+          input.executionReceiptId,
+          input.signal,
+        );
+      } catch (error) {
+        if (isAbortError(error)) {
+          throw new AgentCommandDecisionGateError(
+            "project_command_decision_cancelled",
+          );
+        }
+        throw new AgentCommandDecisionGateError(
+          "project_command_start_persistence_failed",
+        );
+      }
+    }
     await this.recorder.recordDurably({
       type: "COMMAND_APPROVED",
       payload: { actionId },
@@ -153,6 +277,7 @@ export class AgentSessionLedgerRecorder implements AgentSideEffectLifecycle {
 
   async afterCommandComplete(input: AgentCommandResultLifecycleInput): Promise<void> {
     const actionId = input.pending.toolCall.id;
+    const context = this.liveDecisions.get(actionId);
     await this.recordSettlement("command", actionId, input.executionReceiptId, {
       type: "COMMAND_COMPLETED",
       payload: { actionId, ...safeRecoveredCommandResult(input.result) },
@@ -162,11 +287,14 @@ export class AgentSessionLedgerRecorder implements AgentSideEffectLifecycle {
         toolCallId: actionId,
         actionId,
         approvalId: input.approvalId,
-        approvalGeneration: 0,
+        approvalGeneration: context ? context.approval.generation - 1 : 0,
+        ...(context ? { decisionId: context.decision.decisionId } : {}),
         executionReceiptId: input.executionReceiptId,
         executionStatus: input.result.cancelled ? "cancelled" : "completed",
       },
     });
+    this.liveDecisions.delete(actionId);
+    this.liveProposalOperations.delete(actionId);
   }
 
   async afterSideEffectFailure(input: AgentSideEffectFailureInput): Promise<void> {
@@ -231,17 +359,29 @@ export class AgentSessionLedgerRecorder implements AgentSideEffectLifecycle {
       });
     }
     if (task.pendingCommand) {
-      this.recorder.record({
-        type: "COMMAND_PROPOSED",
-        payload: commandProposalPayload(task.pendingCommand),
-        safeMetadata: {
-          recordKey: `command-proposed:${task.pendingCommand.toolCall.id}`,
-          taskId: task.id,
-          toolCallId: task.pendingCommand.toolCall.id,
-          actionId: task.pendingCommand.toolCall.id,
-          runtimeStatus: task.status,
-        },
-      });
+      if (this.commandDecisionGate) {
+        const requestedAt = commandRequestedAt(
+          task,
+          task.pendingCommand.toolCall.id,
+        );
+        void this.ensureLiveProposal(
+          task.id,
+          task.pendingCommand,
+          requestedAt,
+        ).catch(() => {});
+      } else {
+        this.recorder.record({
+          type: "COMMAND_PROPOSED",
+          payload: commandProposalPayload(task.pendingCommand),
+          safeMetadata: {
+            recordKey: `command-proposed:${task.pendingCommand.toolCall.id}`,
+            taskId: task.id,
+            toolCallId: task.pendingCommand.toolCall.id,
+            actionId: task.pendingCommand.toolCall.id,
+            runtimeStatus: task.status,
+          },
+        });
+      }
     }
   }
 
@@ -409,6 +549,7 @@ export class AgentSessionLedgerRecorder implements AgentSideEffectLifecycle {
   private recordCommandApproval(entry: AgentTimelineEntry, metadata: Record<string, SafeJson>): void {
     const actionId = entry.actionId ?? this.pendingCommand?.toolCall.id;
     if (!actionId) return;
+    if (this.commandDecisionGate && entry.title !== "Command denied") return;
     this.recorder.record({
       type: entry.status === "success" ? "COMMAND_APPROVED" : "COMMAND_DENIED",
       payload: { actionId, reason: safeText(entry.summary) },
@@ -419,6 +560,28 @@ export class AgentSessionLedgerRecorder implements AgentSideEffectLifecycle {
       },
       createdAt: entry.timestamp,
     });
+  }
+
+  private ensureLiveProposal(
+    taskId: string,
+    pending: PendingCommandApproval,
+    requestedAt: string,
+  ): Promise<LiveProjectCommandProposal> {
+    const actionId = pending.toolCall.id;
+    const existing = this.liveProposalOperations.get(actionId);
+    if (existing) return existing;
+    if (!this.commandDecisionGate) {
+      return Promise.reject(
+        new AgentCommandDecisionGateError("project_command_policy_error"),
+      );
+    }
+    const operation = this.commandDecisionGate.propose(
+      taskId,
+      pending,
+      requestedAt,
+    );
+    this.liveProposalOperations.set(actionId, operation);
+    return operation;
   }
 
   private recordCommandOutput(entry: AgentTimelineEntry, metadata: Record<string, SafeJson>): void {
@@ -512,6 +675,20 @@ function activeExecutionStatus(status: AgentLoopTask["status"]): string {
   if (status === "RunningCommand" || status === "ApplyingPatch") return "running";
   if (["Done", "Failed", "Cancelled", "LimitReached"].includes(status)) return "settled";
   return "active";
+}
+
+function commandRequestedAt(task: AgentLoopTask, toolCallId: string): string {
+  for (let index = task.timeline.length - 1; index >= 0; index -= 1) {
+    const entry = task.timeline[index];
+    if (entry.kind === "tool_request" && entry.toolCallId === toolCallId) {
+      return entry.timestamp;
+    }
+  }
+  return new Date(task.updatedAt).toISOString();
+}
+
+function isAbortError(error: unknown): boolean {
+  return error instanceof DOMException && error.name === "AbortError";
 }
 
 export function safeRecoveredCommandResult(result: ProjectCommandResult): Record<string, SafeJson> {

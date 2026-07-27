@@ -106,7 +106,10 @@ test.describe("KerniQ Minimal Agent Loop v0.4", () => {
     await page.click('[data-testid="approve-command"]');
     await expect(page.locator('[data-testid="timeline-command_output"]')).toContainText("Exit code 1");
     await expect(page.locator('[data-testid="patch-summary"]')).toContainText("Correct divide after failed assertion");
-    expect((await readAgentCommandFixture(page)).starts).toBe(1);
+    expect(await readAgentCommandFixture(page)).toMatchObject({
+      starts: 1,
+      decisions: 1,
+    });
 
     await page.click('[data-testid="apply-patch"]');
     await expect(page.locator('[data-testid="command-approval"]')).toBeVisible();
@@ -117,7 +120,10 @@ test.describe("KerniQ Minimal Agent Loop v0.4", () => {
     await expect(page.locator('[data-testid="timeline-final"]')).toContainText("verified the cataloged test command passed");
     await expect(page.locator('[data-testid="agent-timeline"] .agent-card-status.status-running')).toHaveCount(0);
     await expect(page.locator('[data-testid="agent-timeline"] .agent-card-status.status-pending')).toHaveCount(0);
-    expect((await readAgentCommandFixture(page)).starts).toBe(2);
+    expect(await readAgentCommandFixture(page)).toMatchObject({
+      starts: 2,
+      decisions: 2,
+    });
     expect((await readProjectFixture(page)).files["src/math.ts"]).toBe(correctedMath);
     expect(requests.every((request) => Array.isArray(request.tools) && request.tools.length === 4)).toBe(true);
     expect(JSON.stringify(requests[6])).toContain('"tool_call_id":"call-test-1"');
@@ -156,11 +162,17 @@ test.describe("KerniQ Minimal Agent Loop v0.4", () => {
     await page.fill('[data-testid="prompt-input"]', "Inspect but ask before tests.");
     await page.click('[data-testid="send-button"]');
     await expect(page.locator('[data-testid="command-approval"]')).toBeVisible();
-    expect((await readAgentCommandFixture(page)).starts).toBe(0);
+    expect(await readAgentCommandFixture(page)).toMatchObject({
+      starts: 0,
+      decisions: 0,
+    });
     await page.click('[data-testid="deny-command"]');
     await expect(page.locator('[data-testid="agent-state"]')).toHaveText("Done");
     await expect(page.locator('[data-testid="timeline-command_output"]')).toContainText("no process started");
-    expect((await readAgentCommandFixture(page)).starts).toBe(0);
+    expect(await readAgentCommandFixture(page)).toMatchObject({
+      starts: 0,
+      decisions: 0,
+    });
   });
 
   test("Stop prevents delayed provider output from advancing the loop", async ({ page }) => {
@@ -229,7 +241,10 @@ test.describe("KerniQ Minimal Agent Loop v0.4", () => {
     await page.click('[data-testid="stop-agent"]');
     await expect(page.locator('[data-testid="agent-state"]')).toHaveText("Cancelled");
     await expect(page.locator('[data-testid="command-approval"]')).toHaveCount(0);
-    expect((await readAgentCommandFixture(page)).starts).toBe(0);
+    expect(await readAgentCommandFixture(page)).toMatchObject({
+      starts: 0,
+      decisions: 0,
+    });
     expect(turns).toBe(1);
   });
 

@@ -2,10 +2,12 @@ import { describe, expect, it, vi } from "vitest";
 import type { ModelChunk, ModelProvider, ModelRequest } from "@qodex/provider-sdk";
 import { AgentLoopRuntime } from "../src/agent-loop/runtime.js";
 import {
+  AgentCommandDecisionGateError,
   SETTLEMENT_PERSISTENCE_ERROR_MESSAGE,
   SettlementPersistenceError,
 } from "../src/agent-loop/types.js";
 import type {
+  AgentCommandDecisionReceipt,
   AgentPatchAdapter,
   AgentPatchProposal,
   AgentProjectAccess,
@@ -130,10 +132,20 @@ function lifecycle(overrides: Partial<AgentSideEffectLifecycle> = {}): AgentSide
   return {
     beforePatchApply: vi.fn(async () => {}),
     afterPatchApply: vi.fn(async () => {}),
+    beforeCommandDecision: vi.fn(async (input) => allowDecision(input.pending.toolCall.id)),
     beforeCommandStart: vi.fn(async () => {}),
     afterCommandComplete: vi.fn(async () => {}),
     afterSideEffectFailure: vi.fn(async () => {}),
     ...overrides,
+  };
+}
+
+function allowDecision(actionId: string): AgentCommandDecisionReceipt {
+  return {
+    decisionId: `decision-${actionId}`,
+    decision: "allow",
+    reasonCode: "allowed",
+    summary: "The trusted Project Command policy allowed this command.",
   };
 }
 
@@ -212,8 +224,11 @@ describe("AgentLoopRuntime v0.4.1 state safety", () => {
     });
     const waitingCommand = await commandRuntime.start("command-barrier-order", "Run tests.");
     await commandRuntime.approveCommand(waitingCommand.id);
+    expect(commandLifecycle.beforeCommandDecision).toHaveBeenCalledOnce();
     expect(commandLifecycle.beforeCommandStart).toHaveBeenCalledOnce();
     expect(commandLifecycle.afterCommandComplete).toHaveBeenCalledOnce();
+    expect(vi.mocked(commandLifecycle.beforeCommandDecision!).mock.invocationCallOrder[0])
+      .toBeLessThan(vi.mocked(commandLifecycle.beforeCommandStart).mock.invocationCallOrder[0]);
     expect(vi.mocked(commandLifecycle.beforeCommandStart).mock.invocationCallOrder[0])
       .toBeLessThan(run.mock.invocationCallOrder[0]);
     expect(run.mock.invocationCallOrder[0])
@@ -437,23 +452,128 @@ describe("AgentLoopRuntime v0.4.1 state safety", () => {
     const sequence = commandThenDoneProvider();
     const patch = patchAdapter();
     const run = vi.fn(() => gate.promise);
+    const commandLifecycle = lifecycle();
     const runtime = new AgentLoopRuntime({
       provider: sequence,
       modelId: "model",
       project,
       patchAdapter: patch.adapter,
       commandRunner: { run },
+      sideEffectLifecycle: commandLifecycle,
+      requireCommandDecision: true,
     });
     const waiting = await runtime.start("duplicate-command", "Run once.");
     const first = runtime.approveCommand(waiting.id);
     const duplicate = await runtime.approveCommand(waiting.id);
-    expect(duplicate.status).toBe("RunningCommand");
-    expect(run).toHaveBeenCalledTimes(1);
+    expect(duplicate.status).toBe("WaitingForCommandApproval");
+    await vi.waitFor(() => expect(run).toHaveBeenCalledTimes(1));
     gate.resolve(passingResult());
     const completed = await first;
     expect(completed.status).toBe("Done");
+    expect(commandLifecycle.beforeCommandDecision).toHaveBeenCalledTimes(1);
+    expect(commandLifecycle.beforeCommandStart).toHaveBeenCalledTimes(1);
     expect(run).toHaveBeenCalledTimes(1);
     expect(sequence.turns).toBe(2);
+  });
+
+  it.each([
+    ["deny", "project_command_policy_denied", "Command blocked by policy"],
+    ["error", "project_command_policy_error", "Command policy evaluation failed"],
+  ] as const)(
+    "returns a bounded %s decision result without dispatch",
+    async (decision, expectedCode, expectedTitle) => {
+      const sequence = commandThenDoneProvider();
+      const run = vi.fn(async () => passingResult());
+      const commandLifecycle = lifecycle({
+        beforeCommandDecision: vi.fn(async () => ({
+          decisionId: `decision-${decision}`,
+          decision,
+          reasonCode: decision === "deny" ? "policy_denied" : "policy_error",
+          summary: "Private policy details must not reach the model.",
+        })),
+      });
+      const runtime = new AgentLoopRuntime({
+        provider: sequence,
+        modelId: "model",
+        project,
+        patchAdapter: patchAdapter().adapter,
+        commandRunner: { run },
+        sideEffectLifecycle: commandLifecycle,
+        requireCommandDecision: true,
+      });
+
+      const waiting = await runtime.start(`decision-${decision}`, "Run tests.");
+      const completed = await runtime.approveCommand(waiting.id);
+
+      expect(completed.status).toBe("Done");
+      expect(run).not.toHaveBeenCalled();
+      expect(commandLifecycle.beforeCommandStart).not.toHaveBeenCalled();
+      expect(completed.timeline.some((entry) => entry.title === expectedTitle)).toBe(true);
+      const toolResult = completed.conversation.findLast((entry) => entry.role === "tool");
+      expect(toolResult?.content).toContain(`"code":"${expectedCode}"`);
+      expect(toolResult?.content).not.toContain("Private policy details");
+    },
+  );
+
+  it("fails closed when the required command decision hook is unavailable", async () => {
+    const sequence = commandThenDoneProvider();
+    const run = vi.fn(async () => passingResult());
+    const commandLifecycle = lifecycle();
+    delete commandLifecycle.beforeCommandDecision;
+    const runtime = new AgentLoopRuntime({
+      provider: sequence,
+      modelId: "model",
+      project,
+      patchAdapter: patchAdapter().adapter,
+      commandRunner: { run },
+      sideEffectLifecycle: commandLifecycle,
+      requireCommandDecision: true,
+    });
+
+    const waiting = await runtime.start("missing-decision-hook", "Run tests.");
+    const completed = await runtime.approveCommand(waiting.id);
+
+    expect(completed.status).toBe("Done");
+    expect(run).not.toHaveBeenCalled();
+    expect(commandLifecycle.beforeCommandStart).not.toHaveBeenCalled();
+    const toolResult = completed.conversation.findLast((entry) => entry.role === "tool");
+    expect(toolResult?.content).toContain('"code":"project_command_policy_error"');
+  });
+
+  it("aborts an active command decision and never starts the runner", async () => {
+    const sequence = commandThenDoneProvider();
+    const run = vi.fn(async () => passingResult());
+    const decisionStarted = deferred();
+    const commandLifecycle = lifecycle({
+      beforeCommandDecision: vi.fn(async ({ signal }) => {
+        decisionStarted.resolve();
+        await new Promise<void>((resolve, reject) => {
+          signal.addEventListener("abort", () => {
+            reject(new AgentCommandDecisionGateError("project_command_decision_cancelled"));
+          }, { once: true });
+        });
+        return allowDecision("unreachable");
+      }),
+    });
+    const runtime = new AgentLoopRuntime({
+      provider: sequence,
+      modelId: "model",
+      project,
+      patchAdapter: patchAdapter().adapter,
+      commandRunner: { run },
+      sideEffectLifecycle: commandLifecycle,
+      requireCommandDecision: true,
+    });
+
+    const waiting = await runtime.start("cancel-command-decision", "Run tests.");
+    const approval = runtime.approveCommand(waiting.id);
+    await decisionStarted.promise;
+    await runtime.cancel(waiting.id);
+    const cancelled = await approval;
+
+    expect(cancelled.status).toBe("Cancelled");
+    expect(run).not.toHaveBeenCalled();
+    expect(commandLifecycle.beforeCommandStart).not.toHaveBeenCalled();
   });
 
   it("blocks rollback during an active model continuation and allows it after Done", async () => {

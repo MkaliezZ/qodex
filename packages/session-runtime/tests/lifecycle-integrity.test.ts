@@ -47,8 +47,21 @@ function runtime() {
 async function propose(instance: SessionRuntime, sessionId: string, kind: ActionKind, actionId = `${kind}-1`) {
   await instance.appendEntry(sessionId, {
     type: EVENTS[kind].proposed,
-    payload: { actionId },
-    safeMetadata: { actionId },
+    payload: {
+      actionId,
+      ...(kind === "command"
+        ? { proposalDigest: PROJECT_COMMAND_PROPOSAL_DIGEST }
+        : {}),
+    },
+    safeMetadata: {
+      actionId,
+      ...(kind === "command"
+        ? {
+          taskId: "task-1",
+          proposalDigest: PROJECT_COMMAND_PROPOSAL_DIGEST,
+        }
+        : {}),
+    },
   });
 }
 
@@ -59,6 +72,13 @@ function evidence(actionId: string, suffix = "1") {
     approvalGeneration: 0,
     decisionId: `decision-${suffix}`,
     executionReceiptId: `receipt-${suffix}`,
+  };
+}
+
+function startEvidence(kind: ActionKind, actionId: string, suffix = "1") {
+  return {
+    ...evidence(actionId, suffix),
+    ...(kind === "command" ? { decisionId: "decision-allow" } : {}),
   };
 }
 
@@ -115,8 +135,8 @@ async function proposeApprovedProjectCommand(
 function commandDecisionEntry(
   decision: "allow" | "deny" | "hold" | "error",
   overrides: Record<string, unknown> = {},
+  actionId = "command-action-1",
 ) {
-  const actionId = "command-action-1";
   const decidedAt = "2026-04-01T00:01:00.000Z";
   return {
     type: "ACTION_DECIDED" as const,
@@ -165,15 +185,21 @@ describe("session lifecycle integrity", () => {
         safeMetadata: evidence(actionId),
       });
       if (kind === "action") await decideAllow(instance, session.id, actionId);
+      if (kind === "command") {
+        await instance.appendEntry(
+          session.id,
+          commandDecisionEntry("allow", {}, actionId),
+        );
+      }
       await instance.appendEntry(session.id, {
         type: EVENTS[kind].started,
         payload: { actionId },
-        safeMetadata: evidence(actionId),
+        safeMetadata: startEvidence(kind, actionId),
       });
       await instance.appendEntry(session.id, {
         type: EVENTS[kind].completed,
         payload: { actionId },
-        safeMetadata: evidence(actionId),
+        safeMetadata: startEvidence(kind, actionId),
       });
       expect((await instance.projectCurrentState(session.id)).pendingAction).toBeNull();
     },
@@ -236,6 +262,41 @@ describe("session lifecycle integrity", () => {
       payload: { actionId: "action-1" },
       safeMetadata: { ...evidence("action-1"), decisionId: "wrong-decision" },
     })).rejects.toThrow("different decision");
+  });
+
+  it("requires the exact durable allow decision before a Project Command can start", async () => {
+    const instance = runtime();
+    const session = await instance.createSession({ title: "Command allow barrier" });
+    await proposeApprovedProjectCommand(instance, session.id);
+    await expect(instance.appendEntry(session.id, {
+      type: "COMMAND_STARTED",
+      payload: { actionId: "command-action-1" },
+      safeMetadata: {
+        ...evidence("command-action-1"),
+        decisionId: "decision-allow",
+      },
+    })).rejects.toThrow("prior allow decision");
+
+    await instance.appendEntry(session.id, commandDecisionEntry("allow"));
+    await expect(instance.appendEntry(session.id, {
+      type: "COMMAND_STARTED",
+      payload: { actionId: "command-action-1" },
+      safeMetadata: {
+        ...evidence("command-action-1"),
+        decisionId: "decision-other",
+      },
+    })).rejects.toThrow("different decision");
+
+    await instance.appendEntry(session.id, {
+      type: "COMMAND_STARTED",
+      payload: { actionId: "command-action-1" },
+      safeMetadata: {
+        ...evidence("command-action-1"),
+        decisionId: "decision-allow",
+      },
+    });
+    expect((await instance.projectCurrentState(session.id)).pendingAction)
+      .toMatchObject({ kind: "command", started: true });
   });
 
   it("rejects a generic decision before approval", async () => {
@@ -585,15 +646,22 @@ describe("session lifecycle integrity", () => {
       payload: { actionId: "command-1" },
       safeMetadata: evidence("command-1"),
     });
+    await instance.appendEntry(
+      mismatch.id,
+      commandDecisionEntry("allow", {}, "command-1"),
+    );
     await instance.appendEntry(mismatch.id, {
       type: "COMMAND_STARTED",
       payload: { actionId: "command-1" },
-      safeMetadata: evidence("command-1"),
+      safeMetadata: startEvidence("command", "command-1"),
     });
     await expect(instance.appendEntry(mismatch.id, {
       type: "COMMAND_COMPLETED",
       payload: { actionId: "command-1" },
-      safeMetadata: { ...evidence("command-1"), executionReceiptId: "receipt-other" },
+      safeMetadata: {
+        ...startEvidence("command", "command-1"),
+        executionReceiptId: "receipt-other",
+      },
     })).rejects.toThrow("different execution receipt");
     await expect(instance.appendEntry(mismatch.id, {
       type: "ACTION_FAILED",
@@ -639,10 +707,16 @@ describe("session lifecycle integrity", () => {
       safeMetadata: evidence(actionId),
     });
     if (kind === "action") await decideAllow(instance, session.id, actionId);
+    if (kind === "command") {
+      await instance.appendEntry(
+        session.id,
+        commandDecisionEntry("allow", {}, actionId),
+      );
+    }
     await instance.appendEntry(session.id, {
       type: EVENTS[kind].started,
       payload: { actionId },
-      safeMetadata: evidence(actionId),
+      safeMetadata: startEvidence(kind, actionId),
     });
     await expect(instance.appendEntry(session.id, {
       type: terminalType,
@@ -665,15 +739,21 @@ describe("session lifecycle integrity", () => {
       safeMetadata: evidence(actionId),
     });
     if (kind === "action") await decideAllow(instance, session.id, actionId);
+    if (kind === "command") {
+      await instance.appendEntry(
+        session.id,
+        commandDecisionEntry("allow", {}, actionId),
+      );
+    }
     await instance.appendEntry(session.id, {
       type: EVENTS[kind].started,
       payload: { actionId },
-      safeMetadata: evidence(actionId),
+      safeMetadata: startEvidence(kind, actionId),
     });
     await instance.appendEntry(session.id, {
       type: settlementType,
       payload: { actionId },
-      safeMetadata: evidence(actionId),
+      safeMetadata: startEvidence(kind, actionId),
     });
     await instance.appendEntry(session.id, {
       type: terminalType,

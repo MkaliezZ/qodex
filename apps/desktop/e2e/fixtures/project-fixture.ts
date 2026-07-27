@@ -9,6 +9,7 @@ interface ProjectFixtureState {
 interface AgentCommandFixtureState {
   starts: number;
   cancellations: number;
+  decisions: number;
 }
 
 interface PersistentSessionFixtureState {
@@ -29,8 +30,38 @@ export async function installAgentCommandFixture(
   passingFileContent: string,
 ): Promise<void> {
   await page.addInitScript((passingContent) => {
-    const commandState: AgentCommandFixtureState = { starts: 0, cancellations: 0 };
+    const commandState: AgentCommandFixtureState = {
+      starts: 0,
+      cancellations: 0,
+      decisions: 0,
+    };
     window.__kerniqCommandFixture = commandState;
+    window.__kerniqTestAgentFuseBridge = {
+      requestDecision: async (request) => {
+        commandState.decisions += 1;
+        return {
+          protocolVersion: "kerniq.agentfuse.bridge.v1",
+          messageId: request.messageId,
+          messageType: "decision_result",
+          payload: {
+            decisionId: `e2e-decision-${request.payload.proposal.actionId}-${commandState.decisions}`,
+            actionId: request.payload.proposal.actionId,
+            decision: "allow",
+            reasonCode: "allowed",
+            summary: "The deterministic E2E policy allowed this trusted command.",
+            policyVersion: "dhms-agentfuse-runtime-guard@3.6.0",
+            schemaVersion: "agentfuse-evidence-schema-v0.1",
+            agentFuseCommit: "ec4b5842339dccfba0db62df7541920759203bc9",
+            policyProfileId: request.payload.policyProfileId,
+            policyDigest: request.payload.expectedPolicyDigest,
+            evidence: { fixture: "kerniq-project-command-e2e" },
+            decidedAt: new Date(
+              Date.parse(request.payload.approval.approvedAt) + 1,
+            ).toISOString(),
+          },
+        };
+      },
+    };
     window.__kerniqTestCommandRunner = {
       run: async (command) => {
         commandState.starts += 1;
@@ -60,12 +91,48 @@ export async function installDelayedAgentCommandFixture(page: Page, delayMs = 50
   await page.addInitScript((delay) => {
     const storageKey = "kerniq-e2e-command-counts";
     if (!sessionStorage.getItem("kerniq-command-fixture-initialized")) {
-      localStorage.setItem(storageKey, JSON.stringify({ starts: 0, cancellations: 0 }));
+      localStorage.setItem(storageKey, JSON.stringify({
+        starts: 0,
+        cancellations: 0,
+        decisions: 0,
+      }));
       sessionStorage.setItem("kerniq-command-fixture-initialized", "1");
     }
-    const read = (): AgentCommandFixtureState => JSON.parse(localStorage.getItem(storageKey) ?? "{\"starts\":0,\"cancellations\":0}");
+    const read = (): AgentCommandFixtureState => JSON.parse(
+      localStorage.getItem(storageKey)
+      ?? "{\"starts\":0,\"cancellations\":0,\"decisions\":0}",
+    );
     const write = (state: AgentCommandFixtureState) => localStorage.setItem(storageKey, JSON.stringify(state));
     window.__kerniqCommandFixture = read();
+    window.__kerniqTestAgentFuseBridge = {
+      requestDecision: async (request) => {
+        const state = read();
+        state.decisions += 1;
+        write(state);
+        window.__kerniqCommandFixture = state;
+        return {
+          protocolVersion: "kerniq.agentfuse.bridge.v1",
+          messageId: request.messageId,
+          messageType: "decision_result",
+          payload: {
+            decisionId: `e2e-decision-${request.payload.proposal.actionId}-${state.decisions}`,
+            actionId: request.payload.proposal.actionId,
+            decision: "allow",
+            reasonCode: "allowed",
+            summary: "The deterministic E2E policy allowed this trusted command.",
+            policyVersion: "dhms-agentfuse-runtime-guard@3.6.0",
+            schemaVersion: "agentfuse-evidence-schema-v0.1",
+            agentFuseCommit: "ec4b5842339dccfba0db62df7541920759203bc9",
+            policyProfileId: request.payload.policyProfileId,
+            policyDigest: request.payload.expectedPolicyDigest,
+            evidence: { fixture: "kerniq-project-command-e2e" },
+            decidedAt: new Date(
+              Date.parse(request.payload.approval.approvedAt) + 1,
+            ).toISOString(),
+          },
+        };
+      },
+    };
     window.__kerniqTestCommandRunner = {
       run: async (command) => {
         const state = read();
@@ -104,6 +171,7 @@ export async function readAgentCommandFixture(page: Page): Promise<AgentCommandF
     return {
       starts: window.__kerniqCommandFixture?.starts ?? 0,
       cancellations: window.__kerniqCommandFixture?.cancellations ?? 0,
+      decisions: window.__kerniqCommandFixture?.decisions ?? 0,
     };
   });
 }

@@ -283,6 +283,57 @@ describe("AgentToolRegistry", () => {
     })).rejects.toThrow("trusted KerniQ catalog");
   });
 
+  it("freezes every trusted command identity field and its argument vector", async () => {
+    const registry = new AgentToolRegistry(project({
+      "package.json": JSON.stringify({ scripts: { test: "vitest" } }),
+    }));
+    const resolved = await registry.resolveCommand({
+      id: "immutable-command",
+      name: "run_project_command",
+      arguments: { commandId: "package-script:test" },
+    });
+    const command = resolved.command!;
+    const original = {
+      id: command.id,
+      catalogDigest: command.catalogDigest,
+      category: command.category,
+      executable: command.executable,
+      args: [...command.args],
+      cwd: command.cwd,
+      policy: command.policy,
+    };
+
+    expect(Object.isFrozen(command)).toBe(true);
+    expect(Object.isFrozen(command.args)).toBe(true);
+    expect(Object.isFrozen(command.policy)).toBe(true);
+    expect(() => {
+      command.id = "package-script:build";
+    }).toThrow(TypeError);
+    expect(() => {
+      command.catalogDigest = `sha256:${"f".repeat(64)}`;
+    }).toThrow(TypeError);
+    expect(() => {
+      command.category = "build";
+    }).toThrow(TypeError);
+    expect(() => {
+      command.executable = "node";
+    }).toThrow(TypeError);
+    expect(() => {
+      command.cwd = "other";
+    }).toThrow(TypeError);
+    expect(() => {
+      command.args.push("--changed");
+    }).toThrow(TypeError);
+    expect(() => {
+      (command as { policy: unknown }).policy = Object.freeze({
+        ...PROJECT_COMMAND_POLICY,
+      });
+    }).toThrow(TypeError);
+    expect(command).toMatchObject(original);
+    expect(command.args).toEqual(original.args);
+    expect(command.policy).toBe(PROJECT_COMMAND_POLICY);
+  });
+
   it("does not attach trusted policy to malformed or unknown catalog entries", async () => {
     const registry = new AgentToolRegistry(project({
       "package.json": JSON.stringify({

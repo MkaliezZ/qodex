@@ -1,10 +1,16 @@
 import { describe, expect, it } from "vitest";
 import {
+  createTrustedProjectCommandDefinition,
   SETTLEMENT_PERSISTENCE_ERROR_MESSAGE,
   SettlementPersistenceError,
   type AgentLoopTask,
+  type PendingCommandApproval,
   type ProjectCommandResult,
 } from "@qodex/agent-runtime";
+import type {
+  AgentFuseBridgeClient,
+  AgentFuseDecisionRequest,
+} from "@qodex/agentfuse-adapter";
 import {
   InMemorySessionStore,
   SessionRuntime,
@@ -12,7 +18,17 @@ import {
   type SessionEventType,
   type SessionMutation,
 } from "@qodex/session-runtime";
+import {
+  AGENTFUSE_COMMIT,
+  AGENTFUSE_POLICY,
+  AGENTFUSE_SCHEMA,
+} from "../platform/agentFuseIdentity";
 import { AgentSessionLedgerRecorder } from "./agentSessionRecorder";
+import { createProjectCommandAgentFuseAdapter } from "./projectCommandDecisionCoordinator";
+
+const NOW = new Date("2026-01-01T00:00:01.000Z");
+const PROJECT_POLICY_DIGEST =
+  "sha256:9c01df377b0cfd8db8392dc8966a2f12b38ad1b2ab9c89780ac049ac0eed38ad";
 
 class FaultInjectingSessionStore extends InMemorySessionStore {
   private readonly remainingFailures: Partial<Record<SessionEventType, number>>;
@@ -56,7 +72,7 @@ function task(overrides: Partial<AgentLoopTask> = {}): AgentLoopTask {
     pendingPatch: null,
     pendingCommand: {
       toolCall: { id: "provider-call-77", name: "run_project_command", arguments: { commandId: "package-script:test" } },
-      command: {
+      command: createTrustedProjectCommandDefinition({
         id: "package-script:test",
         label: "pnpm test",
         executable: "pnpm",
@@ -64,8 +80,8 @@ function task(overrides: Partial<AgentLoopTask> = {}): AgentLoopTask {
         cwd: ".",
         source: "package.json",
         category: "test",
-        catalogDigest: "sha256:fixture",
-      },
+        catalogDigest: `sha256:${"a".repeat(64)}`,
+      }),
     },
     patchHistory: [],
     modelTurns: 1,
@@ -107,6 +123,67 @@ function patchTask(): AgentLoopTask {
   });
 }
 
+async function liveRecorder(runtime: SessionRuntime) {
+  const bridge: AgentFuseBridgeClient = {
+    requestDecision: async (request: AgentFuseDecisionRequest) => ({
+      protocolVersion: request.protocolVersion,
+      messageId: request.messageId,
+      messageType: "decision_result",
+      payload: {
+        decisionId: "decision-command-1",
+        actionId: request.payload.proposal.actionId,
+        decision: "allow",
+        reasonCode: "allowed",
+        summary: "Allowed.",
+        policyVersion: AGENTFUSE_POLICY,
+        schemaVersion: AGENTFUSE_SCHEMA,
+        agentFuseCommit: AGENTFUSE_COMMIT,
+        policyProfileId: "kerniq-project-command-v1",
+        policyDigest: PROJECT_POLICY_DIGEST,
+        evidence: { fixture: "recorder-test" },
+        decidedAt: NOW.toISOString(),
+      },
+    }),
+  };
+  return new AgentSessionLedgerRecorder({
+    runtime,
+    sessionId: "task-1",
+    commandDecisionAdapter: await createProjectCommandAgentFuseAdapter(bridge, {
+      clock: () => NOW,
+      messageIdFactory: () => "message-recorder-test",
+    }),
+    projectBindingId: "project-1",
+    projectFingerprint: `sha256:${"b".repeat(64)}`,
+    clock: () => NOW,
+  });
+}
+
+async function recordCommandStart(
+  recorder: AgentSessionLedgerRecorder,
+  taskId: string,
+  pending: PendingCommandApproval,
+  approvalId: string,
+  executionReceiptId: string,
+) {
+  const signal = new AbortController().signal;
+  const decision = await recorder.beforeCommandDecision({
+    taskId,
+    pending,
+    approvalId,
+    executionReceiptId,
+    signal,
+  });
+  await recorder.beforeCommandStart({
+    taskId,
+    pending,
+    approvalId,
+    executionReceiptId,
+    decision,
+    signal,
+  });
+  return decision;
+}
+
 describe("AgentSessionLedgerRecorder", () => {
   it("records exact provider call IDs and deduplicates repeated snapshots", async () => {
     const runtime = new SessionRuntime(new InMemorySessionStore());
@@ -128,16 +205,17 @@ describe("AgentSessionLedgerRecorder", () => {
     const sensitiveOutput = `github_pat_${"A1".repeat(15)}`;
     const runtime = new SessionRuntime(new InMemorySessionStore());
     await runtime.createSession({ id: "task-1", title: "Task" });
-    const recorder = new AgentSessionLedgerRecorder({ runtime, sessionId: "task-1" });
+    const recorder = await liveRecorder(runtime);
     const waiting = task();
     const pending = waiting.pendingCommand!;
     recorder.recordTask(waiting);
-    await recorder.beforeCommandStart({
-      taskId: waiting.id,
+    const decision = await recordCommandStart(
+      recorder,
+      waiting.id,
       pending,
-      approvalId: "approval-command-1",
-      executionReceiptId: "receipt-command-1",
-    });
+      "approval-command-1",
+      "receipt-command-1",
+    );
     const result: ProjectCommandResult = {
       commandId: pending.command.id,
       approved: true,
@@ -156,6 +234,7 @@ describe("AgentSessionLedgerRecorder", () => {
       pending,
       approvalId: "approval-command-1",
       executionReceiptId: "receipt-command-1",
+      decision,
       result,
     });
     recorder.recordTask(task({
@@ -289,23 +368,25 @@ describe("AgentSessionLedgerRecorder", () => {
     const store = new FaultInjectingSessionStore({ COMMAND_COMPLETED: 1 });
     const runtime = new SessionRuntime(store);
     await runtime.createSession({ id: "task-1", title: "Command settlement" });
-    const recorder = new AgentSessionLedgerRecorder({ runtime, sessionId: "task-1" });
+    const recorder = await liveRecorder(runtime);
     const waiting = task();
     const pending = waiting.pendingCommand!;
     recorder.recordTask(waiting);
     await recorder.flush();
-    await recorder.beforeCommandStart({
-      taskId: waiting.id,
+    const decision = await recordCommandStart(
+      recorder,
+      waiting.id,
       pending,
-      approvalId: "approval-command-settlement",
-      executionReceiptId: "receipt-command-settlement",
-    });
+      "approval-command-settlement",
+      "receipt-command-settlement",
+    );
 
     await expect(recorder.afterCommandComplete({
       taskId: waiting.id,
       pending,
       approvalId: "approval-command-settlement",
       executionReceiptId: "receipt-command-settlement",
+      decision,
       result: {
         commandId: pending.command.id,
         approved: true,

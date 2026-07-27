@@ -68,6 +68,13 @@ export class ProjectCommandDurableApprovalError extends Error {
   }
 }
 
+export class ProjectCommandDurableAllowError extends Error {
+  constructor() {
+    super("The exact durable Project Command allow decision is not active.");
+    this.name = "ProjectCommandDurableAllowError";
+  }
+}
+
 export class ProjectCommandApprovalExpiredDuringDecisionError extends Error {
   constructor() {
     super("The Project Command approval expired during policy evaluation.");
@@ -118,6 +125,42 @@ implements DurableProjectCommandDecisionLedger {
       || pending.decisionRecorded
     ) {
       throw new ProjectCommandDurableApprovalError();
+    }
+  }
+
+  async assertAllowed(
+    proposal: ActionProposal,
+    approval: ActionApproval,
+    decision: ActionDecision,
+  ): Promise<void> {
+    if (proposal.sessionId !== this.recorder.sessionId) {
+      throw new ProjectCommandDurableAllowError();
+    }
+    let projected: ProjectedSessionState;
+    try {
+      projected = await this.runtime.projectCurrentState(this.recorder.sessionId);
+    } catch {
+      throw new ProjectCommandDurableAllowError();
+    }
+    const pending = projected.pendingAction;
+    const approvalGeneration = toSessionApprovalGeneration(approval.generation);
+    if (
+      !pending
+      || pending.kind !== "command"
+      || pending.actionId !== proposal.actionId
+      || pending.taskId !== proposal.taskId
+      || pending.proposalDigest !== proposal.proposalDigest
+      || !pending.approved
+      || pending.approvalId !== approval.approvalId
+      || pending.approvalGeneration !== approvalGeneration
+      || pending.started
+      || pending.settled
+      || !pending.decisionRecorded
+      || pending.decision !== "allow"
+      || pending.decisionId !== decision.decisionId
+      || decision.decision !== "allow"
+    ) {
+      throw new ProjectCommandDurableAllowError();
     }
   }
 

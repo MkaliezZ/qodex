@@ -25,12 +25,17 @@ import type { ApplyResult, PatchError, PatchProposal } from "@qodex/diff-engine"
 import { ProjectRuntime } from "@qodex/project-runtime";
 import type { FileContent, ProjectTree } from "@qodex/project-runtime";
 import type { ModelProvider } from "@qodex/provider-sdk";
+import type { AgentFuseBridgeClient } from "@qodex/agentfuse-adapter";
 import { useProviderContext } from "../components/ProviderContext";
 import { useSessionContext } from "../components/SessionContext";
 import { openProjectDirectory } from "../platform/openProjectDirectory";
+import { createManagedPythonBridge } from "../platform/managedPythonBridge";
 import { projectBindingIdentity, type OpenProjectBindingIdentity } from "../platform/projectBinding";
 import { ProjectAccessError, type ProjectAccessSource } from "../platform/types";
 import { AgentSessionLedgerRecorder } from "../session/agentSessionRecorder";
+import {
+  createProjectCommandAgentFuseAdapter,
+} from "../session/projectCommandDecisionCoordinator";
 import {
   discardedProposalNotice,
   getAgentPendingProposal,
@@ -357,10 +362,18 @@ export function useRuntime() {
     const project = projectRef.current;
 
     if (provider && modelId && project) {
+      const commandRunner = commandRunnerRef.current;
+      const commandDecisionBridge: AgentFuseBridgeClient | null =
+        createManagedPythonBridge()
+        ?? (import.meta.env.DEV
+          ? window.__kerniqTestAgentFuseBridge ?? null
+          : null);
+      const commandExecutionAvailable = commandRunner !== null
+        && commandDecisionBridge !== null;
       const projectAccess: AgentProjectAccess = {
         listFiles: () => project.index?.files.map((file) => ({ path: file.path, size: file.size })) ?? [],
         readFile: (path) => project.fileAccess.readFile(path),
-        commandExecutionAvailable: commandRunnerRef.current !== null,
+        commandExecutionAvailable,
       };
       const agentSupported = provider.capabilities?.toolAgentLoop === true
         && (provider.supportsAgentTools?.(modelId) ?? true);
@@ -381,10 +394,20 @@ export function useRuntime() {
           providerId: provider.id,
           modelId,
         });
+        const commandDecisionAdapter = commandExecutionAvailable
+          ? await createProjectCommandAgentFuseAdapter(commandDecisionBridge)
+          : null;
         const recorder = new AgentSessionLedgerRecorder({
           runtime: sessionRuntime,
           sessionId: taskId,
           onRecorded: refreshSessions,
+          ...(commandDecisionAdapter
+            ? {
+              commandDecisionAdapter,
+              projectBindingId: binding.bindingId,
+              projectFingerprint: binding.projectFingerprint,
+            }
+            : {}),
         });
         const loop = new AgentLoopRuntime({
           provider,
@@ -392,13 +415,14 @@ export function useRuntime() {
           project: projectAccess,
           patchAdapter: createPatchAdapter(project),
           sideEffectLifecycle: recorder,
-          ...(commandRunnerRef.current ? { commandRunner: commandRunnerRef.current } : {}),
+          requireCommandDecision: true,
+          ...(commandExecutionAvailable ? { commandRunner } : {}),
         });
         agentSessionRecorderRef.current = recorder;
         recorder.recordUserMessage(prompt);
         await recorder.flush();
         agentLoopRef.current = loop;
-        setAgentModeNotice(projectSource === "browser" && !commandRunnerRef.current
+        setAgentModeNotice(projectSource === "browser" && !commandExecutionAvailable
           ? "Agent Mode is active. Browser mode supports project inspection and approved patches, but native commands are unavailable."
           : null);
         agentUnsubscribeRef.current?.();

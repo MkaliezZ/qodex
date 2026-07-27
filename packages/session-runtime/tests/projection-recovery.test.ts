@@ -7,6 +7,8 @@ import {
   type SessionStatus,
 } from "../src/index.js";
 
+const COMMAND_PROPOSAL_DIGEST = `sha256:${"a".repeat(64)}`;
+
 function runtime() {
   let index = 0;
   return new SessionRuntime(
@@ -14,6 +16,54 @@ function runtime() {
     () => new Date(Date.UTC(2026, 1, 1, 0, 0, index++)),
     () => `entry-${++index}`,
   );
+}
+
+function commandProposalIdentity(actionId: string) {
+  return {
+    payload: { actionId, proposalDigest: COMMAND_PROPOSAL_DIGEST },
+    safeMetadata: {
+      actionId,
+      taskId: "task-1",
+      proposalDigest: COMMAND_PROPOSAL_DIGEST,
+    },
+  };
+}
+
+async function appendCommandAllow(
+  instance: SessionRuntime,
+  sessionId: string,
+  actionId: string,
+  approvalId: string,
+  approvalGeneration: number,
+  decisionId: string,
+) {
+  const decidedAt = "2026-02-01T00:01:00.000Z";
+  await instance.appendEntry(sessionId, {
+    type: "ACTION_DECIDED",
+    payload: {
+      actionId,
+      proposalDigest: COMMAND_PROPOSAL_DIGEST,
+      decision: "allow",
+      reasonCode: "allow_fixture",
+      summary: "Allow Project Command.",
+      decidedAt,
+      evidence: { fixture: decisionId },
+    },
+    safeMetadata: {
+      actionId,
+      taskId: "task-1",
+      proposalDigest: COMMAND_PROPOSAL_DIGEST,
+      approvalId,
+      approvalGeneration,
+      decisionId,
+      decision: "allow",
+      reasonCode: "allow_fixture",
+      policyVersion: "dhms-agentfuse-runtime-guard@3.6.0",
+      decisionSchemaVersion: "agentfuse-evidence-schema-v0.1",
+      agentFuseCommit: "ec4b5842339dccfba0db62df7541920759203bc9",
+      decidedAt,
+    },
+  });
 }
 
 async function pendingPatch() {
@@ -88,8 +138,9 @@ describe("session projection and restart recovery", () => {
     const actionId = `${kind}-approved`;
     await instance.appendEntry(session.id, {
       type: proposedType,
-      payload: { actionId },
-      safeMetadata: { actionId },
+      ...(kind === "command"
+        ? commandProposalIdentity(actionId)
+        : { payload: { actionId }, safeMetadata: { actionId } }),
     });
     await instance.appendEntry(session.id, {
       type: approvedType,
@@ -115,15 +166,35 @@ describe("session projection and restart recovery", () => {
       payload: { actionId },
       safeMetadata: freshEvidence,
     });
+    if (kind === "command") {
+      await appendCommandAllow(
+        instance,
+        session.id,
+        actionId,
+        freshEvidence.approvalId,
+        freshEvidence.approvalGeneration,
+        "decision-after-restart",
+      );
+    }
     await instance.appendEntry(session.id, {
       type: startedType,
       payload: { actionId },
-      safeMetadata: freshEvidence,
+      safeMetadata: {
+        ...freshEvidence,
+        ...(kind === "command"
+          ? { decisionId: "decision-after-restart" }
+          : {}),
+      },
     });
     await instance.appendEntry(session.id, {
       type: completedType,
       payload: { actionId },
-      safeMetadata: freshEvidence,
+      safeMetadata: {
+        ...freshEvidence,
+        ...(kind === "command"
+          ? { decisionId: "decision-after-restart" }
+          : {}),
+      },
     });
     expect((await instance.projectCurrentState(session.id)).pendingAction).toBeNull();
   });
@@ -142,14 +213,25 @@ describe("session projection and restart recovery", () => {
     const actionId = `${kind}-started`;
     await instance.appendEntry(session.id, {
       type: proposedType,
-      payload: { actionId },
-      safeMetadata: { actionId },
+      ...(kind === "command"
+        ? commandProposalIdentity(actionId)
+        : { payload: { actionId }, safeMetadata: { actionId } }),
     });
     await instance.appendEntry(session.id, {
       type: approvedType,
       payload: { actionId },
       safeMetadata: { actionId, approvalId: "approval-started", approvalGeneration: 0 },
     });
+    if (kind === "command") {
+      await appendCommandAllow(
+        instance,
+        session.id,
+        actionId,
+        "approval-started",
+        0,
+        "decision-started",
+      );
+    }
     await instance.appendEntry(session.id, {
       type: startedType,
       payload: { actionId },
@@ -157,6 +239,7 @@ describe("session projection and restart recovery", () => {
         actionId,
         approvalId: "approval-started",
         approvalGeneration: 0,
+        ...(kind === "command" ? { decisionId: "decision-started" } : {}),
         executionReceiptId: "receipt-started",
       },
     });
@@ -252,18 +335,35 @@ describe("session projection and restart recovery", () => {
     const executionReceiptId = `${kind}-legacy-receipt`;
     await instance.appendEntry(session.id, {
       type: proposedType,
-      payload: { actionId },
-      safeMetadata: { actionId },
+      ...(kind === "command"
+        ? commandProposalIdentity(actionId)
+        : { payload: { actionId }, safeMetadata: { actionId } }),
     });
     await instance.appendEntry(session.id, {
       type: approvedType,
       payload: { actionId },
       safeMetadata: { actionId, approvalId, approvalGeneration: 0 },
     });
+    if (kind === "command") {
+      await appendCommandAllow(
+        instance,
+        session.id,
+        actionId,
+        approvalId,
+        0,
+        "decision-legacy",
+      );
+    }
     await instance.appendEntry(session.id, {
       type: startedType,
       payload: { actionId },
-      safeMetadata: { actionId, approvalId, approvalGeneration: 0, executionReceiptId },
+      safeMetadata: {
+        actionId,
+        approvalId,
+        approvalGeneration: 0,
+        ...(kind === "command" ? { decisionId: "decision-legacy" } : {}),
+        executionReceiptId,
+      },
     });
 
     const started = (await instance.loadActivePath(session.id)).at(-1)!;

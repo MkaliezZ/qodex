@@ -2,13 +2,15 @@
 
 **Date:** 2026-07-26
 **Updated:** 2026-07-27
-**Status:** v0.6.1.1 and v0.6.1.2 merged; v0.6.1.3 implemented in Draft PR; v0.6.1.4 not started
+**Status:** v0.6.1.1, v0.6.1.2, and v0.6.1.3 merged; v0.6.1.4 implemented in Draft PR; v0.6.1.5 not started
 **Source baseline:** `c7a0b0adf7a0dab4729a2db1a77a58d8c2366beb`
 **v0.6.1.1 implementation baseline:** `7be4a7d69699eeac7498be1d75e17c7c1dc599ad`
 **v0.6.1.1 merge:** `be32ca0caa764aa86e3de341557fedbc2acba0a5`
 **v0.6.1.2 implementation baseline:** `be32ca0caa764aa86e3de341557fedbc2acba0a5`
 **v0.6.1.2 merge:** `c201e32ec1dcb342e9b1fbbeace6315cb422bc99`
 **v0.6.1.3 implementation baseline:** `c201e32ec1dcb342e9b1fbbeace6315cb422bc99`
+**v0.6.1.3 merge:** `ca005397b88534ba3663f1f19b0b539de0f94766`
+**v0.6.1.4 implementation baseline:** `ca005397b88534ba3663f1f19b0b539de0f94766`
 
 ## Executive Summary
 
@@ -195,18 +197,18 @@ COMMAND_COMPLETED
 
 ```text
 Project Command carries KerniQ-owned trusted policy metadata=V0_6_1_1_MERGED
-Project Command has pure proposal and approval mapping=V0_6_1_2_DRAFT
-Project Command currently enters ActionRuntime=NOT_CONFIRMED
-Project Command currently calls AgentFuse=NOT_CONFIRMED
-Project Command currently persists ACTION_DECIDED=NOT_CONFIRMED
-Project Command has a production DHMS policy fixture/profile=NOT_CONFIRMED
-ActionRuntime restores live process-local records after restart=NOT_CONFIRMED
-Native request accepts caller-selected arguments/environment/cwd/timeout=NOT_CONFIRMED
+Project Command has pure proposal and approval mapping=V0_6_1_2_MERGED
+Project Command uses Action Runtime contracts without process-local execution=true
+Project Command native Desktop path calls AgentFuse=true
+Project Command native Desktop path persists ACTION_DECIDED=true
+Project Command has a fixed DHMS policy profile=true
+ActionRuntime restores live process-local records after restart=false
+Native request accepts caller-selected arguments/environment/cwd/timeout=false
 ```
 
-The first line changed in v0.6.1.1 and the second changes in v0.6.1.2. The
-remaining items are later implementation gaps or intentionally absent
-surfaces, not defects in the frozen v0.6 foundation.
+The bounded native Desktop flow uses durable Session evidence rather than
+restoring process-local Action Runtime state. Caller-selected native execution
+parameters remain intentionally absent.
 
 ### Audited test evidence
 
@@ -596,7 +598,8 @@ not frozen.
 
 ### v0.6.1.3 - DHMS decision-only integration and durable ACTION_DECIDED
 
-**Status:** Implemented in Draft PR; not merged or frozen.
+**Status:** Merged through `ca005397b88534ba3663f1f19b0b539de0f94766`;
+not frozen.
 
 - Select a fixed KerniQ-owned Project Command policy profile.
 - Call public `RuntimeGuard.evaluate()` through `AgentFuseAdapter.decide`.
@@ -609,10 +612,21 @@ not frozen.
 
 ### v0.6.1.4 - COMMAND_STARTED dispatch gate and native binding
 
-- Register one Action handler that delegates to the existing runner.
-- Adapt `beforeDispatch` to durable `COMMAND_STARTED`.
-- Keep Rust catalog re-resolution, authorization, limits, and no-shell spawn.
-- Adapt settlement to `COMMAND_COMPLETED` without generic Action start/complete.
+**Status:** Implemented in Draft PR; not merged or frozen.
+
+- Bind the live Desktop approval and recovery flows to the decision
+  coordinator with a five-minute approval TTL.
+- Persist one exact `COMMAND_APPROVED`, then one command-linked
+  `ACTION_DECIDED`; only a current durable allow may persist
+  `COMMAND_STARTED`.
+- Delegate to the existing runner once after the start receipt.
+- Keep Rust catalog re-resolution, authorization, limits, request shape, and
+  no-shell spawn unchanged.
+- Preserve `COMMAND_COMPLETED` settlement without generic Action
+  start/complete events.
+- Fail closed with zero native invocations for policy deny/error, expiry,
+  cancellation before start, stale identity, and approval/decision/start
+  persistence failure.
 
 ### v0.6.1.5 - Duplicate, interruption, timeout, cancellation, and recovery tests
 
@@ -765,11 +779,13 @@ SQLite and the process, or safety of arbitrary project scripts.
 ```text
 v0.6.1.1 merged=true
 v0.6.1.2 merged=true
-v0.6.1.3 implemented in Draft PR=true
-v0.6.1.4 and later implementation started=false
-Project Command migrated=false
+v0.6.1.3 merged=true
+v0.6.1.4 implemented in Draft PR=true
+v0.6.1.5 implementation started=false
+Project Command native Desktop path migrated=true
+Project Command all environments migrated=false
 Project Command decision path implemented=true
-Project Command physical execution AgentFuse-protected=false
+Project Command native Desktop execution AgentFuse-gated=true
 Patch migrated=false
 arbitrary shell added=false
 automatic approval added=false
@@ -813,14 +829,13 @@ commands, arbitrary Python, and production claims beyond Project Command.
 
 ## Final Planning Verdict
 
-The current source supports a bounded adapter plan without altering the native
-runner or introducing a duplicate lifecycle. v0.6.1.1 trusted metadata and
-contracts and v0.6.1.2 proposal/approval mapping are merged. v0.6.1.3 is
-implemented in a Draft PR: the fixed profile receives a canonical AgentFuse
-decision and Session Runtime durably binds `ACTION_DECIDED` to the pending
-command. It does not dispatch, start, complete, or physically execute a
-command. v0.6.1.4 remains ready for separate review; Project Command physical
-execution is not yet AgentFuse-protected.
+The current source implements the bounded adapter without altering the native
+runner or introducing a duplicate lifecycle. v0.6.1.1 through v0.6.1.3 are
+merged. v0.6.1.4 is implemented in a Draft PR: the live Desktop path persists
+the canonical decision before `COMMAND_STARTED`, dispatches the existing
+native runner only for durable allow, and preserves command-kind settlement.
+The claim is limited to the native Desktop Project Command path. v0.6.1.5 has
+not started.
 
 ```text
 KERNIQ_V0_6_1_PROJECT_COMMAND_ADAPTER_PLAN_READY_FOR_REVIEW

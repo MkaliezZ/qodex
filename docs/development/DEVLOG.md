@@ -933,7 +933,7 @@ commit `c201e32ec1dcb342e9b1fbbeace6315cb422bc99`.
 
 ### KerniQ v0.6.1.3 Project Command AgentFuse Decision Path
 
-**Date:** 2026-07-27  |  **Status:** Implemented in Draft PR; not merged or frozen
+**Date:** 2026-07-27  |  **Status:** Merged through `ca005397b88534ba3663f1f19b0b539de0f94766`; not frozen
 
 Added the fixed `kerniq-project-command-v1` bridge profile with policy digest
 `sha256:9c01df377b0cfd8db8392dc8966a2f12b38ad1b2ab9c89780ac049ac0eed38ad`.
@@ -958,9 +958,41 @@ Allow remains decision-ready and unstarted; deny/error block start; duplicate,
 mismatched, early, and hold decisions reject. Persistence or cancellation
 failure returns no dispatchable in-memory allow.
 
-This slice does not call `ActionRuntime.execute`, write `COMMAND_STARTED` or
+This slice did not call `ActionRuntime.execute`, write `COMMAND_STARTED` or
 `COMMAND_COMPLETED`, invoke Tauri or the native runner, modify Rust, migrate
-SQLite, or change the Session schema version. v0.6.1.4 has not started.
-Project Command decision evidence is durably proven, but physical Project
-Command execution is not yet gated by this path and is not yet
-AgentFuse-protected.
+SQLite, or change the Session schema version. Physical execution was
+intentionally left to v0.6.1.4.
+
+PR #11 was corrected to require the exact durable `COMMAND_APPROVED` identity
+before the bridge, revalidate approval after AgentFuse, bound `decidedAt` to
+the approval window, and avoid caching failed decisions. It merged through
+merge commit `ca005397b88534ba3663f1f19b0b539de0f94766`.
+
+### KerniQ v0.6.1.4 Live Project Command Decision Gate and Native Dispatch Binding
+
+**Date:** 2026-07-27  |  **Status:** Implemented in Draft PR; not merged or frozen
+
+Connected the real Desktop Project Command approval and recovery flows to the
+merged decision coordinator. The live path creates the proposal from the exact
+provider tool-call, task, Session, trusted resolved command, project binding,
+project fingerprint, and trusted clock. A five-minute KerniQ-owned approval TTL
+binds one fresh approval ID to the current Session approval generation.
+
+The durable order is `COMMAND_PROPOSED`, `COMMAND_APPROVED`,
+`ACTION_DECIDED allow`, `COMMAND_STARTED`, then the existing
+`COMMAND_COMPLETED` or interruption lifecycle. Only the current persisted allow
+can cross the start barrier. AgentFuse deny/error, approval expiry,
+cancellation before start, approval/decision/start persistence failure, stale
+identity, and duplicate approval produce no native dispatch. Human denial
+remains `COMMAND_DENIED` and makes no AgentFuse request.
+
+The existing native request remains `runId`, authorized project root,
+`commandId`, and `catalogDigest`. Rust catalog re-resolution, digest and
+authorized-root checks, direct no-shell spawn, cleared/allowlisted environment,
+null stdin, timeout, cancellation, and bounded output are unchanged. No generic
+`ACTION_STARTED` or `ACTION_COMPLETED` events were added.
+
+The accurate product claim is limited to the bounded native Desktop Project
+Command path. Other environments and Patch, Git, MCP, browser, file-write, and
+arbitrary-shell actions are not claimed as AgentFuse-protected. v0.6.1.5 has
+not started.

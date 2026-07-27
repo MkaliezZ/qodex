@@ -170,9 +170,14 @@ export class SessionProjector {
           if (pendingAction.started) throw new Error("An action cannot start twice.");
           if (pendingAction.settled) throw new Error("A settled action cannot start.");
           requireApprovalBinding(pendingAction, entry);
-          if (pendingAction.kind === "action") {
+          if (
+            pendingAction.kind === "action"
+            || pendingAction.kind === "command"
+          ) {
             if (!pendingAction.decisionRecorded || pendingAction.decision !== "allow") {
-              throw new Error("A generic action cannot start without a prior allow decision.");
+              throw new Error(
+                "A generic action or Project Command cannot start without a prior allow decision.",
+              );
             }
             const startDecisionId = requiredMetadataText(entry, "decisionId");
             if (startDecisionId !== pendingAction.decisionId) {

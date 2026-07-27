@@ -52,12 +52,15 @@ export type { MockProviderOptions } from "./providers/mock.js";
 export { AgentLoopRuntime } from "./agent-loop/runtime.js";
 export { AgentToolRegistry, AGENT_TOOLS } from "./agent-loop/tools.js";
 export {
+  createTrustedProjectCommandDefinition,
   createProjectCommandActionParameters,
   PROJECT_COMMAND_POLICY,
   serializeTrustedProjectCommandPolicy,
   trustedProjectCommandPolicyDigest,
 } from "./agent-loop/project-command-policy.js";
 export {
+  AgentCommandDecisionGateError,
+  isAgentCommandDecisionGateError,
   isSettlementPersistenceError,
   SETTLEMENT_PERSISTENCE_ERROR_MESSAGE,
   SettlementPersistenceError,
@@ -87,6 +90,11 @@ export type {
   AgentPatchLifecycleInput,
   AgentPatchResultLifecycleInput,
   AgentCommandLifecycleInput,
+  AgentCommandDecisionLifecycleInput,
+  AgentCommandDecisionReceipt,
+  AgentCommandStartReceipt,
+  AgentCommandDecisionGateErrorCode,
+  AgentCommandStartLifecycleInput,
   AgentCommandResultLifecycleInput,
   AgentSideEffectFailureInput,
   AgentSideEffectKind,

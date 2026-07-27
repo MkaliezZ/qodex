@@ -1,7 +1,13 @@
 import type { ModelToolCall } from "@qodex/provider-sdk";
 import { AgentToolRegistry, type AgentToolResult } from "./tools.js";
-import { isSettlementPersistenceError } from "./types.js";
+import {
+  AgentCommandDecisionGateError,
+  isAgentCommandDecisionGateError,
+  isSettlementPersistenceError,
+} from "./types.js";
 import type {
+  AgentCommandDecisionLifecycleInput,
+  AgentCommandDecisionReceipt,
   AgentLoopLimits,
   AgentLoopListener,
   AgentLoopRuntimeOptions,
@@ -34,6 +40,7 @@ export class AgentLoopRuntime {
   private readonly now: () => number;
   private readonly queuedCalls = new Map<string, ModelToolCall[]>();
   private readonly activeCommandRuns = new Map<string, string>();
+  private readonly activeCommandDecisions = new Map<string, AbortController>();
   private readonly activeApprovalActions = new Set<string>();
   private readonly activePatchApplies = new Set<string>();
   private readonly activeRollbacks = new Set<string>();
@@ -260,65 +267,111 @@ export class AgentLoopRuntime {
     this.beginOperation(task.id);
     const approvalId = crypto.randomUUID();
     const executionReceiptId = crypto.randomUUID();
+    const decisionController = new AbortController();
+    let decision: AgentCommandDecisionReceipt | null = null;
     let dispatched = false;
     try {
       if (!this.guardTaskAction(task, "WaitingForCommandApproval")) return cloneTask(task);
-      if (this.options.sideEffectLifecycle) {
-        await this.options.sideEffectLifecycle.beforeCommandStart({
-          taskId: task.id,
-          pending,
-          approvalId,
-          executionReceiptId,
-        });
-      }
-      if (!this.guardTaskAction(task, "WaitingForCommandApproval")) return cloneTask(task);
-      task.pendingCommand = null;
-      this.setStatus(task, "RunningCommand");
-      this.addTimeline(task, {
-        kind: "command_approval",
-        title: "Command approved",
-        status: "success",
-        summary: formatCommand(pending),
-        toolCallId: pending.toolCall.id,
-        actionId: pending.toolCall.id,
-      });
-      this.activeCommandRuns.set(task.id, runId);
-      let result: ProjectCommandResult;
-      try {
-        dispatched = true;
-        result = await runner.run(pending.command, runId);
-      } catch (error) {
-        result = {
-          commandId: pending.command.id,
-          approved: true,
-          started: true,
-          exitCode: null,
-          stdout: "",
-          stderr: error instanceof Error ? error.message : "Native command execution failed.",
-          timedOut: false,
-          cancelled: false,
-          stdoutTruncated: false,
-          stderrTruncated: false,
-          durationMs: 0,
-        };
-      } finally {
-        this.activeCommandRuns.delete(task.id);
-      }
-      await this.options.sideEffectLifecycle?.afterCommandComplete({
+      this.activeCommandDecisions.set(task.id, decisionController);
+      decision = await this.decideCommand({
         taskId: task.id,
         pending,
         approvalId,
         executionReceiptId,
-        result,
+        signal: decisionController.signal,
       });
-      if (this.cancellationRequests.has(task.id) || task.status === "Cancelling" || isTerminal(task.status)) {
-        if (!isTerminal(task.status)) {
-          this.terminateTask(task, "Cancelled", "Agent task cancelled after command execution settled.", "task_cancelled");
+      if (!this.guardTaskAction(task, "WaitingForCommandApproval")) return cloneTask(task);
+      if (decision.decision !== "allow") {
+        this.activeCommandDecisions.delete(task.id);
+        task.pendingCommand = null;
+        this.appendCommandDecisionResult(task, pending, decision);
+        this.setStatus(task, "ReturningToolResult");
+      } else {
+        let dispatchCommand = pending.command;
+        if (this.options.sideEffectLifecycle) {
+          const startReceipt = await this.options.sideEffectLifecycle.beforeCommandStart({
+            taskId: task.id,
+            pending,
+            approvalId,
+            executionReceiptId,
+            decision,
+            signal: decisionController.signal,
+          });
+          if (startReceipt) {
+            if (
+              startReceipt.decisionId !== decision.decisionId
+              || startReceipt.executionReceiptId !== executionReceiptId
+            ) {
+              throw new AgentCommandDecisionGateError(
+                "project_command_start_persistence_failed",
+              );
+            }
+            dispatchCommand = startReceipt.command;
+          }
         }
-        return cloneTask(task);
+        this.activeCommandDecisions.delete(task.id);
+        task.pendingCommand = null;
+        if (!this.cancellationRequests.has(task.id) && task.status !== "Cancelling") {
+          this.setStatus(task, "RunningCommand");
+        }
+        this.addTimeline(task, {
+          kind: "command_approval",
+          title: "Command approved",
+          status: "success",
+          summary: formatCommand(pending),
+          toolCallId: pending.toolCall.id,
+          actionId: pending.toolCall.id,
+        });
+        this.activeCommandRuns.set(task.id, runId);
+        let result: ProjectCommandResult;
+        try {
+          dispatched = true;
+          const operation = runner.run(dispatchCommand, runId);
+          if (
+            this.cancellationRequests.has(task.id)
+            || task.status === "Cancelling"
+          ) {
+            try {
+              await runner.cancel?.(runId);
+            } catch {
+              // The command future remains the source of truth for settlement.
+            }
+          }
+          result = await operation;
+        } catch (error) {
+          result = {
+            commandId: pending.command.id,
+            approved: true,
+            started: true,
+            exitCode: null,
+            stdout: "",
+            stderr: error instanceof Error ? error.message : "Native command execution failed.",
+            timedOut: false,
+            cancelled: false,
+            stdoutTruncated: false,
+            stderrTruncated: false,
+            durationMs: 0,
+          };
+        } finally {
+          this.activeCommandRuns.delete(task.id);
+        }
+        await this.options.sideEffectLifecycle?.afterCommandComplete({
+          taskId: task.id,
+          pending,
+          approvalId,
+          executionReceiptId,
+          decision,
+          result,
+        });
+        if (this.cancellationRequests.has(task.id) || task.status === "Cancelling" || isTerminal(task.status)) {
+          if (!isTerminal(task.status)) {
+            this.terminateTask(task, "Cancelled", "Agent task cancelled after command execution settled.", "task_cancelled");
+          }
+          return cloneTask(task);
+        }
+        this.appendCommandResult(task, pending, result);
+        this.setStatus(task, "ReturningToolResult");
       }
-      this.appendCommandResult(task, pending, result);
-      this.setStatus(task, "ReturningToolResult");
     } catch (error) {
       let failure = error;
       if (dispatched && !isSettlementPersistenceError(error)) {
@@ -335,10 +388,19 @@ export class AgentLoopRuntime {
           failure = settlementError;
         }
       }
-      if (!this.cancellationRequests.has(task.id)) {
+      if (
+        !dispatched
+        && isAgentCommandDecisionGateError(error)
+        && !this.cancellationRequests.has(task.id)
+      ) {
+        task.pendingCommand = null;
+        this.appendCommandGateFailure(task, pending, error);
+        this.setStatus(task, "ReturningToolResult");
+      } else if (!this.cancellationRequests.has(task.id)) {
         this.fail(task, failure instanceof Error ? failure.message : "Command execution failed.");
       }
     } finally {
+      this.activeCommandDecisions.delete(task.id);
       this.activeCommandRuns.delete(task.id);
       this.activeApprovalActions.delete(task.id);
       this.endOperation(task.id);
@@ -421,6 +483,7 @@ export class AgentLoopRuntime {
     if (this.runningTasks.has(taskId)
       || this.activeApprovalActions.has(taskId)
       || this.activePatchApplies.has(taskId)
+      || this.activeCommandDecisions.has(taskId)
       || this.activeCommandRuns.has(taskId)
       || this.operationSettlements.has(taskId)
       || this.activeRollbacks.has(taskId)
@@ -449,6 +512,7 @@ export class AgentLoopRuntime {
 
       this.disposePendingState(task, "task_cancelled");
       this.setStatus(task, "Cancelling");
+      this.activeCommandDecisions.get(taskId)?.abort();
       const runId = this.activeCommandRuns.get(taskId);
       if (runId) {
         try {
@@ -681,6 +745,107 @@ export class AgentLoopRuntime {
     });
   }
 
+  private async decideCommand(
+    input: AgentCommandDecisionLifecycleInput,
+  ): Promise<AgentCommandDecisionReceipt> {
+    const lifecycle = this.options.sideEffectLifecycle;
+    if (!lifecycle?.beforeCommandDecision) {
+      if (this.options.requireCommandDecision) {
+        throw new AgentCommandDecisionGateError("project_command_policy_error");
+      }
+      return {
+        decisionId: `ungated-${input.approvalId}`,
+        decision: "allow",
+        reasonCode: "command_decision_gate_not_required",
+        summary: "This environment does not require the Desktop Project Command decision gate.",
+      };
+    }
+    const decision = await lifecycle.beforeCommandDecision(input);
+    if (
+      !nonEmptyText(decision.decisionId)
+      || !["allow", "deny", "error"].includes(decision.decision)
+      || !nonEmptyText(decision.reasonCode)
+      || !nonEmptyText(decision.summary)
+    ) {
+      throw new AgentCommandDecisionGateError("project_command_policy_error");
+    }
+    return decision;
+  }
+
+  private appendCommandDecisionResult(
+    task: AgentLoopTask,
+    pending: PendingCommandApproval,
+    decision: AgentCommandDecisionReceipt,
+  ): void {
+    const denied = decision.decision === "deny";
+    const code = denied
+      ? "project_command_policy_denied"
+      : "project_command_policy_error";
+    this.updateLatestTimeline(
+      task,
+      (entry) => entry.kind === "tool_request"
+        && entry.title === pending.toolCall.name
+        && entry.status === "pending",
+      denied ? "denied" : "error",
+    );
+    task.conversation.push({
+      role: "tool",
+      toolCallId: pending.toolCall.id,
+      name: pending.toolCall.name,
+      content: JSON.stringify({
+        ok: false,
+        code,
+        commandId: pending.command.id,
+        approved: true,
+        started: false,
+      }),
+    });
+    this.addTimeline(task, {
+      kind: "command_approval",
+      title: denied ? "Command blocked by policy" : "Command policy evaluation failed",
+      status: denied ? "denied" : "error",
+      summary: denied
+        ? "AgentFuse denied this command; no process was started."
+        : "AgentFuse failed closed; no process was started.",
+      toolCallId: pending.toolCall.id,
+      actionId: pending.toolCall.id,
+    });
+  }
+
+  private appendCommandGateFailure(
+    task: AgentLoopTask,
+    pending: PendingCommandApproval,
+    error: AgentCommandDecisionGateError,
+  ): void {
+    this.updateLatestTimeline(
+      task,
+      (entry) => entry.kind === "tool_request"
+        && entry.title === pending.toolCall.name
+        && entry.status === "pending",
+      "error",
+    );
+    task.conversation.push({
+      role: "tool",
+      toolCallId: pending.toolCall.id,
+      name: pending.toolCall.name,
+      content: JSON.stringify({
+        ok: false,
+        code: error.code,
+        commandId: pending.command.id,
+        approved: true,
+        started: false,
+      }),
+    });
+    this.addTimeline(task, {
+      kind: "command_approval",
+      title: "Command dispatch blocked",
+      status: "error",
+      summary: error.message,
+      toolCallId: pending.toolCall.id,
+      actionId: pending.toolCall.id,
+    });
+  }
+
   private requireTask(taskId: string): AgentLoopTask {
     const task = this.tasks.get(taskId);
     if (!task) throw new Error(`Agent task not found: ${taskId}`);
@@ -873,6 +1038,10 @@ function isWaiting(status: AgentLoopStatus): boolean {
   return status === "WaitingForPatchApproval" || status === "WaitingForCommandApproval";
 }
 
+function nonEmptyText(value: unknown): value is string {
+  return typeof value === "string" && value.trim().length > 0;
+}
+
 function cloneTask(task: AgentLoopTask): AgentLoopTask {
   return {
     ...task,
@@ -881,7 +1050,7 @@ function cloneTask(task: AgentLoopTask): AgentLoopTask {
     patchHistory: [...task.patchHistory],
     pendingPatch: task.pendingPatch ? { ...task.pendingPatch, files: [...task.pendingPatch.files] } : null,
     pendingCommand: task.pendingCommand
-      ? { toolCall: { ...task.pendingCommand.toolCall }, command: { ...task.pendingCommand.command, args: [...task.pendingCommand.command.args] } }
+      ? { toolCall: { ...task.pendingCommand.toolCall }, command: task.pendingCommand.command }
       : null,
   };
 }

@@ -3,11 +3,13 @@ import {
   isSettlementPersistenceError,
   SettlementPersistenceError,
   type AgentPatchProposal,
+  type PendingCommandApproval,
   type AgentPatchResult,
   type ProjectCommandDefinition,
   type ProjectCommandResult,
   type ProjectCommandRunner,
 } from "@qodex/agent-runtime";
+import type { AgentFuseBridgeClient } from "@qodex/agentfuse-adapter";
 import { DiffEngine } from "@qodex/diff-engine";
 import { ProjectRuntime } from "@qodex/project-runtime";
 import type {
@@ -18,14 +20,23 @@ import type {
   SessionStatus,
   SessionSummary,
 } from "@qodex/session-runtime";
+import { SessionRecorder } from "@qodex/session-runtime";
 import { useEffect, useMemo, useState } from "react";
 import { TimelineHistory } from "../components/AgentTimeline";
 import { useSessionContext } from "../components/SessionContext";
 import { openProjectDirectory } from "../platform/openProjectDirectory";
+import { createManagedPythonBridge } from "../platform/managedPythonBridge";
 import { projectBindingIdentity } from "../platform/projectBinding";
 import { commandsMatch, recoveredCommand, recoveredPatch } from "../session/recoveryActions";
 import { saveRedactedSessionExport } from "../session/exportSession";
 import { safeRecoveredCommandResult } from "../session/agentSessionRecorder";
+import {
+  createProjectCommandAgentFuseAdapter,
+} from "../session/projectCommandDecisionCoordinator";
+import {
+  ProjectCommandLiveDecisionGate,
+  type LiveProjectCommandProposal,
+} from "../session/projectCommandLiveDecisionGate";
 import { sessionEntriesToTimeline } from "../session/sessionTimeline";
 
 type SessionFilter = "All" | "Active" | "Recovery Required" | "Completed" | "Failed" | "Cancelled";
@@ -42,6 +53,8 @@ interface RecoveryTarget {
   command: ProjectCommandDefinition | null;
   diff: DiffEngine | null;
   runner: ProjectCommandRunner | null;
+  commandGate: ProjectCommandLiveDecisionGate | null;
+  commandProposal: LiveProjectCommandProposal | null;
   message: string;
 }
 
@@ -120,6 +133,8 @@ export function SessionsView() {
             command: null,
             diff,
             runner: null,
+            commandGate: null,
+            commandProposal: null,
             message: "Target files changed after the proposal. Apply is unavailable and no files were written.",
           });
           return;
@@ -130,6 +145,8 @@ export function SessionsView() {
           command: null,
           diff,
           runner: null,
+          commandGate: null,
+          commandProposal: null,
           message: "Matching project verified and target files reread. Review the patch and approve it again.",
         });
         return;
@@ -138,7 +155,17 @@ export function SessionsView() {
         const stored = recoveredCommand(pending.payload);
         const runner = opened.commandRunner
           ?? (import.meta.env.DEV ? window.__kerniqTestCommandRunner ?? null : null);
-        if (!stored || !runner) {
+        const bridge: AgentFuseBridgeClient | null = createManagedPythonBridge()
+          ?? (import.meta.env.DEV
+            ? window.__kerniqTestAgentFuseBridge ?? null
+            : null);
+        if (
+          !stored
+          || !runner
+          || !bridge
+          || !pending.taskId
+          || !pending.proposalDigest
+        ) {
           setRecovery(emptyRecovery("unrecoverable", "The recovered command cannot run in this environment."));
           return;
         }
@@ -156,12 +183,57 @@ export function SessionsView() {
           setRecovery(emptyRecovery("changed", "The cataloged command is absent or changed. Approval is unavailable and no process was started."));
           return;
         }
+        const proposalEntry = detail.entries.find((entry) => (
+          entry.id === pending.proposalEntryId
+        ));
+        const requestedAt = recoveredCommandRequestedAt(
+          pending.payload,
+          proposalEntry?.createdAt,
+        );
+        if (!requestedAt) {
+          setRecovery(emptyRecovery(
+            "unrecoverable",
+            "The recovered command is missing its original request identity.",
+          ));
+          return;
+        }
+        const recorder = new SessionRecorder(runtime, selected.id, refreshSessions);
+        const adapter = await createProjectCommandAgentFuseAdapter(bridge);
+        const commandGate = new ProjectCommandLiveDecisionGate({
+          runtime,
+          recorder,
+          adapter,
+          projectBindingId: selected.projectBindingId,
+          projectFingerprint: identity.projectFingerprint,
+        });
+        const livePending: PendingCommandApproval = {
+          toolCall: {
+            id: pending.actionId,
+            name: "run_project_command",
+            arguments: { commandId: resolved.command.id },
+          },
+          command: resolved.command,
+        };
+        const commandProposal = await commandGate.propose(
+          pending.taskId,
+          livePending,
+          requestedAt,
+        );
+        if (commandProposal.proposal.proposalDigest !== pending.proposalDigest) {
+          setRecovery(emptyRecovery(
+            "changed",
+            "The recovered command approval identity changed. No process was started.",
+          ));
+          return;
+        }
         setRecovery({
           availability: "ready",
           patch: null,
           command: resolved.command,
           diff: null,
           runner,
+          commandGate,
+          commandProposal,
           message: "Matching project and command catalog verified. Review the command and approve it again.",
         });
       }
@@ -243,30 +315,45 @@ export function SessionsView() {
           },
         });
         if (!success) throw new Error("The recovered patch failed verified application.");
-      } else if (pending.kind === "command" && recovery.command && recovery.runner) {
-        await runtime.appendEntry(selected.id, {
-          type: "COMMAND_APPROVED",
-          payload: { actionId: pending.actionId },
-          safeMetadata: {
-            actionId: pending.actionId,
-            approvalId,
-            approvalGeneration: pending.approvalGeneration,
-            toolCallId: pending.actionId,
-          },
-        });
+      } else if (
+        pending.kind === "command"
+        && recovery.command
+        && recovery.runner
+        && recovery.commandGate
+        && recovery.commandProposal
+      ) {
+        const controller = new AbortController();
+        const decisionContext = await recovery.commandGate.approveAndDecide(
+          recovery.commandProposal,
+          approvalId,
+          controller.signal,
+        );
+        if (decisionContext.decision.decision !== "allow") {
+          await runtime.appendEntry(selected.id, {
+            type: "RECOVERY_COMPLETED",
+            payload: {
+              actionId: pending.actionId,
+              status: "blocked_by_policy",
+            },
+          });
+          await runtime.appendEntry(selected.id, {
+            type: "SESSION_COMPLETED",
+            payload: {
+              reason: "Recovered command was blocked by policy; no process was started.",
+            },
+          });
+          setRecovery(null);
+          setNotice("Recovered command was blocked by policy. No process was started.");
+          await refreshSessions();
+          return;
+        }
         const executionReceiptId = crypto.randomUUID();
-        await runtime.appendEntry(selected.id, {
-          type: "COMMAND_STARTED",
-          payload: { actionId: pending.actionId, commandId: recovery.command.id },
-          safeMetadata: {
-            actionId: pending.actionId,
-            approvalId,
-            approvalGeneration: pending.approvalGeneration,
-            toolCallId: pending.actionId,
-            executionReceiptId,
-            executionStatus: "running",
-          },
-        });
+        await recovery.commandGate.recordStarted(
+          decisionContext,
+          recovery.commandProposal.pending,
+          executionReceiptId,
+          controller.signal,
+        );
         let result: ProjectCommandResult;
         try {
           result = await recovery.runner.run(recovery.command, crypto.randomUUID());
@@ -281,6 +368,7 @@ export function SessionsView() {
               actionId: pending.actionId,
               approvalId,
               approvalGeneration: pending.approvalGeneration,
+              decisionId: decisionContext.decision.decisionId,
               toolCallId: pending.actionId,
               executionReceiptId,
               executionStatus: "failed",
@@ -295,6 +383,7 @@ export function SessionsView() {
             actionId: pending.actionId,
             approvalId,
             approvalGeneration: pending.approvalGeneration,
+            decisionId: decisionContext.decision.decisionId,
             toolCallId: pending.actionId,
             executionReceiptId,
             executionStatus: result.cancelled ? "cancelled" : "completed",
@@ -498,7 +587,33 @@ function recoveryInstruction(projection: ProjectedSessionState): string {
 }
 
 function emptyRecovery(availability: RecoveryAvailability, message: string): RecoveryTarget {
-  return { availability, patch: null, command: null, diff: null, runner: null, message };
+  return {
+    availability,
+    patch: null,
+    command: null,
+    diff: null,
+    runner: null,
+    commandGate: null,
+    commandProposal: null,
+    message,
+  };
+}
+
+function recoveredCommandRequestedAt(
+  payload: unknown,
+  fallback: string | undefined,
+): string | null {
+  if (
+    typeof payload === "object"
+    && payload !== null
+    && !Array.isArray(payload)
+    && "requestedAt" in payload
+    && typeof payload.requestedAt === "string"
+    && !Number.isNaN(Date.parse(payload.requestedAt))
+  ) {
+    return payload.requestedAt;
+  }
+  return fallback && !Number.isNaN(Date.parse(fallback)) ? fallback : null;
 }
 
 async function appendRecoveredSettlement(
