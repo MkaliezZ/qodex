@@ -5,6 +5,18 @@ import type {
   JsonValue,
 } from "@qodex/action-runtime";
 
+export type AgentFusePolicySelection =
+  | {
+    policyFixtureId: string;
+    policyProfileId?: never;
+    expectedPolicyDigest?: never;
+  }
+  | {
+    policyFixtureId?: never;
+    policyProfileId: string;
+    expectedPolicyDigest: string;
+  };
+
 export interface AgentFuseDecisionRequest {
   protocolVersion: "kerniq.agentfuse.bridge.v1";
   messageId: string;
@@ -12,8 +24,7 @@ export interface AgentFuseDecisionRequest {
   payload: {
     proposal: ActionProposal;
     approval: ActionApproval;
-    policyFixtureId: string;
-  };
+  } & AgentFusePolicySelection;
 }
 
 export interface AgentFuseDecisionResponse {
@@ -23,12 +34,14 @@ export interface AgentFuseDecisionResponse {
   payload: {
     decisionId: string;
     actionId: string;
-    decision: ActionDecision["decision"];
+    decision: ActionDecision["decision"] | "block";
     reasonCode: string;
     summary: string;
     policyVersion: string;
     schemaVersion: string;
     agentFuseCommit: string;
+    policyProfileId?: string;
+    policyDigest?: string;
     evidence: JsonValue;
     decidedAt: string;
   };
@@ -38,13 +51,14 @@ export interface AgentFuseBridgeClient {
   requestDecision(request: AgentFuseDecisionRequest, signal: AbortSignal): Promise<unknown>;
 }
 
-export interface AgentFuseAdapterOptions {
+interface AgentFuseAdapterBaseOptions {
   bridge: AgentFuseBridgeClient;
   expectedAgentFuseCommit: string;
   expectedProtocolVersion: "kerniq.agentfuse.bridge.v1";
   expectedSchemaVersion: string;
   expectedPolicyVersion: string;
-  policyFixtureId: string;
   messageIdFactory?: () => string;
   clock?: () => Date;
 }
+
+export type AgentFuseAdapterOptions = AgentFuseAdapterBaseOptions & AgentFusePolicySelection;

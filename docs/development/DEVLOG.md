@@ -909,7 +909,7 @@ commit `be32ca0caa764aa86e3de341557fedbc2acba0a5`.
 
 ### KerniQ v0.6.1.2 Project Command Proposal and Approval Mapping
 
-**Date:** 2026-07-27  |  **Status:** Implementation in Draft PR; not merged or frozen
+**Date:** 2026-07-27  |  **Status:** Merged; not frozen
 
 Added a pure Desktop integration mapper that creates one digest-bound
 `ActionProposal` from a resolved trusted command, provider tool-call ID, Agent
@@ -919,13 +919,48 @@ fixed policy profile and a SHA-256 digest of the exact deterministic
 KerniQ-owned policy serialization.
 
 Added explicit Session-to-Action approval-generation conversion. Session
-generation `0` maps to Action generation `1`; invalid negative or fractional
-generations fail closed. The approval mapper binds the exact action, task, and
-proposal digest and reuses Action Runtime's public approval validator for
-generation and expiry validation.
+generation `0` maps to Action generation `1`; invalid negative, fractional, or
+unsafe generations fail closed. Before issuing an approval, the mapper
+revalidates the proposal digest, exact Project Command action/risk/Session
+identity, exact parameter keys, and fixed policy profile/digest through public
+Action Runtime validation plus the Project Command validator.
 
 This slice does not instantiate or mutate Action Runtime state, call
 AgentFuse, persist `ACTION_DECIDED`, write Session events, invoke Tauri or the
 native runner, change command dispatch, change `COMMAND_STARTED`, migrate
-Project Command, or alter the Session schema. v0.6.1.3 has not started and
-Project Command is not yet AgentFuse-protected.
+Project Command, or alter the Session schema. PR #10 merged through merge
+commit `c201e32ec1dcb342e9b1fbbeace6315cb422bc99`.
+
+### KerniQ v0.6.1.3 Project Command AgentFuse Decision Path
+
+**Date:** 2026-07-27  |  **Status:** Implemented in Draft PR; not merged or frozen
+
+Added the fixed `kerniq-project-command-v1` bridge profile with policy digest
+`sha256:9c01df377b0cfd8db8392dc8966a2f12b38ad1b2ab9c89780ac049ac0eed38ad`.
+The managed Python bridge validates bounded proposal, approval, project, and
+policy identity, maps only safe fields into `ToolCallRequest`, and calls public
+`RuntimeGuard.evaluate()` without a handler. AgentFuse `allow|block` maps to
+KerniQ `allow|deny`; bridge or validation failure maps to fail-closed `error`.
+The canonical Project Command path does not support `hold`.
+
+Because the managed bridge source is embedded and integrity-checked, its
+trusted installed-tree SHA-256 advances from
+`52bd2dfd5fdd7eb183ed30d4fad56666cd19363fcce381a94ef77b3ac4a4a8dc` to
+`34e0633e303a0e2b5107832d42486503f7c1f55a0e717001d176345ecfbe9ef3`.
+The managed Python runtime version, AgentFuse package/commit, bridge protocol,
+and evidence schema remain unchanged.
+
+Added a decision-only Desktop coordinator that validates proposal and approval,
+requests one AgentFuse decision, validates it, and durably records one
+command-linked `ACTION_DECIDED`. Session projection now binds that event to the
+pending command's action, task, approval ID/generation, and proposal digest.
+Allow remains decision-ready and unstarted; deny/error block start; duplicate,
+mismatched, early, and hold decisions reject. Persistence or cancellation
+failure returns no dispatchable in-memory allow.
+
+This slice does not call `ActionRuntime.execute`, write `COMMAND_STARTED` or
+`COMMAND_COMPLETED`, invoke Tauri or the native runner, modify Rust, migrate
+SQLite, or change the Session schema version. v0.6.1.4 has not started.
+Project Command decision evidence is durably proven, but physical Project
+Command execution is not yet gated by this path and is not yet
+AgentFuse-protected.

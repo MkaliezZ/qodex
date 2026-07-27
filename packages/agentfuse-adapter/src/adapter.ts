@@ -9,14 +9,19 @@ import type {
   AgentFuseAdapterOptions,
   AgentFuseDecisionRequest,
   AgentFuseDecisionResponse,
+  AgentFusePolicySelection,
 } from "./types.js";
+
+const MAX_RESPONSE_EVIDENCE_BYTES = 64 * 1024;
 
 export class AgentFuseAdapter {
   private readonly seenResponseIds = new Set<string>();
   private readonly messageIdFactory;
   private readonly clock;
+  private readonly policySelection: AgentFusePolicySelection;
 
   constructor(private readonly options: AgentFuseAdapterOptions) {
+    this.policySelection = validatePolicySelection(options);
     this.messageIdFactory = options.messageIdFactory
       ?? (() => `agentfuse-${globalThis.crypto.randomUUID()}`);
     this.clock = options.clock ?? (() => new Date());
@@ -31,7 +36,7 @@ export class AgentFuseAdapter {
     const request = mapActionProposalToDecisionRequest(
       proposal,
       approval,
-      this.options.policyFixtureId,
+      this.policySelection,
       messageId,
     );
     try {
@@ -43,6 +48,8 @@ export class AgentFuseAdapter {
         expectedProtocolVersion: this.options.expectedProtocolVersion,
         expectedSchemaVersion: this.options.expectedSchemaVersion,
         expectedPolicyVersion: this.options.expectedPolicyVersion,
+        expectedPolicyProfileId: this.policySelection.policyProfileId,
+        expectedPolicyDigest: this.policySelection.expectedPolicyDigest,
       });
       if (this.seenResponseIds.has(response.payload.decisionId)) {
         return this.errorDecision(proposal, "duplicate_response");
@@ -51,7 +58,9 @@ export class AgentFuseAdapter {
       return {
         decisionId: response.payload.decisionId,
         actionId: response.payload.actionId,
-        decision: response.payload.decision,
+        decision: response.payload.decision === "block"
+          ? "deny"
+          : response.payload.decision,
         reasonCode: response.payload.reasonCode,
         summary: response.payload.summary,
         policyVersion: response.payload.policyVersion,
@@ -78,6 +87,14 @@ export class AgentFuseAdapter {
       evidence: {
         adapter: "@qodex/agentfuse-adapter",
         expectedAgentFuseCommit: this.options.expectedAgentFuseCommit,
+        ...(this.policySelection.policyProfileId
+          ? {
+            agentFuseCommit: this.options.expectedAgentFuseCommit,
+            schemaVersion: this.options.expectedSchemaVersion,
+            policyProfileId: this.policySelection.policyProfileId,
+            policyDigest: this.policySelection.expectedPolicyDigest,
+          }
+          : {}),
         reasonCode,
       },
       decidedAt: this.clock().toISOString(),
@@ -88,9 +105,12 @@ export class AgentFuseAdapter {
 export function mapActionProposalToDecisionRequest(
   proposal: ActionProposal,
   approval: ActionApproval,
-  policyFixtureId: string,
+  policySelection: AgentFusePolicySelection | string,
   messageId: string,
 ): AgentFuseDecisionRequest {
+  const selected = typeof policySelection === "string"
+    ? { policyFixtureId: policySelection }
+    : validatePolicySelection(policySelection);
   return {
     protocolVersion: "kerniq.agentfuse.bridge.v1",
     messageId,
@@ -98,7 +118,7 @@ export function mapActionProposalToDecisionRequest(
     payload: {
       proposal: structuredClone(proposal),
       approval: structuredClone(approval),
-      policyFixtureId,
+      ...selected,
     },
   };
 }
@@ -110,6 +130,8 @@ interface ResponseExpectation {
   expectedProtocolVersion: string;
   expectedSchemaVersion: string;
   expectedPolicyVersion: string;
+  expectedPolicyProfileId?: string;
+  expectedPolicyDigest?: string;
 }
 
 export function validateDecisionResponse(
@@ -125,20 +147,33 @@ export function validateDecisionResponse(
     throw new Error("protocol_or_message_mismatch");
   }
   const payload = raw.payload;
+  const expectedDecisions = expected.expectedPolicyProfileId
+    ? ["allow", "block"]
+    : ["allow", "deny", "hold", "error"];
   if (
     !text(payload.decisionId)
     || payload.actionId !== expected.actionId
-    || !["allow", "deny", "hold", "error"].includes(String(payload.decision))
+    || !expectedDecisions.includes(String(payload.decision))
     || !text(payload.reasonCode)
     || !text(payload.summary)
     || payload.policyVersion !== expected.expectedPolicyVersion
     || payload.schemaVersion !== expected.expectedSchemaVersion
     || payload.agentFuseCommit !== expected.expectedAgentFuseCommit
     || !isJsonValue(payload.evidence)
+    || jsonByteLength(payload.evidence) > MAX_RESPONSE_EVIDENCE_BYTES
     || !text(payload.decidedAt)
     || Number.isNaN(Date.parse(payload.decidedAt))
   ) {
     throw new Error("invalid_decision_response");
+  }
+  if (
+    expected.expectedPolicyProfileId
+    && (
+      payload.policyProfileId !== expected.expectedPolicyProfileId
+      || payload.policyDigest !== expected.expectedPolicyDigest
+    )
+  ) {
+    throw new Error("policy_profile_mismatch");
   }
   return raw as unknown as AgentFuseDecisionResponse;
 }
@@ -174,4 +209,31 @@ function isJsonValue(value: unknown): value is JsonValue {
   if (typeof value === "number") return Number.isFinite(value);
   if (Array.isArray(value)) return value.every(isJsonValue);
   return isRecord(value) && Object.values(value).every(isJsonValue);
+}
+
+function jsonByteLength(value: JsonValue): number {
+  return new TextEncoder().encode(JSON.stringify(value)).byteLength;
+}
+
+function validatePolicySelection(
+  selection: AgentFusePolicySelection,
+): AgentFusePolicySelection {
+  const fixtureId = "policyFixtureId" in selection
+    ? selection.policyFixtureId
+    : undefined;
+  const profileId = "policyProfileId" in selection
+    ? selection.policyProfileId
+    : undefined;
+  if (text(fixtureId) === text(profileId)) {
+    throw new TypeError("Exactly one trusted AgentFuse policy selection is required.");
+  }
+  if (profileId && !text(selection.expectedPolicyDigest)) {
+    throw new TypeError("A trusted AgentFuse policy profile requires its expected digest.");
+  }
+  return profileId
+    ? {
+      policyProfileId: profileId,
+      expectedPolicyDigest: selection.expectedPolicyDigest!,
+    }
+    : { policyFixtureId: fixtureId! };
 }

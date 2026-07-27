@@ -2,11 +2,13 @@
 
 **Date:** 2026-07-26
 **Updated:** 2026-07-27
-**Status:** v0.6.1.1 merged; v0.6.1.2 implementation in Draft PR; v0.6.1.3 not started
+**Status:** v0.6.1.1 and v0.6.1.2 merged; v0.6.1.3 implemented in Draft PR; v0.6.1.4 not started
 **Source baseline:** `c7a0b0adf7a0dab4729a2db1a77a58d8c2366beb`
 **v0.6.1.1 implementation baseline:** `7be4a7d69699eeac7498be1d75e17c7c1dc599ad`
 **v0.6.1.1 merge:** `be32ca0caa764aa86e3de341557fedbc2acba0a5`
 **v0.6.1.2 implementation baseline:** `be32ca0caa764aa86e3de341557fedbc2acba0a5`
+**v0.6.1.2 merge:** `c201e32ec1dcb342e9b1fbbeace6315cb422bc99`
+**v0.6.1.3 implementation baseline:** `c201e32ec1dcb342e9b1fbbeace6315cb422bc99`
 
 ## Executive Summary
 
@@ -579,7 +581,8 @@ not frozen.
 
 ### v0.6.1.2 - Command proposal and approval mapping
 
-**Status:** Implementation in Draft PR; not merged or frozen.
+**Status:** Merged through `c201e32ec1dcb342e9b1fbbeace6315cb422bc99`;
+not frozen.
 
 - Create one digest-bound `ActionProposal` from the resolved command and
   project binding.
@@ -593,11 +596,16 @@ not frozen.
 
 ### v0.6.1.3 - DHMS decision-only integration and durable ACTION_DECIDED
 
+**Status:** Implemented in Draft PR; not merged or frozen.
+
 - Select a fixed KerniQ-owned Project Command policy profile.
 - Call public `RuntimeGuard.evaluate()` through `AgentFuseAdapter.decide`.
 - Persist command-linked `ACTION_DECIDED`.
 - Prove mapped deny/error, unsupported values, and persistence failure invoke
   no runner.
+- Advance only the embedded bridge installed-tree integrity digest required by
+  the reviewed bridge source; preserve the managed Python runtime version,
+  AgentFuse package/commit, protocol, and evidence schema.
 
 ### v0.6.1.4 - COMMAND_STARTED dispatch gate and native binding
 
@@ -756,9 +764,12 @@ SQLite and the process, or safety of arbitrary project scripts.
 
 ```text
 v0.6.1.1 merged=true
-v0.6.1.2 implementation in Draft PR=true
-v0.6.1.3 and later implementation started=false
+v0.6.1.2 merged=true
+v0.6.1.3 implemented in Draft PR=true
+v0.6.1.4 and later implementation started=false
 Project Command migrated=false
+Project Command decision path implemented=true
+Project Command physical execution AgentFuse-protected=false
 Patch migrated=false
 arbitrary shell added=false
 automatic approval added=false
@@ -767,6 +778,7 @@ MCP integration added=false
 browser execution added=false
 DHMS danger classification added=false
 managed Python identity changed=false
+embedded bridge tree digest updated=true
 Session schema migration added=false
 ```
 
@@ -776,12 +788,11 @@ commands, arbitrary Python, and production claims beyond Project Command.
 
 ## Open Questions
 
-1. Which KerniQ-owned Project Command policy profile should the bridge
-   translate into AgentFuse allowlist, denylist, and optional custom-policy
-   configuration? Which trusted `safe_metadata` fields should that custom
-   policy inspect? How will the profile remain explicit, versioned,
-   deterministic, and application-owned? The proof fixture is not a production
-   command policy.
+1. Resolved in v0.6.1.3: KerniQ selects
+   `kerniq-project-command-v1`, bound to policy digest
+   `sha256:9c01df377b0cfd8db8392dc8966a2f12b38ad1b2ab9c89780ac049ac0eed38ad`.
+   The bridge maps only bounded command parameters plus task, Session,
+   approval, proposal, risk, profile, and digest identity into AgentFuse.
 2. Should all current catalog commands remain risk `process`, or should a later
    KerniQ-owned taxonomy add deterministic severity/approval metadata while
    keeping Action Runtime's existing `process` risk?
@@ -804,11 +815,12 @@ commands, arbitrary Python, and production claims beyond Project Command.
 
 The current source supports a bounded adapter plan without altering the native
 runner or introducing a duplicate lifecycle. v0.6.1.1 trusted metadata and
-contracts are merged; v0.6.1.2 pure proposal and approval mapping is
-implemented in a Draft PR. Project Command does not enter Action Runtime state,
-does not call AgentFuse, and is not yet AgentFuse-protected. v0.6.1.3 and later
-slices remain ready for separate architecture, security, policy-profile, and
-test-plan review.
+contracts and v0.6.1.2 proposal/approval mapping are merged. v0.6.1.3 is
+implemented in a Draft PR: the fixed profile receives a canonical AgentFuse
+decision and Session Runtime durably binds `ACTION_DECIDED` to the pending
+command. It does not dispatch, start, complete, or physically execute a
+command. v0.6.1.4 remains ready for separate review; Project Command physical
+execution is not yet AgentFuse-protected.
 
 ```text
 KERNIQ_V0_6_1_PROJECT_COMMAND_ADAPTER_PLAN_READY_FOR_REVIEW
