@@ -58,6 +58,7 @@ export class AgentSessionLedgerRecorder implements AgentSideEffectLifecycle {
     string,
     Promise<LiveProjectCommandProposal>
   >();
+  private readonly failedProposalActions = new Set<string>();
   private readonly liveDecisions = new Map<string, LiveProjectCommandDecision>();
 
   constructor(options: AgentSessionRecorderOptions) {
@@ -112,6 +113,9 @@ export class AgentSessionLedgerRecorder implements AgentSideEffectLifecycle {
 
   async flush(): Promise<void> {
     await Promise.all(this.liveProposalOperations.values());
+    if (this.failedProposalActions.size > 0) {
+      throw new AgentCommandDecisionGateError("project_command_policy_error");
+    }
     await this.recorder.flush();
   }
 
@@ -191,6 +195,8 @@ export class AgentSessionLedgerRecorder implements AgentSideEffectLifecycle {
       }
       if (context.decision.decision === "allow") {
         this.liveDecisions.set(context.proposal.actionId, context);
+      } else {
+        this.clearLiveCommand(context.proposal.actionId, context);
       }
       return {
         decisionId: context.decision.decisionId,
@@ -199,6 +205,7 @@ export class AgentSessionLedgerRecorder implements AgentSideEffectLifecycle {
         summary: context.decision.summary,
       };
     } catch (error) {
+      this.clearLiveCommand(input.pending.toolCall.id);
       if (error instanceof AgentCommandDecisionGateError) throw error;
       if (isAbortError(error)) {
         throw new AgentCommandDecisionGateError(
@@ -237,6 +244,7 @@ export class AgentSessionLedgerRecorder implements AgentSideEffectLifecycle {
           input.signal,
         );
       } catch (error) {
+        this.clearLiveCommand(actionId, context);
         if (isAbortError(error)) {
           throw new AgentCommandDecisionGateError(
             "project_command_decision_cancelled",
@@ -278,39 +286,50 @@ export class AgentSessionLedgerRecorder implements AgentSideEffectLifecycle {
   async afterCommandComplete(input: AgentCommandResultLifecycleInput): Promise<void> {
     const actionId = input.pending.toolCall.id;
     const context = this.liveDecisions.get(actionId);
-    await this.recordSettlement("command", actionId, input.executionReceiptId, {
-      type: "COMMAND_COMPLETED",
-      payload: { actionId, ...safeRecoveredCommandResult(input.result) },
-      safeMetadata: {
-        recordKey: `command-completed:${actionId}`,
-        taskId: input.taskId,
-        toolCallId: actionId,
-        actionId,
-        approvalId: input.approvalId,
-        approvalGeneration: context ? context.approval.generation - 1 : 0,
-        ...(context ? { decisionId: context.decision.decisionId } : {}),
-        executionReceiptId: input.executionReceiptId,
-        executionStatus: input.result.cancelled ? "cancelled" : "completed",
-      },
-    });
-    this.liveDecisions.delete(actionId);
-    this.liveProposalOperations.delete(actionId);
+    try {
+      await this.recordSettlement("command", actionId, input.executionReceiptId, {
+        type: "COMMAND_COMPLETED",
+        payload: { actionId, ...safeRecoveredCommandResult(input.result) },
+        safeMetadata: {
+          recordKey: `command-completed:${actionId}`,
+          taskId: input.taskId,
+          toolCallId: actionId,
+          actionId,
+          approvalId: input.approvalId,
+          approvalGeneration: context ? context.approval.generation - 1 : 0,
+          ...(context ? { decisionId: context.decision.decisionId } : {}),
+          executionReceiptId: input.executionReceiptId,
+          executionStatus: input.result.cancelled ? "cancelled" : "completed",
+        },
+      });
+    } finally {
+      this.clearLiveCommand(actionId, context);
+    }
   }
 
   async afterSideEffectFailure(input: AgentSideEffectFailureInput): Promise<void> {
-    await this.recordSettlement(input.kind, input.actionId, input.executionReceiptId, {
-      type: "ACTION_FAILED",
-      payload: { actionId: input.actionId, reason: safeText(input.message) },
-      safeMetadata: {
-        recordKey: `${input.kind}-settled:${input.actionId}`,
-        taskId: input.taskId,
-        actionId: input.actionId,
-        approvalId: input.approvalId,
-        approvalGeneration: 0,
-        executionReceiptId: input.executionReceiptId,
-        executionStatus: "failed",
-      },
-    });
+    const context = input.kind === "command"
+      ? this.liveDecisions.get(input.actionId)
+      : undefined;
+    try {
+      await this.recordSettlement(input.kind, input.actionId, input.executionReceiptId, {
+        type: "ACTION_FAILED",
+        payload: { actionId: input.actionId, reason: safeText(input.message) },
+        safeMetadata: {
+          recordKey: `${input.kind}-settled:${input.actionId}`,
+          taskId: input.taskId,
+          actionId: input.actionId,
+          approvalId: input.approvalId,
+          approvalGeneration: 0,
+          executionReceiptId: input.executionReceiptId,
+          executionStatus: "failed",
+        },
+      });
+    } finally {
+      if (input.kind === "command") {
+        this.clearLiveCommand(input.actionId, context);
+      }
+    }
   }
 
   private async recordSettlement(
@@ -549,7 +568,10 @@ export class AgentSessionLedgerRecorder implements AgentSideEffectLifecycle {
   private recordCommandApproval(entry: AgentTimelineEntry, metadata: Record<string, SafeJson>): void {
     const actionId = entry.actionId ?? this.pendingCommand?.toolCall.id;
     if (!actionId) return;
-    if (this.commandDecisionGate && entry.title !== "Command denied") return;
+    if (this.commandDecisionGate) {
+      if (entry.status !== "success") this.clearLiveCommand(actionId);
+      if (entry.title !== "Command denied") return;
+    }
     this.recorder.record({
       type: entry.status === "success" ? "COMMAND_APPROVED" : "COMMAND_DENIED",
       payload: { actionId, reason: safeText(entry.summary) },
@@ -570,18 +592,40 @@ export class AgentSessionLedgerRecorder implements AgentSideEffectLifecycle {
     const actionId = pending.toolCall.id;
     const existing = this.liveProposalOperations.get(actionId);
     if (existing) return existing;
+    if (this.failedProposalActions.has(actionId)) {
+      return Promise.reject(
+        new AgentCommandDecisionGateError("project_command_policy_error"),
+      );
+    }
     if (!this.commandDecisionGate) {
       return Promise.reject(
         new AgentCommandDecisionGateError("project_command_policy_error"),
       );
     }
-    const operation = this.commandDecisionGate.propose(
+    let operation: Promise<LiveProjectCommandProposal>;
+    operation = this.commandDecisionGate.propose(
       taskId,
       pending,
       requestedAt,
-    );
+    ).catch((error) => {
+      if (this.liveProposalOperations.get(actionId) === operation) {
+        this.liveProposalOperations.delete(actionId);
+      }
+      this.failedProposalActions.add(actionId);
+      throw error;
+    });
     this.liveProposalOperations.set(actionId, operation);
     return operation;
+  }
+
+  private clearLiveCommand(
+    actionId: string,
+    context = this.liveDecisions.get(actionId),
+  ): void {
+    if (context) this.commandDecisionGate?.release(context);
+    this.liveDecisions.delete(actionId);
+    this.liveProposalOperations.delete(actionId);
+    this.failedProposalActions.delete(actionId);
   }
 
   private recordCommandOutput(entry: AgentTimelineEntry, metadata: Record<string, SafeJson>): void {

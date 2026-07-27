@@ -222,6 +222,10 @@ export class ProjectCommandLiveDecisionGate {
     });
   }
 
+  release(context: LiveProjectCommandDecision): void {
+    this.coordinator.release(context.proposal, context.approval);
+  }
+
   private trustedNow(): Date {
     const now = this.clock();
     if (!(now instanceof Date) || Number.isNaN(now.getTime())) {

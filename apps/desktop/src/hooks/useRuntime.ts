@@ -429,7 +429,20 @@ export function useRuntime() {
         agentUnsubscribeRef.current = loop.subscribe(syncAgentTask);
         const task = await loop.start(taskId, bundle.assembledPrompt);
         syncAgentTask(task);
-        await recorder.flush();
+        try {
+          await recorder.flush();
+        } catch {
+          agentUnsubscribeRef.current?.();
+          agentUnsubscribeRef.current = null;
+          agentLoopRef.current = null;
+          agentSessionRecorderRef.current = null;
+          setAgentTask(null);
+          setIsRunning(false);
+          setPatchErrors([{
+            code: "provider_failed",
+            message: "Agent Session evidence could not be persisted. No approval action was made available.",
+          }]);
+        }
         return;
       }
       setAgentModeNotice("Agent Mode is unavailable for this provider or model. Normal single-turn mode remains available.");
