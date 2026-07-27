@@ -18,11 +18,11 @@ mature Capability Pack, not the product boundary.
 
 Private managed CPython provisioning, universal action contracts, and one
 development-only canonical AgentFuse proof are frozen. Patch and Project
-Command migration remains outside this proof milestone and has not started.
+Command migration remained outside that proof milestone.
 
 ### v0.6.1 - Project Command Action Runtime Adapter
 
-**Status:** v0.6.1.1 and v0.6.1.2 merged; v0.6.1.3 implemented in Draft PR; v0.6.1.4 not started
+**Status:** v0.6.1.1, v0.6.1.2, and v0.6.1.3 merged; v0.6.1.4 implemented in Draft PR; v0.6.1.5 not started
 
 The source audit, responsibility boundary, typed contracts, lifecycle decision,
 threat model, six implementation slices, automated test plan, and real Tauri
@@ -33,19 +33,27 @@ canonical `allow|block` evidence; KerniQ maps it to `allow|deny|error`.
 Native catalog re-resolution, no shell, one authoritative command start, honest
 settlement uncertainty, and restart no-replay remain mandatory.
 
-Project Command has not been migrated. Patch migration remains a separate,
-future decision.
+The bounded native Desktop Project Command path is migrated through its live
+decision and dispatch gate. Patch migration remains a separate, future
+decision.
 
 v0.6.1.1 merged immutable KerniQ-owned policy metadata and pure future
 action-parameter contracts. v0.6.1.2 merged pure
 `ActionProposal` and `ActionApproval` mapping with deterministic policy-digest
 binding, proposal revalidation, and explicit approval-generation conversion.
-The v0.6.1.3 Draft PR adds the fixed Project Command AgentFuse profile, public
+v0.6.1.3 merged the fixed Project Command AgentFuse profile, public
 decision-only evaluation, `block -> deny` mapping, and durable command-linked
 `ACTION_DECIDED`. It does not call `ActionRuntime.execute`, start or complete a
-command, invoke Tauri or Rust, or change native execution. Project Command
-physical execution is not yet gated by AgentFuse and is not yet
-AgentFuse-protected.
+command, invoke Tauri or Rust, or change native execution.
+
+The v0.6.1.4 Draft PR binds the live Desktop approval flow to that decision
+path. It durably records `COMMAND_APPROVED`, obtains and persists the exact
+AgentFuse decision, and permits `COMMAND_STARTED` plus the existing native
+runner only for a current durable allow. Deny, error, expiry, cancellation, and
+persistence failures remain zero-dispatch. The native request, Rust catalog
+re-resolution, project authorization, and no-shell implementation are
+unchanged. This claim applies only to the bounded native Desktop Project
+Command path, not Patch, Git, MCP, browser actions, or arbitrary shell.
 
 - [v0.6.1 planning document](kerniq_project_command_action_runtime_adapter_planning_v0_6_1.md)
 - [ADR-021](../../qodex-config/adr/ADR-021-Project-Command-Action-Runtime-Adapter.md)

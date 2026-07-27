@@ -1,6 +1,6 @@
 # ADR-021
 
-**Status:** Accepted plan; v0.6.1.1 and v0.6.1.2 merged; v0.6.1.3 implemented in Draft PR
+**Status:** Accepted plan; v0.6.1.1 through v0.6.1.3 merged; v0.6.1.4 implemented in Draft PR; v0.6.1.5 not started
 **Date:** 2026-07-26
 **Updated:** 2026-07-27
 
@@ -141,7 +141,7 @@ PR #10 merged through `c201e32ec1dcb342e9b1fbbeace6315cb422bc99`.
 
 ### v0.6.1.3 implementation boundary
 
-The v0.6.1.3 Draft PR fixes the application-owned policy profile at
+The merged v0.6.1.3 slice fixes the application-owned policy profile at
 `kerniq-project-command-v1` and binds it to policy digest
 `sha256:9c01df377b0cfd8db8392dc8966a2f12b38ad1b2ab9c89780ac049ac0eed38ad`.
 The bridge validates the bounded Project Command proposal and approval,
@@ -159,10 +159,29 @@ Session Runtime additively binds that decision to the pending command's action,
 task, approval ID/generation, and proposal digest. No Session schema or SQLite
 migration is required.
 
-This slice does not call `ActionRuntime.execute`, write `COMMAND_STARTED` or
+This slice did not call `ActionRuntime.execute`, write `COMMAND_STARTED` or
 `COMMAND_COMPLETED`, invoke Tauri or the native runner, or physically execute a
-command. v0.6.1.4 has not started. The decision path is durably proven, but
-Project Command physical execution is not yet AgentFuse-protected.
+command. Physical execution was intentionally left to v0.6.1.4.
+
+### v0.6.1.4 implementation boundary
+
+The v0.6.1.4 Draft PR connects only the bounded native Desktop Project Command
+flow. It creates the trusted proposal and expiring approval from live runtime
+identity, durably records `COMMAND_APPROVED`, calls the merged decision
+coordinator, and accepts only the exact current persisted allow at the start
+barrier. `COMMAND_STARTED` must persist before the existing runner is invoked.
+
+Policy deny/error, approval expiry, cancellation before start, stale pending
+identity, and approval/decision/start persistence failures invoke no native
+runner. Human denial remains a separate `COMMAND_DENIED` event and makes no
+AgentFuse request. Recovery revalidates the project and command catalog,
+reconstructs the same proposal digest, and requires fresh approval and policy
+decision.
+
+The native request and Rust implementation are unchanged. No generic
+`ACTION_STARTED` or `ACTION_COMPLETED` is added. This implementation does not
+protect Patch, Git, MCP, browser, file-write, arbitrary-shell, or non-Desktop
+Project Command paths.
 
 ### Target lifecycle
 
@@ -374,12 +393,10 @@ started work is uncertain and cannot be replayed or reapproved.
 
 ## Compatibility and Non-Goals
 
-The v0.6.1.1 through v0.6.1.3 implementations do not:
+The v0.6.1.4 implementation remains bounded and does not:
 
-- migrate Project Command or Patch;
-- dispatch through Action Runtime or connect physical command execution;
-- write `COMMAND_STARTED`, `COMMAND_COMPLETED`, `ACTION_STARTED`, or
-  `ACTION_COMPLETED` for the new decision path;
+- migrate Patch or actions beyond native Desktop Project Command;
+- add `ACTION_STARTED` or `ACTION_COMPLETED`;
 - change Session or SQLite schema versions;
 - change managed Python or AgentFuse identity;
 - add arbitrary shell, executable, arguments, environment, cwd, or timeout;

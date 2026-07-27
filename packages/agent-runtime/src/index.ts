@@ -58,6 +58,8 @@ export {
   trustedProjectCommandPolicyDigest,
 } from "./agent-loop/project-command-policy.js";
 export {
+  AgentCommandDecisionGateError,
+  isAgentCommandDecisionGateError,
   isSettlementPersistenceError,
   SETTLEMENT_PERSISTENCE_ERROR_MESSAGE,
   SettlementPersistenceError,
@@ -87,6 +89,10 @@ export type {
   AgentPatchLifecycleInput,
   AgentPatchResultLifecycleInput,
   AgentCommandLifecycleInput,
+  AgentCommandDecisionLifecycleInput,
+  AgentCommandDecisionReceipt,
+  AgentCommandDecisionGateErrorCode,
+  AgentCommandStartLifecycleInput,
   AgentCommandResultLifecycleInput,
   AgentSideEffectFailureInput,
   AgentSideEffectKind,

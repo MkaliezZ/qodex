@@ -107,6 +107,13 @@ function patchTask(): AgentLoopTask {
   });
 }
 
+const commandDecision = {
+  decisionId: "decision-command-1",
+  decision: "allow" as const,
+  reasonCode: "allowed",
+  summary: "Allowed.",
+};
+
 describe("AgentSessionLedgerRecorder", () => {
   it("records exact provider call IDs and deduplicates repeated snapshots", async () => {
     const runtime = new SessionRuntime(new InMemorySessionStore());
@@ -137,6 +144,8 @@ describe("AgentSessionLedgerRecorder", () => {
       pending,
       approvalId: "approval-command-1",
       executionReceiptId: "receipt-command-1",
+      decision: commandDecision,
+      signal: new AbortController().signal,
     });
     const result: ProjectCommandResult = {
       commandId: pending.command.id,
@@ -156,6 +165,7 @@ describe("AgentSessionLedgerRecorder", () => {
       pending,
       approvalId: "approval-command-1",
       executionReceiptId: "receipt-command-1",
+      decision: commandDecision,
       result,
     });
     recorder.recordTask(task({
@@ -299,6 +309,8 @@ describe("AgentSessionLedgerRecorder", () => {
       pending,
       approvalId: "approval-command-settlement",
       executionReceiptId: "receipt-command-settlement",
+      decision: commandDecision,
+      signal: new AbortController().signal,
     });
 
     await expect(recorder.afterCommandComplete({
@@ -306,6 +318,7 @@ describe("AgentSessionLedgerRecorder", () => {
       pending,
       approvalId: "approval-command-settlement",
       executionReceiptId: "receipt-command-settlement",
+      decision: commandDecision,
       result: {
         commandId: pending.command.id,
         approved: true,

@@ -145,7 +145,45 @@ export interface AgentCommandLifecycleInput {
   executionReceiptId: string;
 }
 
-export interface AgentCommandResultLifecycleInput extends AgentCommandLifecycleInput {
+export interface AgentCommandDecisionReceipt {
+  decisionId: string;
+  decision: "allow" | "deny" | "error";
+  reasonCode: string;
+  summary: string;
+}
+
+export type AgentCommandDecisionGateErrorCode =
+  | "project_command_policy_error"
+  | "project_command_decision_cancelled"
+  | "project_command_decision_persistence_failed"
+  | "project_command_start_persistence_failed";
+
+export class AgentCommandDecisionGateError extends Error {
+  constructor(readonly code: AgentCommandDecisionGateErrorCode) {
+    super(commandDecisionGateErrorMessage(code));
+    this.name = "AgentCommandDecisionGateError";
+  }
+}
+
+export function isAgentCommandDecisionGateError(
+  value: unknown,
+): value is AgentCommandDecisionGateError {
+  return value instanceof AgentCommandDecisionGateError;
+}
+
+export interface AgentCommandDecisionLifecycleInput
+extends AgentCommandLifecycleInput {
+  signal: AbortSignal;
+}
+
+export interface AgentCommandStartLifecycleInput
+extends AgentCommandDecisionLifecycleInput {
+  decision: AgentCommandDecisionReceipt;
+}
+
+export interface AgentCommandResultLifecycleInput
+extends AgentCommandLifecycleInput {
+  decision: AgentCommandDecisionReceipt;
   result: ProjectCommandResult;
 }
 
@@ -184,7 +222,10 @@ export function isSettlementPersistenceError(value: unknown): value is Settlemen
 export interface AgentSideEffectLifecycle {
   beforePatchApply(input: AgentPatchLifecycleInput): Promise<void>;
   afterPatchApply(input: AgentPatchResultLifecycleInput): Promise<void>;
-  beforeCommandStart(input: AgentCommandLifecycleInput): Promise<void>;
+  beforeCommandDecision?(
+    input: AgentCommandDecisionLifecycleInput,
+  ): Promise<AgentCommandDecisionReceipt>;
+  beforeCommandStart(input: AgentCommandStartLifecycleInput): Promise<void>;
   afterCommandComplete(input: AgentCommandResultLifecycleInput): Promise<void>;
   afterSideEffectFailure(input: AgentSideEffectFailureInput): Promise<void>;
 }
@@ -239,6 +280,7 @@ export interface AgentLoopRuntimeOptions {
   patchAdapter: AgentPatchAdapter;
   commandRunner?: ProjectCommandRunner;
   sideEffectLifecycle?: AgentSideEffectLifecycle;
+  requireCommandDecision?: boolean;
   limits?: Partial<AgentLoopLimits>;
   systemPrompt?: string;
   now?: () => number;
@@ -250,3 +292,18 @@ export interface AgentRollbackAvailability {
 }
 
 export type AgentLoopListener = (task: AgentLoopTask) => void;
+
+function commandDecisionGateErrorMessage(
+  code: AgentCommandDecisionGateErrorCode,
+): string {
+  switch (code) {
+    case "project_command_decision_cancelled":
+      return "Project Command policy evaluation was cancelled; no process was started.";
+    case "project_command_decision_persistence_failed":
+      return "Project Command decision evidence could not be persisted; no process was started.";
+    case "project_command_start_persistence_failed":
+      return "Project Command start evidence could not be persisted; no process was started.";
+    default:
+      return "Project Command policy evaluation failed closed; no process was started.";
+  }
+}

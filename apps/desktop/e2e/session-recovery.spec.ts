@@ -156,7 +156,10 @@ test.describe("KerniQ Universal Session and Recovery v0.5", () => {
     await expect(page.locator('[data-testid="recovery-banner"]')).toContainText("command catalog verified");
     await page.locator('[data-testid="approve-recovered-action"]').click();
     await expect(page.locator('[data-testid="session-notice"]')).toContainText("explicit reapproval");
-    expect((await readAgentCommandFixture(page)).starts).toBe(1);
+    expect(await readAgentCommandFixture(page)).toMatchObject({
+      starts: 1,
+      decisions: 1,
+    });
     expect(providerCalls).toBe(1);
   });
 
@@ -188,7 +191,10 @@ test.describe("KerniQ Universal Session and Recovery v0.5", () => {
     await expect(page.locator('[data-testid="recovery-banner"]')).toContainText("Execution was interrupted");
     await expect(page.locator('[data-testid="reauthorize-project"]')).toHaveCount(0);
     await page.waitForTimeout(400);
-    expect((await readAgentCommandFixture(page)).starts).toBe(1);
+    expect(await readAgentCommandFixture(page)).toMatchObject({
+      starts: 1,
+      decisions: 1,
+    });
   });
 
   test("started patch evidence becomes Interrupted and never writes after restart", async ({ page }) => {
