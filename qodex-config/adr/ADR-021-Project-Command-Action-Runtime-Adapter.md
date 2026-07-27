@@ -1,7 +1,8 @@
 # ADR-021
 
-**Status:** Accepted plan; v0.6.1.1 implementation in Draft PR
+**Status:** Accepted plan; v0.6.1.1 merged; v0.6.1.2 implementation in Draft PR
 **Date:** 2026-07-26
+**Updated:** 2026-07-27
 
 ## Context
 
@@ -103,7 +104,7 @@ KerniQ-owned catalog policy may later add finer metadata.
 
 ### v0.6.1.1 implementation boundary
 
-The v0.6.1.1 Draft PR implements only the immutable KerniQ-owned policy
+The merged v0.6.1.1 slice implements only the immutable KerniQ-owned policy
 metadata and pure future action-parameter contract. Every trusted discovered
 command receives the same source-defined policy. Unknown or malformed entries
 receive no guessed policy. The model schema remains limited to `commandId`.
@@ -116,7 +117,27 @@ re-resolution.
 No Action Runtime or AgentFuse call, `ACTION_DECIDED` persistence, dispatch
 change, approval UI change, Session schema change, native-runner change, Rust
 catalog change, or command migration is included. Project Command is not yet
-AgentFuse-protected. v0.6.1.2 and later slices have not started.
+AgentFuse-protected.
+
+### v0.6.1.2 implementation boundary
+
+The v0.6.1.2 Draft PR adds a pure Desktop integration mapper because Desktop
+already depends on both Agent Runtime and Action Runtime. Agent Runtime does
+not gain an Action Runtime dependency. The mapper reuses
+`createActionProposal()` and `validateActionApproval()` without creating or
+mutating Action Runtime state.
+
+The proposal binds exact provider tool-call, task, Session, trusted command,
+native catalog digest, project binding, project fingerprint, fixed action type,
+fixed risk, policy profile, deterministic policy digest, and trusted timestamp
+identity. The approval binds the exact action, task, and proposal digest.
+Session generation `n` maps explicitly to Action generation `n + 1`, and the
+existing validator enforces identity, positive generation, and expiry.
+
+This slice does not call AgentFuse, persist `ACTION_DECIDED`, write Session
+events, invoke the native runner or Tauri, change dispatch or
+`COMMAND_STARTED`, alter the Session schema, or migrate Project Command.
+v0.6.1.3 has not started and Project Command is not yet AgentFuse-protected.
 
 ### Target lifecycle
 
@@ -326,7 +347,7 @@ started work is uncertain and cannot be replayed or reapproved.
 
 ## Compatibility and Non-Goals
 
-The v0.6.1.1 implementation does not:
+The v0.6.1.1 and v0.6.1.2 implementations do not:
 
 - migrate Project Command or Patch;
 - connect Action Runtime or AgentFuse;

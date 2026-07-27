@@ -55,6 +55,7 @@ export {
   createProjectCommandActionParameters,
   PROJECT_COMMAND_POLICY,
   serializeTrustedProjectCommandPolicy,
+  trustedProjectCommandPolicyDigest,
 } from "./agent-loop/project-command-policy.js";
 export {
   isSettlementPersistenceError,
