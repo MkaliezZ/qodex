@@ -287,8 +287,9 @@ export class AgentLoopRuntime {
         this.appendCommandDecisionResult(task, pending, decision);
         this.setStatus(task, "ReturningToolResult");
       } else {
+        let dispatchCommand = pending.command;
         if (this.options.sideEffectLifecycle) {
-          await this.options.sideEffectLifecycle.beforeCommandStart({
+          const startReceipt = await this.options.sideEffectLifecycle.beforeCommandStart({
             taskId: task.id,
             pending,
             approvalId,
@@ -296,6 +297,17 @@ export class AgentLoopRuntime {
             decision,
             signal: decisionController.signal,
           });
+          if (startReceipt) {
+            if (
+              startReceipt.decisionId !== decision.decisionId
+              || startReceipt.executionReceiptId !== executionReceiptId
+            ) {
+              throw new AgentCommandDecisionGateError(
+                "project_command_start_persistence_failed",
+              );
+            }
+            dispatchCommand = startReceipt.command;
+          }
         }
         this.activeCommandDecisions.delete(task.id);
         task.pendingCommand = null;
@@ -314,7 +326,7 @@ export class AgentLoopRuntime {
         let result: ProjectCommandResult;
         try {
           dispatched = true;
-          const operation = runner.run(pending.command, runId);
+          const operation = runner.run(dispatchCommand, runId);
           if (
             this.cancellationRequests.has(task.id)
             || task.status === "Cancelling"
@@ -1038,7 +1050,7 @@ function cloneTask(task: AgentLoopTask): AgentLoopTask {
     patchHistory: [...task.patchHistory],
     pendingPatch: task.pendingPatch ? { ...task.pendingPatch, files: [...task.pendingPatch.files] } : null,
     pendingCommand: task.pendingCommand
-      ? { toolCall: { ...task.pendingCommand.toolCall }, command: { ...task.pendingCommand.command, args: [...task.pendingCommand.command.args] } }
+      ? { toolCall: { ...task.pendingCommand.toolCall }, command: task.pendingCommand.command }
       : null,
   };
 }

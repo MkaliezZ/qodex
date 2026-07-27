@@ -4,6 +4,7 @@ import {
   type AgentCommandDecisionLifecycleInput,
   type AgentCommandDecisionReceipt,
   type AgentCommandResultLifecycleInput,
+  type AgentCommandStartReceipt,
   type AgentCommandStartLifecycleInput,
   type AgentLoopTask,
   type AgentPatchLifecycleInput,
@@ -213,7 +214,9 @@ export class AgentSessionLedgerRecorder implements AgentSideEffectLifecycle {
     }
   }
 
-  async beforeCommandStart(input: AgentCommandStartLifecycleInput): Promise<void> {
+  async beforeCommandStart(
+    input: AgentCommandStartLifecycleInput,
+  ): Promise<AgentCommandStartReceipt | void> {
     const actionId = input.pending.toolCall.id;
     if (this.commandDecisionGate) {
       const context = this.liveDecisions.get(actionId);
@@ -227,13 +230,12 @@ export class AgentSessionLedgerRecorder implements AgentSideEffectLifecycle {
         );
       }
       try {
-        await this.commandDecisionGate.recordStarted(
+        return await this.commandDecisionGate.recordStarted(
           context,
           input.pending,
           input.executionReceiptId,
           input.signal,
         );
-        return;
       } catch (error) {
         if (isAbortError(error)) {
           throw new AgentCommandDecisionGateError(

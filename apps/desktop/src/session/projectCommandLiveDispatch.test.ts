@@ -6,8 +6,12 @@ import type {
 } from "@qodex/provider-sdk";
 import {
   AgentLoopRuntime,
+  createTrustedProjectCommandDefinition,
+  type AgentCommandStartLifecycleInput,
   type AgentPatchAdapter,
   type AgentSideEffectLifecycle,
+  type PendingCommandApproval,
+  type ProjectCommandDefinition,
   type ProjectCommandResult,
 } from "@qodex/agent-runtime";
 import type {
@@ -155,6 +159,138 @@ describe("live Project Command decision and dispatch gate", () => {
     ]);
   });
 
+  it.each([
+    ["command ID", (pending: PendingCommandApproval) => {
+      pending.command = createTrustedProjectCommandDefinition({
+        ...pending.command,
+        id: "package-script:build",
+      });
+    }],
+    ["catalog digest", (pending: PendingCommandApproval) => {
+      pending.command = createTrustedProjectCommandDefinition({
+        ...pending.command,
+        catalogDigest: `sha256:${"c".repeat(64)}`,
+      });
+    }],
+    ["category", (pending: PendingCommandApproval) => {
+      pending.command = createTrustedProjectCommandDefinition({
+        ...pending.command,
+        category: "build",
+      });
+    }],
+  ] as const)(
+    "blocks dispatch when the approved %s identity is replaced before start",
+    async (_field, replacePending) => {
+      const prepared = await prepare("allow", {
+        mutateBeforeCommandStart: ({ pending }) => replacePending(pending),
+      });
+
+      await prepared.loop.approveCommand(prepared.waiting.id);
+      await prepared.recorder.flush();
+
+      expect(prepared.run).not.toHaveBeenCalled();
+      expect(commandEvents(await prepared.entries())).toEqual([
+        "COMMAND_PROPOSED",
+        "COMMAND_APPROVED",
+        "ACTION_DECIDED",
+      ]);
+    },
+  );
+
+  it("blocks transfer of approval to another valid trusted catalog command", async () => {
+    const buildDigest = await digest("package.json\0build\0vite build");
+    const prepared = await prepare("allow", {
+      mutateBeforeCommandStart: ({ pending }) => {
+        pending.command = createTrustedProjectCommandDefinition({
+          id: "package-script:build",
+          label: "pnpm build",
+          executable: "pnpm",
+          args: ["run", "build"],
+          cwd: ".",
+          source: "package.json",
+          category: "build",
+          catalogDigest: buildDigest,
+        });
+      },
+    });
+
+    await prepared.loop.approveCommand(prepared.waiting.id);
+    await prepared.recorder.flush();
+
+    expect(prepared.run).not.toHaveBeenCalled();
+    expect(commandEvents(await prepared.entries())).toEqual([
+      "COMMAND_PROPOSED",
+      "COMMAND_APPROVED",
+      "ACTION_DECIDED",
+    ]);
+  });
+
+  it.each(["projectBindingId", "projectFingerprint"] as const)(
+    "blocks dispatch when the configured %s drifts after decision",
+    async (field) => {
+      const prepared = await prepare("allow", {
+        mutateBeforeCommandStart: (_input, recorder) => {
+          const gate = (
+            recorder as unknown as {
+              commandDecisionGate: {
+                options: {
+                  projectBindingId: string;
+                  projectFingerprint: string;
+                };
+              };
+            }
+          ).commandDecisionGate;
+          gate.options[field] = field === "projectBindingId"
+            ? "project-drifted"
+            : `sha256:${"d".repeat(64)}`;
+        },
+      });
+
+      await prepared.loop.approveCommand(prepared.waiting.id);
+      await prepared.recorder.flush();
+
+      expect(prepared.run).not.toHaveBeenCalled();
+      expect(commandEvents(await prepared.entries())).toEqual([
+        "COMMAND_PROPOSED",
+        "COMMAND_APPROVED",
+        "ACTION_DECIDED",
+      ]);
+    },
+  );
+
+  it("dispatches the exact approved immutable command snapshot", async () => {
+    const prepared = await prepare("allow");
+    const approvedCommand = prepared.waiting.pendingCommand!.command;
+
+    await prepared.loop.approveCommand(prepared.waiting.id);
+    await prepared.recorder.flush();
+
+    expect(Object.isFrozen(approvedCommand)).toBe(true);
+    expect(Object.isFrozen(approvedCommand.args)).toBe(true);
+    expect(prepared.run).toHaveBeenCalledTimes(1);
+    expect(prepared.run.mock.calls[0][0]).toBe(approvedCommand);
+  });
+
+  it("dispatches the validated receipt command even if the pending reference changes after start persistence", async () => {
+    const prepared = await prepare("allow", {
+      mutateAfterCommandStart: ({ pending }) => {
+        pending.command = createTrustedProjectCommandDefinition({
+          ...pending.command,
+          id: "package-script:replacement-after-start",
+          catalogDigest: `sha256:${"e".repeat(64)}`,
+        });
+      },
+    });
+    const approvedCommand = prepared.waiting.pendingCommand!.command;
+
+    await prepared.loop.approveCommand(prepared.waiting.id);
+    await prepared.recorder.flush();
+
+    expect(prepared.run).toHaveBeenCalledTimes(1);
+    expect(prepared.run.mock.calls[0][0]).toBe(approvedCommand);
+    expect(prepared.run.mock.calls[0][0].id).toBe("package-script:test");
+  });
+
   it("discards allow when approval expires during AgentFuse", async () => {
     let now = NOW;
     const prepared = await prepare("allow", {
@@ -264,6 +400,13 @@ interface PrepareOptions {
   clock?: () => Date;
   beforeBridgeReturn?: () => void;
   beforeCommandStart?: () => Promise<void>;
+  mutateBeforeCommandStart?: (
+    input: AgentCommandStartLifecycleInput,
+    recorder: AgentSessionLedgerRecorder,
+  ) => void | Promise<void>;
+  mutateAfterCommandStart?: (
+    input: AgentCommandStartLifecycleInput,
+  ) => void | Promise<void>;
   invalidateBeforeCommandStart?: boolean;
 }
 
@@ -296,7 +439,9 @@ async function prepare(
     projectFingerprint: `sha256:${"b".repeat(64)}`,
     clock,
   });
-  const run = vi.fn(async (): Promise<ProjectCommandResult> => ({
+  const run = vi.fn(async (
+    _command: ProjectCommandDefinition,
+  ): Promise<ProjectCommandResult> => ({
     commandId: "package-script:test",
     approved: true,
     started: true,
@@ -310,6 +455,8 @@ async function prepare(
     durationMs: 1,
   }));
   const lifecycle: AgentSideEffectLifecycle = options.beforeCommandStart
+    || options.mutateBeforeCommandStart
+    || options.mutateAfterCommandStart
     || options.invalidateBeforeCommandStart
     ? {
       beforePatchApply: recorder.beforePatchApply.bind(recorder),
@@ -317,6 +464,7 @@ async function prepare(
       beforeCommandDecision: recorder.beforeCommandDecision.bind(recorder),
       beforeCommandStart: async (input) => {
         await options.beforeCommandStart?.();
+        await options.mutateBeforeCommandStart?.(input, recorder);
         if (options.invalidateBeforeCommandStart) {
           await runtime.appendEntry("task-1", {
             type: "RECOVERY_REQUIRED",
@@ -324,7 +472,9 @@ async function prepare(
             safeMetadata: { approvalGeneration: 1 },
           });
         }
-        await recorder.beforeCommandStart(input);
+        const receipt = await recorder.beforeCommandStart(input);
+        await options.mutateAfterCommandStart?.(input);
+        return receipt;
       },
       afterCommandComplete: recorder.afterCommandComplete.bind(recorder),
       afterSideEffectFailure: recorder.afterSideEffectFailure.bind(recorder),
@@ -359,6 +509,16 @@ async function prepare(
     waiting,
     entries: () => runtime.loadActivePath("task-1"),
   };
+}
+
+async function digest(value: string): Promise<string> {
+  const bytes = await crypto.subtle.digest(
+    "SHA-256",
+    new TextEncoder().encode(value),
+  );
+  return `sha256:${[...new Uint8Array(bytes)]
+    .map((byte) => byte.toString(16).padStart(2, "0"))
+    .join("")}`;
 }
 
 function bridgeFor(

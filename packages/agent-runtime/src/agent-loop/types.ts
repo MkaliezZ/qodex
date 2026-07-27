@@ -181,6 +181,12 @@ extends AgentCommandDecisionLifecycleInput {
   decision: AgentCommandDecisionReceipt;
 }
 
+export interface AgentCommandStartReceipt {
+  readonly command: ProjectCommandDefinition;
+  readonly decisionId: string;
+  readonly executionReceiptId: string;
+}
+
 export interface AgentCommandResultLifecycleInput
 extends AgentCommandLifecycleInput {
   decision: AgentCommandDecisionReceipt;
@@ -225,7 +231,9 @@ export interface AgentSideEffectLifecycle {
   beforeCommandDecision?(
     input: AgentCommandDecisionLifecycleInput,
   ): Promise<AgentCommandDecisionReceipt>;
-  beforeCommandStart(input: AgentCommandStartLifecycleInput): Promise<void>;
+  beforeCommandStart(
+    input: AgentCommandStartLifecycleInput,
+  ): Promise<AgentCommandStartReceipt | void>;
   afterCommandComplete(input: AgentCommandResultLifecycleInput): Promise<void>;
   afterSideEffectFailure(input: AgentSideEffectFailureInput): Promise<void>;
 }

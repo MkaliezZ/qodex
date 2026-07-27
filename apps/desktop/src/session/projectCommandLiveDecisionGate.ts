@@ -6,7 +6,9 @@ import {
 } from "@qodex/action-runtime";
 import {
   PROJECT_COMMAND_POLICY,
+  trustedProjectCommandPolicyDigest,
   type PendingCommandApproval,
+  type ProjectCommandActionParameters,
   type TrustedProjectCommandDefinition,
 } from "@qodex/agent-runtime";
 import type { AgentFuseAdapter } from "@qodex/agentfuse-adapter";
@@ -19,6 +21,7 @@ import {
 import {
   createProjectCommandActionApproval,
   createProjectCommandActionProposal,
+  validateProjectCommandActionProposal,
 } from "./projectCommandActionMapping";
 
 export const PROJECT_COMMAND_APPROVAL_TTL_MS = 5 * 60 * 1000;
@@ -41,6 +44,13 @@ export interface LiveProjectCommandDecision {
   proposal: Readonly<ActionProposal>;
   approval: Readonly<ActionApproval>;
   decision: ActionDecision;
+  command: TrustedProjectCommandDefinition;
+}
+
+export interface LiveProjectCommandStartReceipt {
+  readonly command: TrustedProjectCommandDefinition;
+  readonly decisionId: string;
+  readonly executionReceiptId: string;
 }
 
 export class ProjectCommandLiveDecisionGate {
@@ -151,7 +161,12 @@ export class ProjectCommandLiveDecisionGate {
       approval,
       signal,
     );
-    return { proposal: proposed.proposal, approval, decision };
+    return {
+      proposal: proposed.proposal,
+      approval,
+      decision,
+      command: proposed.pending.command as TrustedProjectCommandDefinition,
+    };
   }
 
   async recordStarted(
@@ -159,13 +174,20 @@ export class ProjectCommandLiveDecisionGate {
     pending: PendingCommandApproval,
     executionReceiptId: string,
     signal: AbortSignal,
-  ): Promise<void> {
+  ): Promise<Readonly<LiveProjectCommandStartReceipt>> {
     throwIfAborted(signal);
     validateActionApproval(
       context.approval,
       context.proposal,
       context.approval.generation,
       this.trustedNow(),
+    );
+    await assertProjectCommandDispatchIdentity(
+      context.proposal,
+      pending,
+      context.command,
+      this.options.projectBindingId,
+      this.options.projectFingerprint,
     );
     await this.ledger.assertAllowed(
       context.proposal,
@@ -193,6 +215,11 @@ export class ProjectCommandLiveDecisionGate {
         executionStatus: "running",
       },
     });
+    return Object.freeze({
+      command: context.command,
+      decisionId: context.decision.decisionId,
+      executionReceiptId,
+    });
   }
 
   private trustedNow(): Date {
@@ -201,6 +228,51 @@ export class ProjectCommandLiveDecisionGate {
       throw new TypeError("Project Command lifecycle requires a trusted current time.");
     }
     return now;
+  }
+}
+
+export async function assertProjectCommandDispatchIdentity(
+  proposal: ActionProposal,
+  pending: PendingCommandApproval,
+  approvedCommand: TrustedProjectCommandDefinition,
+  projectBindingId: string,
+  projectFingerprint: string,
+): Promise<void> {
+  await validateProjectCommandActionProposal(proposal);
+  const parameters = proposal.parameters as unknown as ProjectCommandActionParameters;
+  if (pending.toolCall.id !== proposal.actionId) {
+    throw new TypeError("Project Command dispatch targets a different tool call.");
+  }
+  if (pending.command !== approvedCommand) {
+    throw new TypeError("Project Command dispatch targets a different trusted command snapshot.");
+  }
+  if (
+    !Object.isFrozen(approvedCommand)
+    || !Object.isFrozen(approvedCommand.args)
+    || approvedCommand.policy !== PROJECT_COMMAND_POLICY
+  ) {
+    throw new TypeError("Project Command dispatch requires an immutable trusted command.");
+  }
+  if (pending.command.id !== parameters.commandId) {
+    throw new TypeError("Project Command dispatch command ID does not match the proposal.");
+  }
+  if (pending.command.catalogDigest !== parameters.catalogDigest) {
+    throw new TypeError("Project Command dispatch catalog digest does not match the proposal.");
+  }
+  if (pending.command.category !== parameters.commandCategory) {
+    throw new TypeError("Project Command dispatch category does not match the proposal.");
+  }
+  if (projectBindingId !== parameters.projectBindingId) {
+    throw new TypeError("Project Command dispatch project binding does not match the proposal.");
+  }
+  if (projectFingerprint !== parameters.projectFingerprint) {
+    throw new TypeError("Project Command dispatch project fingerprint does not match the proposal.");
+  }
+  if (parameters.policyProfileId !== PROJECT_COMMAND_POLICY.policyProfileId) {
+    throw new TypeError("Project Command dispatch policy profile does not match the trusted policy.");
+  }
+  if (parameters.policyDigest !== await trustedProjectCommandPolicyDigest()) {
+    throw new TypeError("Project Command dispatch policy digest does not match the trusted policy.");
   }
 }
 

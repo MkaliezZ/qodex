@@ -102,10 +102,11 @@ export async function trustedProjectCommandPolicyDigest(): Promise<string> {
 export function createTrustedProjectCommandDefinition(
   definition: ProjectCommandDefinition,
 ): TrustedProjectCommandDefinition {
-  return {
+  return Object.freeze({
     ...definition,
+    args: Object.freeze([...definition.args]) as unknown as string[],
     policy: PROJECT_COMMAND_POLICY,
-  };
+  });
 }
 
 function assertTrustedPolicy(policy: TrustedProjectCommandPolicy): void {

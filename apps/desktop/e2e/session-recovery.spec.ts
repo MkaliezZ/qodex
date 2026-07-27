@@ -160,6 +160,11 @@ test.describe("KerniQ Universal Session and Recovery v0.5", () => {
       starts: 1,
       decisions: 1,
     });
+    const recoveredTypes = await readSessionEntryTypes(page);
+    expect(recoveredTypes.filter((type) => type === "COMMAND_PROPOSED")).toHaveLength(1);
+    expect(recoveredTypes.filter((type) => type === "COMMAND_APPROVED")).toHaveLength(1);
+    expect(recoveredTypes.filter((type) => type === "ACTION_DECIDED")).toHaveLength(1);
+    expect(recoveredTypes.filter((type) => type === "COMMAND_STARTED")).toHaveLength(1);
     expect(providerCalls).toBe(1);
   });
 
@@ -190,6 +195,7 @@ test.describe("KerniQ Universal Session and Recovery v0.5", () => {
     await page.locator('[data-testid="session-row"]').first().getByRole("button", { name: "Resume recovery" }).click();
     await expect(page.locator('[data-testid="recovery-banner"]')).toContainText("Execution was interrupted");
     await expect(page.locator('[data-testid="reauthorize-project"]')).toHaveCount(0);
+    await expect(page.locator('[data-testid="approve-recovered-action"]')).toHaveCount(0);
     await page.waitForTimeout(400);
     expect(await readAgentCommandFixture(page)).toMatchObject({
       starts: 1,

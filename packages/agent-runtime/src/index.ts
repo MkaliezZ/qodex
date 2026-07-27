@@ -52,6 +52,7 @@ export type { MockProviderOptions } from "./providers/mock.js";
 export { AgentLoopRuntime } from "./agent-loop/runtime.js";
 export { AgentToolRegistry, AGENT_TOOLS } from "./agent-loop/tools.js";
 export {
+  createTrustedProjectCommandDefinition,
   createProjectCommandActionParameters,
   PROJECT_COMMAND_POLICY,
   serializeTrustedProjectCommandPolicy,
@@ -91,6 +92,7 @@ export type {
   AgentCommandLifecycleInput,
   AgentCommandDecisionLifecycleInput,
   AgentCommandDecisionReceipt,
+  AgentCommandStartReceipt,
   AgentCommandDecisionGateErrorCode,
   AgentCommandStartLifecycleInput,
   AgentCommandResultLifecycleInput,
