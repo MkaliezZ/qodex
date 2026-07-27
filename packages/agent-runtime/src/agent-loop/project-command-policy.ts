@@ -84,11 +84,11 @@ export async function createProjectCommandActionParameters(
     projectBindingId: input.projectBindingId,
     projectFingerprint: input.projectFingerprint,
     policyProfileId: PROJECT_COMMAND_POLICY.policyProfileId,
-    policyDigest: await computeTrustedProjectCommandPolicyDigest(),
+    policyDigest: await trustedProjectCommandPolicyDigest(),
   });
 }
 
-async function computeTrustedProjectCommandPolicyDigest(): Promise<string> {
+export async function trustedProjectCommandPolicyDigest(): Promise<string> {
   const serialized = serializeTrustedProjectCommandPolicy();
   const digest = await globalThis.crypto.subtle.digest(
     "SHA-256",

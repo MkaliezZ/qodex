@@ -234,7 +234,7 @@ describe("Project Command Action mapping", () => {
 
   it("maps Session generation explicitly and binds an immutable approval", async () => {
     const proposal = await proposalWith();
-    const approval = createProjectCommandActionApproval({
+    const approval = await createProjectCommandActionApproval({
       proposal,
       approvalId: "approval-1",
       sessionApprovalGeneration: 0,
@@ -260,10 +260,15 @@ describe("Project Command Action mapping", () => {
     expect(sessionApprovalGenerationToActionGeneration(0)).toBe(1);
     expect(sessionApprovalGenerationToActionGeneration(2)).toBe(3);
     expect(() => sessionApprovalGenerationToActionGeneration(-1)).toThrow(
-      "non-negative integer",
+      "positive safe integer",
     );
     expect(() => sessionApprovalGenerationToActionGeneration(0.5)).toThrow(
-      "non-negative integer",
+      "positive safe integer",
+    );
+    expect(() => sessionApprovalGenerationToActionGeneration(
+      Number.MAX_SAFE_INTEGER,
+    )).toThrow(
+      "positive safe integer",
     );
   });
 
@@ -277,25 +282,25 @@ describe("Project Command Action mapping", () => {
       now: NOW,
     };
 
-    expect(() => createProjectCommandActionApproval({
+    await expect(createProjectCommandActionApproval({
       ...common,
       expiresAt: "2026-07-27T02:01:30.000Z",
-    })).toThrow("expired");
-    expect(() => createProjectCommandActionApproval({
+    })).rejects.toThrow("expired");
+    await expect(createProjectCommandActionApproval({
       ...common,
       expiresAt: APPROVED_AT,
       now: new Date("2026-07-27T02:00:00.000Z"),
-    })).toThrow("later than approvedAt");
-    expect(() => createProjectCommandActionApproval({
+    })).rejects.toThrow("later than approvedAt");
+    await expect(createProjectCommandActionApproval({
       ...common,
       expiresAt: EXPIRES_AT,
       now: new Date("invalid"),
-    })).toThrow("trusted current time");
+    })).rejects.toThrow("trusted current time");
   });
 
   it("rejects approval identity, digest, and generation mismatches with the public validator", async () => {
     const proposal = await proposalWith();
-    const approval = createProjectCommandActionApproval({
+    const approval = await createProjectCommandActionApproval({
       proposal,
       approvalId: "approval-mismatch",
       sessionApprovalGeneration: 0,
@@ -319,6 +324,107 @@ describe("Project Command Action mapping", () => {
       1,
       NOW,
     )).toThrow("stale or unexpected");
+  });
+
+  it("rejects tampered or arbitrary proposals before creating an approval", async () => {
+    const proposal = await proposalWith();
+    const approvalInput = {
+      approvalId: "approval-untrusted-proposal",
+      sessionApprovalGeneration: 0,
+      approvedAt: APPROVED_AT,
+      expiresAt: EXPIRES_AT,
+      now: NOW,
+    };
+
+    await expect(createProjectCommandActionApproval({
+      ...approvalInput,
+      proposal: { ...proposal, title: "tampered without recomputing the digest" },
+    })).rejects.toThrow("digest does not match");
+    await expect(createProjectCommandActionApproval({
+      ...approvalInput,
+      proposal: { ...proposal, proposalDigest: `sha256:${"0".repeat(64)}` },
+    })).rejects.toThrow("digest does not match");
+  });
+
+  it("rejects recomputed proposals that are not the exact trusted Project Command shape", async () => {
+    const proposal = await proposalWith();
+    const input = proposalActionInput(proposal);
+    const parameters = proposal.parameters as Record<string, string>;
+    const missingCommandId = { ...parameters };
+    delete missingCommandId.commandId;
+    const { sessionId: _sessionId, ...withoutSessionId } = input;
+    const untrustedProposals = [
+      await createActionProposal({
+        ...input,
+        actionType: "kerniq.generic-action",
+      }),
+      await createActionProposal({
+        ...input,
+        risk: "read",
+      }),
+      await createActionProposal({
+        ...input,
+        parameters: {
+          ...parameters,
+          policyProfileId: "project-selected-policy",
+        },
+      }),
+      await createActionProposal({
+        ...input,
+        parameters: {
+          ...parameters,
+          policyDigest: `sha256:${"f".repeat(64)}`,
+        },
+      }),
+      await createActionProposal({
+        ...input,
+        parameters: {
+          ...parameters,
+          executable: "sh",
+        },
+      }),
+      await createActionProposal({
+        ...input,
+        parameters: missingCommandId,
+      }),
+      await createActionProposal(withoutSessionId),
+      await createActionProposal({
+        ...input,
+        parameters: {
+          ...parameters,
+          commandCategory: "deploy",
+        },
+      }),
+    ];
+
+    for (const untrustedProposal of untrustedProposals) {
+      await expect(createProjectCommandActionApproval({
+        proposal: untrustedProposal,
+        approvalId: "approval-untrusted-shape",
+        sessionApprovalGeneration: 0,
+        approvedAt: APPROVED_AT,
+        expiresAt: EXPIRES_AT,
+        now: NOW,
+      })).rejects.toThrow();
+    }
+  });
+
+  it.each([
+    -1,
+    0.5,
+    Number.MAX_SAFE_INTEGER,
+    Number.MAX_SAFE_INTEGER + 1,
+  ])("rejects unsafe Session generation %s in the approval factory", async (generation) => {
+    const proposal = await proposalWith();
+
+    await expect(createProjectCommandActionApproval({
+      proposal,
+      approvalId: "approval-unsafe-generation",
+      sessionApprovalGeneration: generation,
+      approvedAt: APPROVED_AT,
+      expiresAt: EXPIRES_AT,
+      now: NOW,
+    })).rejects.toThrow("positive safe integer");
   });
 
   it("has no imports or calls to execution, policy, persistence, native, or Tauri boundaries", async () => {
