@@ -298,6 +298,99 @@ describe("ProjectCommandDecisionCoordinator", () => {
     expect(prepared.recordDurably).not.toHaveBeenCalled();
   });
 
+  it("does not reuse an allow after its lifecycle releases the completed decision", async () => {
+    const prepared = await prepare("allow");
+    await expect(decide(prepared)).resolves.toMatchObject({ decision: "allow" });
+    prepared.coordinator.release(prepared.proposal, prepared.approval);
+
+    await expect(decide(prepared)).rejects.toBeInstanceOf(
+      ProjectCommandDurableApprovalError,
+    );
+    expect(prepared.bridge.requestDecision).toHaveBeenCalledTimes(1);
+  });
+
+  it("bounds completed decision retention across many sequential commands", async () => {
+    const requestDecision = vi.fn(async (request: AgentFuseDecisionRequest) => ({
+      protocolVersion: request.protocolVersion,
+      messageId: request.messageId,
+      messageType: "decision_result",
+      payload: {
+        decisionId: `decision-${request.messageId}`,
+        actionId: request.payload.proposal.actionId,
+        decision: "allow",
+        reasonCode: "allowed",
+        summary: "Allowed.",
+        policyVersion: AGENTFUSE_POLICY,
+        schemaVersion: AGENTFUSE_SCHEMA,
+        agentFuseCommit: AGENTFUSE_COMMIT,
+        policyProfileId: PROJECT_COMMAND_POLICY.policyProfileId,
+        policyDigest: PROJECT_POLICY_DIGEST,
+        evidence: { fixture: request.messageId },
+        decidedAt: NOW.toISOString(),
+      },
+    }));
+    const adapter = await createProjectCommandAgentFuseAdapter(
+      { requestDecision },
+      {
+        messageIdFactory: sequenceIds("bounded-message"),
+        clock: () => NOW,
+      },
+    );
+    const ledger = {
+      assertApproved: vi.fn(async () => {}),
+      recordDurably: vi.fn(async () => {}),
+    };
+    const coordinator = new ProjectCommandDecisionCoordinator({
+      adapter,
+      ledger,
+      clock: () => NOW,
+    });
+    const decisions: Awaited<ReturnType<typeof proposalAndApproval>>[] = [];
+    for (let index = 0; index < 129; index += 1) {
+      const proposal = await createProjectCommandActionProposal({
+        command: {
+          id: "package:test",
+          label: "Run tests",
+          executable: "pnpm",
+          args: ["test"],
+          cwd: ".",
+          source: "package.json",
+          category: "test",
+          catalogDigest: `sha256:${"a".repeat(64)}`,
+          policy: PROJECT_COMMAND_POLICY,
+        },
+        toolCallId: `command-bounded-${index}`,
+        taskId: "task-bounded",
+        sessionId: "session-bounded",
+        projectBindingId: "project-1",
+        projectFingerprint: `sha256:${"b".repeat(64)}`,
+        requestedAt: NOW.toISOString(),
+      });
+      const approval = await createProjectCommandActionApproval({
+        proposal,
+        approvalId: `approval-bounded-${index}`,
+        sessionApprovalGeneration: 0,
+        approvedAt: NOW.toISOString(),
+        expiresAt: EXPIRES_AT,
+        now: NOW,
+      });
+      decisions.push({ proposal, approval });
+      await coordinator.decideAndPersist(
+        proposal,
+        approval,
+        new AbortController().signal,
+      );
+    }
+
+    await coordinator.decideAndPersist(
+      decisions[0].proposal,
+      decisions[0].approval,
+      new AbortController().signal,
+    );
+    expect(requestDecision).toHaveBeenCalledTimes(130);
+    expect(ledger.recordDurably).toHaveBeenCalledTimes(130);
+  });
+
   it("contains no dispatch, native runner, Tauri, or command-start dependency", async () => {
     const source = await readFile(new URL(
       "./projectCommandDecisionCoordinator.ts",

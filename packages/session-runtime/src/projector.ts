@@ -242,6 +242,16 @@ export class SessionProjector {
             pendingAction.recoveryRequired = !pendingAction.started;
             pendingAction.approved = false;
             pendingAction.approvalId = null;
+            if (reason !== "interrupted") {
+              pendingAction.decisionRecorded = false;
+              pendingAction.decisionId = null;
+              pendingAction.decision = null;
+              pendingAction.reasonCode = null;
+              pendingAction.decidedAt = null;
+              pendingAction.policyVersion = null;
+              pendingAction.decisionSchemaVersion = null;
+              pendingAction.agentFuseCommit = null;
+            }
           }
           status = reason === "interrupted" ? "Interrupted" : "RecoveryRequired";
           break;

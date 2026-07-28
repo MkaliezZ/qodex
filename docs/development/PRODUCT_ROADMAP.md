@@ -22,7 +22,7 @@ Command migration remained outside that proof milestone.
 
 ### v0.6.1 - Project Command Action Runtime Adapter
 
-**Status:** v0.6.1.1, v0.6.1.2, and v0.6.1.3 merged; v0.6.1.4 implemented in Draft PR; v0.6.1.5 not started
+**Status:** v0.6.1.1 through v0.6.1.4 merged; v0.6.1.5 implemented in Draft PR; v0.6.1.6 not started
 
 The source audit, responsibility boundary, typed contracts, lifecycle decision,
 threat model, six implementation slices, automated test plan, and real Tauri
@@ -46,7 +46,7 @@ decision-only evaluation, `block -> deny` mapping, and durable command-linked
 `ACTION_DECIDED`. It does not call `ActionRuntime.execute`, start or complete a
 command, invoke Tauri or Rust, or change native execution.
 
-The v0.6.1.4 Draft PR binds the live Desktop approval flow to that decision
+The merged v0.6.1.4 slice binds the live Desktop approval flow to that decision
 path. It durably records `COMMAND_APPROVED`, obtains and persists the exact
 AgentFuse decision, and permits `COMMAND_STARTED` plus the existing native
 runner only for a current durable allow. Deny, error, expiry, cancellation, and
@@ -54,6 +54,13 @@ persistence failures remain zero-dispatch. The native request, Rust catalog
 re-resolution, project authorization, and no-shell implementation are
 unchanged. This claim applies only to the bounded native Desktop Project
 Command path, not Patch, Git, MCP, browser actions, or arbitrary shell.
+
+The v0.6.1.5 Draft PR adds deterministic persistence-fault, cancellation,
+duplicate, restart, drift, timeout, result-bound, cache-cleanup, and no-replay
+coverage. It resets unstarted pre-restart allow evidence before fresh
+reapproval, releases transient live decision state on every terminal path, and
+prevents raw runner diagnostics from reaching model-visible results. It does
+not claim real Tauri proof or frozen status. v0.6.1.6 has not started.
 
 - [v0.6.1 planning document](kerniq_project_command_action_runtime_adapter_planning_v0_6_1.md)
 - [ADR-021](../../qodex-config/adr/ADR-021-Project-Command-Action-Runtime-Adapter.md)

@@ -970,7 +970,7 @@ merge commit `ca005397b88534ba3663f1f19b0b539de0f94766`.
 
 ### KerniQ v0.6.1.4 Live Project Command Decision Gate and Native Dispatch Binding
 
-**Date:** 2026-07-27  |  **Status:** Implemented in Draft PR; not merged or frozen
+**Date:** 2026-07-27  |  **Status:** Merged; not frozen
 
 Connected the real Desktop Project Command approval and recovery flows to the
 merged decision coordinator. The live path creates the proposal from the exact
@@ -994,5 +994,30 @@ null stdin, timeout, cancellation, and bounded output are unchanged. No generic
 
 The accurate product claim is limited to the bounded native Desktop Project
 Command path. Other environments and Patch, Git, MCP, browser, file-write, and
-arbitrary-shell actions are not claimed as AgentFuse-protected. v0.6.1.5 has
-not started.
+arbitrary-shell actions are not claimed as AgentFuse-protected. Fault and
+recovery hardening remained the next v0.6.1.5 slice at merge time.
+
+PR #12 was corrected to bind `COMMAND_STARTED` to the exact durable allow
+decision and immutable trusted command snapshot. It merged through merge commit
+`a36503f198c016daa1f6c1c8f2af1d894c0e95ef`.
+
+### KerniQ v0.6.1.5 Project Command Fault and Recovery Hardening
+
+**Date:** 2026-07-27  |  **Status:** Implemented in Draft PR; not merged or frozen
+
+Added deterministic fault, cancellation, duplicate, restart, drift, timeout,
+bounded-result, and cache-lifecycle coverage around the merged Project Command
+path. Persistence failures before `COMMAND_STARTED` remain zero-dispatch.
+Settlement persistence failure records interruption when possible and retains
+started evidence as unknown or interrupted without automatic replay.
+
+The tests exposed and corrected three bounded defects. Recovery now discards an
+unstarted pre-restart allow so a fresh approval generation and AgentFuse
+decision can be recorded. Terminal, denied, cancelled, and failed live command
+paths release proposal and decision caches. Native runner rejection is reduced
+to a generic model-visible failure instead of forwarding raw diagnostics.
+
+The native Rust runner, managed Python bridge, package manifests, workflow,
+lockfile, and Session schema version are unchanged. Timeout and output
+properties remain unit-fixture and existing Rust-test evidence only. The final
+real Tauri proof and freeze are reserved for v0.6.1.6, which has not started.

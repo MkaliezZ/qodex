@@ -345,7 +345,7 @@ export class AgentLoopRuntime {
             started: true,
             exitCode: null,
             stdout: "",
-            stderr: error instanceof Error ? error.message : "Native command execution failed.",
+            stderr: "Native command execution failed.",
             timedOut: false,
             cancelled: false,
             stdoutTruncated: false,

@@ -1,6 +1,6 @@
 # ADR-021
 
-**Status:** Accepted plan; v0.6.1.1 through v0.6.1.3 merged; v0.6.1.4 implemented in Draft PR; v0.6.1.5 not started
+**Status:** Accepted plan; v0.6.1.1 through v0.6.1.4 merged; v0.6.1.5 implemented in Draft PR; v0.6.1.6 not started
 **Date:** 2026-07-26
 **Updated:** 2026-07-27
 
@@ -165,7 +165,7 @@ command. Physical execution was intentionally left to v0.6.1.4.
 
 ### v0.6.1.4 implementation boundary
 
-The v0.6.1.4 Draft PR connects only the bounded native Desktop Project Command
+The merged v0.6.1.4 slice connects only the bounded native Desktop Project Command
 flow. It creates the trusted proposal and expiring approval from live runtime
 identity, durably records `COMMAND_APPROVED`, calls the merged decision
 coordinator, and accepts only the exact current persisted allow at the start
@@ -182,6 +182,23 @@ The native request and Rust implementation are unchanged. No generic
 `ACTION_STARTED` or `ACTION_COMPLETED` is added. This implementation does not
 protect Patch, Git, MCP, browser, file-write, arbitrary-shell, or non-Desktop
 Project Command paths.
+
+### v0.6.1.5 implementation boundary
+
+The v0.6.1.5 Draft PR adds deterministic fault and recovery evidence around the
+merged command path. It covers proposal, approval, decision, start, execution,
+and settlement boundaries; cancellation races; duplicate submissions; restart
+positions; project and catalog drift; timeout/output fixtures; cache release;
+and bounded model-visible failures.
+
+An unstarted allow from before restart is explicitly removed as dispatch
+authority before fresh reapproval. Started work remains unknown or interrupted
+until matching settlement evidence exists and is never automatically replayed.
+The native Rust runner, managed Python bridge, Session schema version, package
+manifests, workflow, and lockfile remain unchanged.
+
+This slice is not frozen and does not claim a real Tauri smoke. v0.6.1.6 real
+Tauri proof, result review, and freeze have not started.
 
 ### Target lifecycle
 

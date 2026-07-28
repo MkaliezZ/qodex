@@ -2,7 +2,7 @@
 
 **Date:** 2026-07-26
 **Updated:** 2026-07-27
-**Status:** v0.6.1.1, v0.6.1.2, and v0.6.1.3 merged; v0.6.1.4 implemented in Draft PR; v0.6.1.5 not started
+**Status:** v0.6.1.1 through v0.6.1.4 merged; v0.6.1.5 implemented in Draft PR; v0.6.1.6 not started
 **Source baseline:** `c7a0b0adf7a0dab4729a2db1a77a58d8c2366beb`
 **v0.6.1.1 implementation baseline:** `7be4a7d69699eeac7498be1d75e17c7c1dc599ad`
 **v0.6.1.1 merge:** `be32ca0caa764aa86e3de341557fedbc2acba0a5`
@@ -11,6 +11,8 @@
 **v0.6.1.3 implementation baseline:** `c201e32ec1dcb342e9b1fbbeace6315cb422bc99`
 **v0.6.1.3 merge:** `ca005397b88534ba3663f1f19b0b539de0f94766`
 **v0.6.1.4 implementation baseline:** `ca005397b88534ba3663f1f19b0b539de0f94766`
+**v0.6.1.4 merge:** `a36503f198c016daa1f6c1c8f2af1d894c0e95ef`
+**v0.6.1.5 implementation baseline:** `a36503f198c016daa1f6c1c8f2af1d894c0e95ef`
 
 ## Executive Summary
 
@@ -612,7 +614,7 @@ not frozen.
 
 ### v0.6.1.4 - COMMAND_STARTED dispatch gate and native binding
 
-**Status:** Implemented in Draft PR; not merged or frozen.
+**Status:** Merged; not frozen.
 
 - Bind the live Desktop approval and recovery flows to the decision
   coordinator with a five-minute approval TTL.
@@ -630,10 +632,18 @@ not frozen.
 
 ### v0.6.1.5 - Duplicate, interruption, timeout, cancellation, and recovery tests
 
+**Status:** Implemented in Draft PR; not merged or frozen.
+
 - Exercise stale approvals/digests, catalog and project mismatch, duplicate
   clicks/execute calls, cancellation windows, timeout, output truncation,
   settlement failure, restart interruption, and no replay.
 - Cover normal and recovered command paths.
+- Release transient proposal and decision state after success, denial, error,
+  cancellation, or persistence failure, with bounded completed-decision
+  retention.
+- Reset an unstarted pre-restart allow before requiring a fresh approval
+  generation and AgentFuse decision.
+- Keep model-visible execution failures generic and bounded.
 
 ### v0.6.1.6 - Real Tauri proof, result review, and freeze
 
@@ -780,8 +790,9 @@ SQLite and the process, or safety of arbitrary project scripts.
 v0.6.1.1 merged=true
 v0.6.1.2 merged=true
 v0.6.1.3 merged=true
-v0.6.1.4 implemented in Draft PR=true
-v0.6.1.5 implementation started=false
+v0.6.1.4 merged=true
+v0.6.1.5 implemented in Draft PR=true
+v0.6.1.6 implementation started=false
 Project Command native Desktop path migrated=true
 Project Command all environments migrated=false
 Project Command decision path implemented=true
@@ -830,12 +841,12 @@ commands, arbitrary Python, and production claims beyond Project Command.
 ## Final Planning Verdict
 
 The current source implements the bounded adapter without altering the native
-runner or introducing a duplicate lifecycle. v0.6.1.1 through v0.6.1.3 are
-merged. v0.6.1.4 is implemented in a Draft PR: the live Desktop path persists
-the canonical decision before `COMMAND_STARTED`, dispatches the existing
-native runner only for durable allow, and preserves command-kind settlement.
-The claim is limited to the native Desktop Project Command path. v0.6.1.5 has
-not started.
+runner or introducing a duplicate lifecycle. v0.6.1.1 through v0.6.1.4 are
+merged. v0.6.1.5 is implemented in a Draft PR with deterministic fault,
+cancellation, duplicate, restart, drift, bound, cache-cleanup, and no-replay
+coverage. The claim is limited to the native Desktop Project Command path.
+Real Tauri proof, result review, and freeze remain v0.6.1.6 work and have not
+started.
 
 ```text
 KERNIQ_V0_6_1_PROJECT_COMMAND_ADAPTER_PLAN_READY_FOR_REVIEW

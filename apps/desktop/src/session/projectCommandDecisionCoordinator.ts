@@ -183,13 +183,7 @@ export class ProjectCommandDecisionCoordinator {
     approval: ActionApproval,
     signal: AbortSignal,
   ): Promise<ActionDecision> {
-    const key = JSON.stringify([
-      proposal.sessionId,
-      proposal.actionId,
-      approval.approvalId,
-      approval.generation,
-      proposal.proposalDigest,
-    ]);
+    const key = decisionKey(proposal, approval);
     const completed = this.completedDecisions.get(key);
     if (completed) {
       throwIfAborted(signal);
@@ -213,6 +207,13 @@ export class ProjectCommandDecisionCoordinator {
       });
     this.inFlightDecisions.set(key, tracked);
     return tracked;
+  }
+
+  release(
+    proposal: ActionProposal,
+    approval: ActionApproval,
+  ): void {
+    this.completedDecisions.delete(decisionKey(proposal, approval));
   }
 
   private async decideAndPersistOnce(
@@ -315,6 +316,19 @@ export class ProjectCommandDecisionCoordinator {
       this.completedDecisions.delete(oldest);
     }
   }
+}
+
+function decisionKey(
+  proposal: ActionProposal,
+  approval: ActionApproval,
+): string {
+  return JSON.stringify([
+    proposal.sessionId,
+    proposal.actionId,
+    approval.approvalId,
+    approval.generation,
+    proposal.proposalDigest,
+  ]);
 }
 
 export async function createProjectCommandAgentFuseAdapter(
