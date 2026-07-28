@@ -1,9 +1,21 @@
 # KerniQ v0.6.1 Project Command Result Review and Freeze Preparation
 
 **Date:** 2026-07-29
-**Status:** Ready for Draft PR result review; not merged or release-frozen
+**Status:** Ready for Draft PR #14 result review; PR CI passed; not merged or
+release-frozen
 **Proof base:** `c5e214a43f9102c23f9c0a973782d227606a5c2b`
 **Verdict:** `READY_FOR_V0_6_1_6_RESULT_REVIEW`
+
+## Review Identity
+
+| Anchor | Identity |
+|:--|:--|
+| Proof execution code head | `1ec336c4d5aaa1f0ba902117532bf2b610be1a4a` |
+| Reviewed Draft PR head before status correction | `291534a12b49fd41f5944e9863d0feb1b30c6cd5` |
+| Draft PR | `#14` |
+| Successful PR CI | `30383355384` |
+| PR merged | `false` |
+| Release frozen | `false` |
 
 ## Review Basis
 

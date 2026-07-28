@@ -1,9 +1,26 @@
 # KerniQ v0.6.1.6 Project Command Real Tauri Proof
 
 **Date:** 2026-07-29
-**Status:** Complete on the review branch; Draft PR and CI pending
-**Implementation base:** `c5e214a43f9102c23f9c0a973782d227606a5c2b`
-**Reviewed v0.6.1.5 head:** `ed6a0ce7fc00e0a201e3d98dc87fbd4d42a8f8a3`
+**Status:** Complete on Draft PR #14; PR CI passed; result review pending; not
+merged
+
+## Review Identity
+
+| Anchor | Identity |
+|:--|:--|
+| Implementation base | `c5e214a43f9102c23f9c0a973782d227606a5c2b` |
+| Reviewed v0.6.1.5 head | `ed6a0ce7fc00e0a201e3d98dc87fbd4d42a8f8a3` |
+| Real proof execution code head | `1ec336c4d5aaa1f0ba902117532bf2b610be1a4a` |
+| Draft PR pre-correction head | `291534a12b49fd41f5944e9863d0feb1b30c6cd5` |
+| Draft PR | `#14` |
+| Successful PR CI | `30383355384` |
+| Merged | `false` |
+
+The formal real Tauri proof was executed against the production and proof code
+tree at `1ec336c4d5aaa1f0ba902117532bf2b610be1a4a`. The later
+`291534a12b49fd41f5944e9863d0feb1b30c6cd5` commit changed documentation only
+and did not alter the executed production, proof, bridge, policy, native
+runner, or Session behavior.
 
 ## Verdict
 
