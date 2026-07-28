@@ -12,6 +12,7 @@ import {
   type AgentSideEffectLifecycle,
   type PendingCommandApproval,
   type ProjectCommandDefinition,
+  type ProjectCommandRunner,
   type ProjectCommandResult,
 } from "@qodex/agent-runtime";
 import type {
@@ -44,11 +45,25 @@ const COMMAND_EVENTS = new Set<SessionEventType>([
   "COMMAND_STARTED",
   "COMMAND_COMPLETED",
 ]);
+type BridgeOutcome =
+  | "allow"
+  | "block"
+  | "bridge-error"
+  | "bridge-timeout"
+  | "malformed"
+  | "wrong-source"
+  | "wrong-schema"
+  | "wrong-policy"
+  | "delayed";
 
 class FaultInjectingStore extends InMemorySessionStore {
   private readonly remaining: Partial<Record<SessionEventType, number>>;
 
-  constructor(failures: Partial<Record<SessionEventType, number>> = {}) {
+  constructor(
+    failures: Partial<Record<SessionEventType, number>> = {},
+    private readonly beforeAppend?: (entry: SessionEntry) => Promise<void>,
+    private readonly afterAppend?: (entry: SessionEntry) => Promise<void>,
+  ) {
     super();
     this.remaining = { ...failures };
   }
@@ -57,12 +72,14 @@ class FaultInjectingStore extends InMemorySessionStore {
     entry: SessionEntry,
     mutation: SessionMutation,
   ): Promise<void> {
+    await this.beforeAppend?.(entry);
     const remaining = this.remaining[entry.type] ?? 0;
     if (remaining > 0) {
       this.remaining[entry.type] = remaining - 1;
       throw new Error(`Injected ${entry.type} persistence failure.`);
     }
     await super.appendEntry(entry, mutation);
+    await this.afterAppend?.(entry);
   }
 }
 
@@ -90,9 +107,55 @@ describe("live Project Command decision and dispatch gate", () => {
         expect((await prepared.entries()).some((entry) => (
           entry.type === "COMMAND_DENIED"
         ))).toBe(false);
+        await prepared.loop.approveCommand(prepared.waiting.id);
+        expect(prepared.bridge.requestDecision).toHaveBeenCalledTimes(1);
+        expect(prepared.run).not.toHaveBeenCalled();
       }
     },
   );
+
+  it.each([
+    "bridge-error",
+    "bridge-timeout",
+    "malformed",
+    "wrong-source",
+    "wrong-schema",
+    "wrong-policy",
+  ] as const)(
+    "persists fail-closed evidence and never dispatches for %s",
+    async (outcome) => {
+      const prepared = await prepare(outcome);
+      await prepared.loop.approveCommand(prepared.waiting.id);
+      await prepared.recorder.flush();
+
+      expect(prepared.bridge.requestDecision).toHaveBeenCalledTimes(1);
+      expect(prepared.run).not.toHaveBeenCalled();
+      expect(commandEvents(await prepared.entries())).toEqual([
+        "COMMAND_PROPOSED",
+        "COMMAND_APPROVED",
+        "ACTION_DECIDED",
+      ]);
+      expect((await prepared.entries()).at(-1)?.safeMetadata.decision)
+        .not.toBe("allow");
+      expectNoLiveCommandCache(prepared.recorder);
+    },
+  );
+
+  it("fails closed after COMMAND_PROPOSED persistence failure without retrying AgentFuse", async () => {
+    const prepared = await prepare("allow", {
+      failures: { COMMAND_PROPOSED: 1 },
+      expectProposalPersistenceFailure: true,
+    });
+
+    const completed = await prepared.loop.approveCommand(prepared.waiting.id);
+    await prepared.recorder.flush();
+
+    expect(completed.status).toBe("Done");
+    expect(prepared.bridge.requestDecision).not.toHaveBeenCalled();
+    expect(prepared.run).not.toHaveBeenCalled();
+    expect(commandEvents(await prepared.entries())).toEqual([]);
+    expectNoLiveCommandCache(prepared.recorder);
+  });
 
   it("blocks before AgentFuse when COMMAND_APPROVED cannot persist", async () => {
     const prepared = await prepare("allow", {
@@ -107,6 +170,7 @@ describe("live Project Command decision and dispatch gate", () => {
     expect(commandEvents(await prepared.entries())).toEqual([
       "COMMAND_PROPOSED",
     ]);
+    expectNoLiveCommandCache(prepared.recorder);
   });
 
   it("blocks native dispatch when ACTION_DECIDED cannot persist", async () => {
@@ -123,6 +187,7 @@ describe("live Project Command decision and dispatch gate", () => {
       "COMMAND_PROPOSED",
       "COMMAND_APPROVED",
     ]);
+    expectNoLiveCommandCache(prepared.recorder);
   });
 
   it("blocks native dispatch when COMMAND_STARTED cannot persist", async () => {
@@ -140,6 +205,7 @@ describe("live Project Command decision and dispatch gate", () => {
       "COMMAND_APPROVED",
       "ACTION_DECIDED",
     ]);
+    expectNoLiveCommandCache(prepared.recorder);
   });
 
   it("blocks native dispatch when the pending command becomes stale after allow", async () => {
@@ -176,6 +242,12 @@ describe("live Project Command decision and dispatch gate", () => {
       pending.command = createTrustedProjectCommandDefinition({
         ...pending.command,
         category: "build",
+      });
+    }],
+    ["script source", (pending: PendingCommandApproval) => {
+      pending.command = createTrustedProjectCommandDefinition({
+        ...pending.command,
+        source: "cargo",
       });
     }],
   ] as const)(
@@ -269,6 +341,7 @@ describe("live Project Command decision and dispatch gate", () => {
     expect(Object.isFrozen(approvedCommand.args)).toBe(true);
     expect(prepared.run).toHaveBeenCalledTimes(1);
     expect(prepared.run.mock.calls[0][0]).toBe(approvedCommand);
+    expectNoLiveCommandCache(prepared.recorder);
   });
 
   it("dispatches the validated receipt command even if the pending reference changes after start persistence", async () => {
@@ -331,6 +404,10 @@ describe("live Project Command decision and dispatch gate", () => {
       "COMMAND_STARTED",
       "COMMAND_COMPLETED",
     ]);
+    await prepared.loop.approveCommand(prepared.waiting.id);
+    expect(prepared.bridge.requestDecision).toHaveBeenCalledTimes(1);
+    expect(prepared.run).toHaveBeenCalledTimes(1);
+    expectNoLiveCommandCache(prepared.recorder);
   });
 
   it("records human denial without an AgentFuse request or native run", async () => {
@@ -346,6 +423,11 @@ describe("live Project Command decision and dispatch gate", () => {
       "COMMAND_PROPOSED",
       "COMMAND_DENIED",
     ]);
+    await prepared.loop.denyCommand(prepared.waiting.id);
+    await prepared.loop.approveCommand(prepared.waiting.id);
+    expect(prepared.bridge.requestDecision).not.toHaveBeenCalled();
+    expect(prepared.run).not.toHaveBeenCalled();
+    expectNoLiveCommandCache(prepared.recorder);
   });
 
   it("cancels during AgentFuse without persisting a decision or starting native work", async () => {
@@ -365,6 +447,7 @@ describe("live Project Command decision and dispatch gate", () => {
       "COMMAND_PROPOSED",
       "COMMAND_APPROVED",
     ]);
+    expectNoLiveCommandCache(prepared.recorder);
   });
 
   it("cancels after durable allow but before COMMAND_STARTED with zero dispatch", async () => {
@@ -392,11 +475,180 @@ describe("live Project Command decision and dispatch gate", () => {
       "COMMAND_APPROVED",
       "ACTION_DECIDED",
     ]);
+    expectNoLiveCommandCache(prepared.recorder);
   });
+
+  it("cancels before COMMAND_PROPOSED durability without decision or dispatch", async () => {
+    const proposalEntered = deferred();
+    const releaseProposal = deferred();
+    const prepared = await prepare("allow", {
+      deferInitialFlush: true,
+      beforePersist: async (entry) => {
+        if (entry.type !== "COMMAND_PROPOSED") return;
+        proposalEntered.resolve();
+        await releaseProposal.promise;
+      },
+    });
+    await proposalEntered.promise;
+
+    await prepared.loop.cancel(prepared.waiting.id);
+    releaseProposal.resolve();
+    await prepared.initialFlush;
+    await prepared.recorder.flush();
+
+    expect(prepared.loop.getTask(prepared.waiting.id)?.status).toBe("Cancelled");
+    expect(prepared.bridge.requestDecision).not.toHaveBeenCalled();
+    expect(prepared.run).not.toHaveBeenCalled();
+    expect(prepared.cancel).not.toHaveBeenCalled();
+    expectNoLiveCommandCache(prepared.recorder);
+  });
+
+  it("cancels after durable approval before the bridge request", async () => {
+    const approvalPersisted = deferred();
+    const releaseApproval = deferred();
+    const prepared = await prepare("allow", {
+      afterPersist: async (entry) => {
+        if (entry.type !== "COMMAND_APPROVED") return;
+        approvalPersisted.resolve();
+        await releaseApproval.promise;
+      },
+    });
+    const approval = prepared.loop.approveCommand(prepared.waiting.id);
+    await approvalPersisted.promise;
+    const cancellation = prepared.loop.cancel(prepared.waiting.id);
+    releaseApproval.resolve();
+
+    await Promise.all([approval, cancellation]);
+    await prepared.recorder.flush();
+
+    expect(prepared.loop.getTask(prepared.waiting.id)?.status).toBe("Cancelled");
+    expect(prepared.bridge.requestDecision).not.toHaveBeenCalled();
+    expect(prepared.run).not.toHaveBeenCalled();
+    expectNoLiveCommandCache(prepared.recorder);
+  });
+
+  it("attempts one bounded cancellation after durable start and invokes native once", async () => {
+    const startPersisted = deferred();
+    const releaseStart = deferred();
+    const runResult = deferred<ProjectCommandResult>();
+    const prepared = await prepare("allow", {
+      mutateAfterCommandStart: async () => {
+        startPersisted.resolve();
+        await releaseStart.promise;
+      },
+      run: async () => runResult.promise,
+      cancel: async () => {
+        runResult.resolve(cancelledResult());
+      },
+    });
+    const approval = prepared.loop.approveCommand(prepared.waiting.id);
+    await startPersisted.promise;
+    const cancellation = prepared.loop.cancel(prepared.waiting.id);
+    releaseStart.resolve();
+
+    await Promise.all([approval, cancellation]);
+    await prepared.recorder.flush();
+
+    expect(prepared.loop.getTask(prepared.waiting.id)?.status).toBe("Cancelled");
+    expect(prepared.run).toHaveBeenCalledTimes(1);
+    expect(prepared.cancel).toHaveBeenCalledTimes(1);
+    expect(commandEvents(await prepared.entries())).toEqual([
+      "COMMAND_PROPOSED",
+      "COMMAND_APPROVED",
+      "ACTION_DECIDED",
+      "COMMAND_STARTED",
+      "COMMAND_COMPLETED",
+    ]);
+    expectNoLiveCommandCache(prepared.recorder);
+  });
+
+  it("does not replay when cancelled after physical settlement but before durable settlement", async () => {
+    const settlementEntered = deferred();
+    const releaseSettlement = deferred();
+    const prepared = await prepare("allow", {
+      beforePersist: async (entry) => {
+        if (entry.type !== "COMMAND_COMPLETED") return;
+        settlementEntered.resolve();
+        await releaseSettlement.promise;
+      },
+    });
+    const approval = prepared.loop.approveCommand(prepared.waiting.id);
+    await settlementEntered.promise;
+    const cancellation = prepared.loop.cancel(prepared.waiting.id);
+    releaseSettlement.resolve();
+
+    await Promise.all([approval, cancellation]);
+    await prepared.recorder.flush();
+
+    expect(prepared.loop.getTask(prepared.waiting.id)?.status).toBe("Cancelled");
+    expect(prepared.run).toHaveBeenCalledTimes(1);
+    expect(prepared.cancel).not.toHaveBeenCalled();
+    expect((await prepared.entries()).filter((entry) => (
+      entry.type === "COMMAND_COMPLETED"
+    ))).toHaveLength(1);
+    expectNoLiveCommandCache(prepared.recorder);
+  });
+
+  it("records interruption and releases live state when settlement persistence fails", async () => {
+    const prepared = await prepare("allow", {
+      failures: { COMMAND_COMPLETED: 1 },
+    });
+
+    const failed = await prepared.loop.approveCommand(prepared.waiting.id);
+    await prepared.recorder.flush();
+    const entries = await prepared.entries();
+
+    expect(failed.status).toBe("Failed");
+    expect(prepared.run).toHaveBeenCalledTimes(1);
+    expect(entries.some((entry) => entry.type === "SESSION_INTERRUPTED")).toBe(true);
+    expect(entries.some((entry) => entry.type === "SESSION_COMPLETED")).toBe(false);
+    expect((await prepared.runtime.recoverSession("task-1")).status).toBe("Interrupted");
+    expectNoLiveCommandCache(prepared.recorder);
+  });
+
+  it.each([
+    ["runner rejection", async () => {
+      throw new Error("private failure at /Users/private/project");
+    }, {
+      commandId: "package-script:test",
+      approved: true,
+      started: true,
+      exitCode: null,
+      stdout: "",
+      stderr: "Native command execution failed.",
+      timedOut: false,
+      cancelled: false,
+      stdoutTruncated: false,
+      stderrTruncated: false,
+      durationMs: 0,
+    }],
+    ["runner timeout", async () => timeoutResult(), timeoutResult()],
+  ] as const)(
+    "records one truthful bounded completion for %s",
+    async (_name, run, expected) => {
+      const prepared = await prepare("allow", { run });
+      const completed = await prepared.loop.approveCommand(prepared.waiting.id);
+      await prepared.recorder.flush();
+
+      expect(completed.status).toBe("Done");
+      expect(prepared.run).toHaveBeenCalledTimes(1);
+      expect((await prepared.entries()).filter((entry) => (
+        entry.type === "COMMAND_COMPLETED"
+      ))).toHaveLength(1);
+      const toolResult = [...completed.conversation]
+        .reverse()
+        .find((entry) => entry.role === "tool");
+      expect(toolResult?.content).toContain(JSON.stringify(expected).slice(1, -1));
+      expect(toolResult?.content).not.toContain("/Users/private");
+      expectNoLiveCommandCache(prepared.recorder);
+    },
+  );
 });
 
 interface PrepareOptions {
   failures?: Partial<Record<SessionEventType, number>>;
+  beforePersist?: (entry: SessionEntry) => Promise<void>;
+  afterPersist?: (entry: SessionEntry) => Promise<void>;
   clock?: () => Date;
   beforeBridgeReturn?: () => void;
   beforeCommandStart?: () => Promise<void>;
@@ -408,15 +660,23 @@ interface PrepareOptions {
     input: AgentCommandStartLifecycleInput,
   ) => void | Promise<void>;
   invalidateBeforeCommandStart?: boolean;
+  expectProposalPersistenceFailure?: boolean;
+  deferInitialFlush?: boolean;
+  run?: ProjectCommandRunner["run"];
+  cancel?: NonNullable<ProjectCommandRunner["cancel"]>;
 }
 
 async function prepare(
-  outcome: "allow" | "block" | "bridge-error" | "delayed",
+  outcome: BridgeOutcome,
   options: PrepareOptions = {},
 ) {
   const clock = options.clock ?? (() => NOW);
   const runtime = new SessionRuntime(
-    new FaultInjectingStore(options.failures),
+    new FaultInjectingStore(
+      options.failures,
+      options.beforePersist,
+      options.afterPersist,
+    ),
     clock,
     sequenceIds("ledger"),
   );
@@ -439,7 +699,7 @@ async function prepare(
     projectFingerprint: `sha256:${"b".repeat(64)}`,
     clock,
   });
-  const run = vi.fn(async (
+  const run = vi.fn(options.run ?? (async (
     _command: ProjectCommandDefinition,
   ): Promise<ProjectCommandResult> => ({
     commandId: "package-script:test",
@@ -453,7 +713,8 @@ async function prepare(
     stdoutTruncated: false,
     stderrTruncated: false,
     durationMs: 1,
-  }));
+  })));
+  const cancel = vi.fn(options.cancel ?? (async () => {}));
   const lifecycle: AgentSideEffectLifecycle = options.beforeCommandStart
     || options.mutateBeforeCommandStart
     || options.mutateAfterCommandStart
@@ -491,22 +752,29 @@ async function prepare(
       commandExecutionAvailable: true,
     },
     patchAdapter: inertPatchAdapter(),
-    commandRunner: { run },
+    commandRunner: { run, cancel },
     sideEffectLifecycle: lifecycle,
     requireCommandDecision: true,
     now: () => clock().getTime(),
   });
   loop.subscribe((task) => recorder.recordTask(task));
   const waiting = await loop.start("task-1", "Run tests.");
-  await recorder.flush();
+  const initialFlush = recorder.flush();
+  if (options.expectProposalPersistenceFailure) {
+    await expect(initialFlush).rejects.toBeDefined();
+  } else if (!options.deferInitialFlush) {
+    await initialFlush;
+  }
   expect(waiting.status).toBe("WaitingForCommandApproval");
   return {
     runtime,
     recorder,
     bridge,
     run,
+    cancel,
     loop,
     waiting,
+    initialFlush,
     entries: () => runtime.loadActivePath("task-1"),
   };
 }
@@ -522,7 +790,7 @@ async function digest(value: string): Promise<string> {
 }
 
 function bridgeFor(
-  outcome: "allow" | "block" | "bridge-error" | "delayed",
+  outcome: BridgeOutcome,
   beforeReturn: () => void = () => {},
 ): AgentFuseBridgeClient & { requestDecision: ReturnType<typeof vi.fn> } {
   return {
@@ -531,6 +799,8 @@ function bridgeFor(
       signal: AbortSignal,
     ) => {
       if (outcome === "bridge-error") throw new Error("bridge process exited");
+      if (outcome === "bridge-timeout") throw new Error("request timeout");
+      if (outcome === "malformed") return "not-a-decision-response";
       if (outcome === "delayed") {
         await new Promise<void>((_resolve, reject) => {
           signal.addEventListener("abort", () => {
@@ -539,14 +809,14 @@ function bridgeFor(
         });
       }
       beforeReturn();
-      return {
+      const response = {
         protocolVersion: request.protocolVersion,
         messageId: request.messageId,
         messageType: "decision_result",
         payload: {
           decisionId: `decision-${outcome}`,
           actionId: request.payload.proposal.actionId,
-          decision: outcome,
+          decision: outcome === "block" ? "block" : "allow",
           reasonCode: outcome === "allow" ? "allowed" : "policy_denied",
           summary: `Canonical AgentFuse returned ${outcome}.`,
           policyVersion: AGENTFUSE_POLICY,
@@ -558,7 +828,58 @@ function bridgeFor(
           decidedAt: NOW.toISOString(),
         },
       };
+      if (outcome === "wrong-source") {
+        response.payload.agentFuseCommit = "0".repeat(40);
+      } else if (outcome === "wrong-schema") {
+        response.payload.schemaVersion = "future-schema";
+      } else if (outcome === "wrong-policy") {
+        response.payload.policyVersion = "future-policy";
+      }
+      return response;
     }),
+  };
+}
+
+function expectNoLiveCommandCache(recorder: AgentSessionLedgerRecorder): void {
+  const internal = recorder as unknown as {
+    liveProposalOperations: Map<string, unknown>;
+    failedProposalActions: Set<string>;
+    liveDecisions: Map<string, unknown>;
+  };
+  expect(internal.liveProposalOperations.size).toBe(0);
+  expect(internal.failedProposalActions.size).toBe(0);
+  expect(internal.liveDecisions.size).toBe(0);
+}
+
+function timeoutResult(): ProjectCommandResult {
+  return {
+    commandId: "package-script:test",
+    approved: true,
+    started: true,
+    exitCode: null,
+    stdout: "bounded stdout",
+    stderr: "bounded stderr",
+    timedOut: true,
+    cancelled: false,
+    stdoutTruncated: true,
+    stderrTruncated: true,
+    durationMs: 120_000,
+  };
+}
+
+function cancelledResult(): ProjectCommandResult {
+  return {
+    commandId: "package-script:test",
+    approved: true,
+    started: true,
+    exitCode: null,
+    stdout: "",
+    stderr: "",
+    timedOut: false,
+    cancelled: true,
+    stdoutTruncated: false,
+    stderrTruncated: false,
+    durationMs: 1,
   };
 }
 
@@ -617,9 +938,9 @@ function sequenceIds(prefix: string): () => string {
   return () => `${prefix}-${++index}`;
 }
 
-function deferred() {
-  let resolve!: () => void;
-  const promise = new Promise<void>((settle) => {
+function deferred<T = void>() {
+  let resolve!: (value: T | PromiseLike<T>) => void;
+  const promise = new Promise<T>((settle) => {
     resolve = settle;
   });
   return { promise, resolve };

@@ -199,6 +199,144 @@ describe("session projection and restart recovery", () => {
     expect((await instance.projectCurrentState(session.id)).pendingAction).toBeNull();
   });
 
+  it("invalidates an allow recorded before restart and requires a fresh decision", async () => {
+    const instance = runtime();
+    const session = await instance.createSession({ title: "Allowed command recovery" });
+    const actionId = "command-allowed-before-restart";
+    await instance.appendEntry(session.id, {
+      type: "COMMAND_PROPOSED",
+      ...commandProposalIdentity(actionId),
+    });
+    await instance.appendEntry(session.id, {
+      type: "COMMAND_APPROVED",
+      payload: { actionId },
+      safeMetadata: {
+        actionId,
+        approvalId: "approval-before-restart",
+        approvalGeneration: 0,
+      },
+    });
+    await appendCommandAllow(
+      instance,
+      session.id,
+      actionId,
+      "approval-before-restart",
+      0,
+      "decision-before-restart",
+    );
+
+    const recovered = await instance.recoverSession(session.id);
+    expect(recovered.status).toBe("RecoveryRequired");
+    expect(recovered.pendingAction).toMatchObject({
+      kind: "command",
+      approved: false,
+      approvalGeneration: 1,
+      decisionRecorded: false,
+      decisionId: null,
+      decision: null,
+      recoveryRequired: true,
+    });
+
+    await instance.appendEntry(session.id, {
+      type: "COMMAND_APPROVED",
+      payload: { actionId },
+      safeMetadata: {
+        actionId,
+        approvalId: "approval-after-restart",
+        approvalGeneration: 1,
+      },
+    });
+    await expect(instance.appendEntry(session.id, {
+      type: "COMMAND_STARTED",
+      payload: { actionId },
+      safeMetadata: {
+        actionId,
+        approvalId: "approval-after-restart",
+        approvalGeneration: 1,
+        decisionId: "decision-before-restart",
+        executionReceiptId: "receipt-before-fresh-decision",
+      },
+    })).rejects.toThrow("prior allow decision");
+
+    await appendCommandAllow(
+      instance,
+      session.id,
+      actionId,
+      "approval-after-restart",
+      1,
+      "decision-after-restart",
+    );
+    await instance.appendEntry(session.id, {
+      type: "COMMAND_STARTED",
+      payload: { actionId },
+      safeMetadata: {
+        actionId,
+        approvalId: "approval-after-restart",
+        approvalGeneration: 1,
+        decisionId: "decision-after-restart",
+        executionReceiptId: "receipt-after-fresh-decision",
+      },
+    });
+    expect((await instance.projectCurrentState(session.id)).pendingAction)
+      .toMatchObject({ started: true, decisionId: "decision-after-restart" });
+  });
+
+  it.each(["deny", "error"] as const)(
+    "keeps a durable command %s settled after restart",
+    async (decision) => {
+      const instance = runtime();
+      const session = await instance.createSession({ title: `Command ${decision} recovery` });
+      const actionId = `command-${decision}-before-restart`;
+      await instance.appendEntry(session.id, {
+        type: "COMMAND_PROPOSED",
+        ...commandProposalIdentity(actionId),
+      });
+      await instance.appendEntry(session.id, {
+        type: "COMMAND_APPROVED",
+        payload: { actionId },
+        safeMetadata: {
+          actionId,
+          approvalId: `approval-${decision}`,
+          approvalGeneration: 0,
+        },
+      });
+      const decidedAt = "2026-02-01T00:01:00.000Z";
+      await instance.appendEntry(session.id, {
+        type: "ACTION_DECIDED",
+        payload: {
+          actionId,
+          proposalDigest: COMMAND_PROPOSAL_DIGEST,
+          decision,
+          reasonCode: `${decision}_fixture`,
+          summary: `${decision} Project Command.`,
+          decidedAt,
+          evidence: { fixture: decision },
+        },
+        safeMetadata: {
+          actionId,
+          taskId: "task-1",
+          proposalDigest: COMMAND_PROPOSAL_DIGEST,
+          approvalId: `approval-${decision}`,
+          approvalGeneration: 0,
+          decisionId: `decision-${decision}`,
+          decision,
+          reasonCode: `${decision}_fixture`,
+          policyVersion: "dhms-agentfuse-runtime-guard@3.6.0",
+          decisionSchemaVersion: "agentfuse-evidence-schema-v0.1",
+          agentFuseCommit: "ec4b5842339dccfba0db62df7541920759203bc9",
+          decidedAt,
+        },
+      });
+
+      const recovered = await instance.recoverSession(session.id);
+      expect(recovered.pendingAction).toBeNull();
+      expect(recovered.recoveryRequirement?.reason).not.toBe("command_reapproval");
+      expect((await instance.loadActivePath(session.id)).some((entry) => (
+        entry.type === "COMMAND_STARTED"
+      ))).toBe(false);
+    },
+  );
+
   it.each([
     ["patch", "PATCH_PROPOSED", "PATCH_APPROVED", "PATCH_STARTED"],
     ["command", "COMMAND_PROPOSED", "COMMAND_APPROVED", "COMMAND_STARTED"],

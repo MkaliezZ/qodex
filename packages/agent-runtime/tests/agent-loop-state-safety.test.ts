@@ -287,6 +287,37 @@ describe("AgentLoopRuntime v0.4.1 state safety", () => {
     expect(run).toHaveBeenCalledOnce();
     expect(afterSideEffectFailure).not.toHaveBeenCalled();
     expect(sequence.turns).toBe(1);
+    expect(runtime.canRollback(waiting.id).allowed).toBe(true);
+  });
+
+  it("returns a bounded generic failure when the native runner rejects", async () => {
+    const sequence = commandThenDoneProvider();
+    const privateFailure = "spawn failed at /Users/private/project with TOKEN=secret";
+    const run = vi.fn(async () => {
+      throw new Error(privateFailure);
+    });
+    const runtime = new AgentLoopRuntime({
+      provider: sequence,
+      modelId: "model",
+      project,
+      patchAdapter: patchAdapter().adapter,
+      commandRunner: { run },
+      sideEffectLifecycle: lifecycle(),
+      requireCommandDecision: true,
+    });
+
+    const waiting = await runtime.start("command-runner-rejection", "Run tests.");
+    const completed = await runtime.approveCommand(waiting.id);
+
+    expect(completed.status).toBe("Done");
+    expect(run).toHaveBeenCalledOnce();
+    const toolResult = completed.conversation.findLast((entry) => entry.role === "tool");
+    expect(toolResult?.content).toContain('"ok":false');
+    expect(toolResult?.content).toContain('"started":true');
+    expect(toolResult?.content).toContain("Native command execution failed.");
+    expect(toolResult?.content).not.toContain(privateFailure);
+    expect(toolResult?.content).not.toContain("/Users/private");
+    expect(runtime.canRollback(waiting.id).allowed).toBe(true);
   });
 
   it("disposes a pending patch on Stop and makes late approval actions inert", async () => {
@@ -474,6 +505,10 @@ describe("AgentLoopRuntime v0.4.1 state safety", () => {
     expect(commandLifecycle.beforeCommandStart).toHaveBeenCalledTimes(1);
     expect(run).toHaveBeenCalledTimes(1);
     expect(sequence.turns).toBe(2);
+
+    await runtime.approveCommand(waiting.id);
+    expect(commandLifecycle.beforeCommandDecision).toHaveBeenCalledTimes(1);
+    expect(run).toHaveBeenCalledTimes(1);
   });
 
   it.each([
@@ -574,6 +609,7 @@ describe("AgentLoopRuntime v0.4.1 state safety", () => {
     expect(cancelled.status).toBe("Cancelled");
     expect(run).not.toHaveBeenCalled();
     expect(commandLifecycle.beforeCommandStart).not.toHaveBeenCalled();
+    expect(runtime.canRollback(waiting.id).allowed).toBe(true);
   });
 
   it("blocks rollback during an active model continuation and allows it after Done", async () => {
