@@ -20,6 +20,11 @@ import type { ApplyResult, PatchError, PatchProposal } from "@qodex/diff-engine"
 import type { ProjectAccessSource } from "../platform/types";
 import type { AgentLoopTask } from "@qodex/agent-runtime";
 import type { ProposalOrigin } from "../hooks/proposalOwnership";
+import { ProjectCommandRealTauriProof } from "./ProjectCommandRealTauriProof";
+
+const PROJECT_COMMAND_REAL_PROOF_ENABLED =
+  import.meta.env.VITE_KERNIQ_ENABLE_AGENTFUSE_PROOF === "1"
+  && import.meta.env.VITE_KERNIQ_PROJECT_COMMAND_REAL_PROOF === "1";
 
 export type ActiveView = "agent" | "files" | "sessions" | "skills" | "git" | "settings" | "marketplace";
 
@@ -116,6 +121,14 @@ function AppShellInner() {
     media.addEventListener("change", closeAtWideWidth);
     return () => media.removeEventListener("change", closeAtWideWidth);
   }, []);
+
+  if (PROJECT_COMMAND_REAL_PROOF_ENABLED) {
+    return (
+      <RuntimeContext.Provider value={enhancedRuntime}>
+        <ProjectCommandRealTauriProof />
+      </RuntimeContext.Provider>
+    );
+  }
 
   return (
     <RuntimeContext.Provider value={enhancedRuntime}>

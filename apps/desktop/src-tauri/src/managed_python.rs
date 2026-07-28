@@ -20,6 +20,9 @@ const BRIDGE_MAIN: &str = include_str!("../../../../python/kerniq_agentfuse_brid
 const BRIDGE_SERVICE: &str = include_str!("../../../../python/kerniq_agentfuse_bridge/service.py");
 
 const BRIDGE_PROTOCOL: &str = "kerniq.agentfuse.bridge.v1";
+const PROJECT_COMMAND_POLICY_PROFILE: &str = "kerniq-project-command-v1";
+const PROJECT_COMMAND_POLICY_DIGEST: &str =
+    "sha256:9c01df377b0cfd8db8392dc8966a2f12b38ad1b2ab9c89780ac049ac0eed38ad";
 const BRIDGE_PYTHON_FLAGS: [&str; 3] = ["-B", "-s", "-E"];
 const MESSAGE_LIMIT: usize = 64 * 1024;
 const STDOUT_LIMIT: usize = 256 * 1024;
@@ -170,7 +173,7 @@ pub(crate) struct AgentFuseSelfCheckResult {
     bridge_protocol_version: String,
 }
 
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub(crate) struct AgentFuseNativeDecisionRequest {
     protocol_version: String,
@@ -1194,10 +1197,33 @@ fn validate_native_decision_request(
     let fixture = request
         .payload
         .get("policyFixtureId")
-        .and_then(Value::as_str)
-        .ok_or("AgentFuse decision request lacks a trusted policy fixture.")?;
-    if !matches!(fixture, "kerniq-proof-allow-v1" | "kerniq-proof-deny-v1") {
-        return Err("AgentFuse decision request uses an unknown policy fixture.".into());
+        .and_then(Value::as_str);
+    let profile = request
+        .payload
+        .get("policyProfileId")
+        .and_then(Value::as_str);
+    let digest = request
+        .payload
+        .get("expectedPolicyDigest")
+        .and_then(Value::as_str);
+    match (fixture, profile, digest) {
+        (Some(value), None, None)
+            if matches!(value, "kerniq-proof-allow-v1" | "kerniq-proof-deny-v1") => {}
+        (None, Some(PROJECT_COMMAND_POLICY_PROFILE), Some(PROJECT_COMMAND_POLICY_DIGEST)) => {}
+        (Some(_), Some(_), _) | (Some(_), _, Some(_)) => {
+            return Err("AgentFuse decision request has an ambiguous policy selection.".into());
+        }
+        (Some(_), None, None) => {
+            return Err("AgentFuse decision request uses an unknown policy fixture.".into());
+        }
+        (None, Some(_), Some(_)) => {
+            return Err("AgentFuse decision request uses an unknown policy profile.".into());
+        }
+        _ => {
+            return Err(
+                "AgentFuse decision request lacks a complete trusted policy selection.".into(),
+            );
+        }
     }
     if serde_json::to_vec(request)
         .map(|bytes| bytes.len() > MESSAGE_LIMIT)
@@ -1546,7 +1572,7 @@ mod tests {
     }
 
     #[test]
-    fn native_decision_request_rejects_unknown_fixture_and_extra_fields() {
+    fn native_decision_request_accepts_only_trusted_policy_selections() {
         let valid = json!({
             "protocolVersion": BRIDGE_PROTOCOL,
             "messageId": "message-1",
@@ -1555,11 +1581,33 @@ mod tests {
         });
         let request: AgentFuseNativeDecisionRequest = serde_json::from_value(valid).unwrap();
         assert!(validate_native_decision_request(&request).is_ok());
+        let profile = AgentFuseNativeDecisionRequest {
+            payload: json!({
+                "policyProfileId": PROJECT_COMMAND_POLICY_PROFILE,
+                "expectedPolicyDigest": PROJECT_COMMAND_POLICY_DIGEST,
+            }),
+            ..request.clone()
+        };
+        assert!(validate_native_decision_request(&profile).is_ok());
         let unknown = AgentFuseNativeDecisionRequest {
             payload: json!({"policyFixtureId": "model-selected"}),
-            ..request
+            ..request.clone()
         };
         assert!(validate_native_decision_request(&unknown).is_err());
+        let incomplete = AgentFuseNativeDecisionRequest {
+            payload: json!({"policyProfileId": PROJECT_COMMAND_POLICY_PROFILE}),
+            ..request.clone()
+        };
+        assert!(validate_native_decision_request(&incomplete).is_err());
+        let ambiguous = AgentFuseNativeDecisionRequest {
+            payload: json!({
+                "policyFixtureId": "kerniq-proof-allow-v1",
+                "policyProfileId": PROJECT_COMMAND_POLICY_PROFILE,
+                "expectedPolicyDigest": PROJECT_COMMAND_POLICY_DIGEST,
+            }),
+            ..request
+        };
+        assert!(validate_native_decision_request(&ambiguous).is_err());
         assert!(
             serde_json::from_value::<AgentFuseNativeDecisionRequest>(json!({
                 "protocolVersion": BRIDGE_PROTOCOL,

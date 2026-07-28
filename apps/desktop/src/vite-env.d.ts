@@ -6,6 +6,7 @@ import type { SessionStore } from "@qodex/session-runtime";
 
 interface ImportMetaEnv {
   readonly VITE_KERNIQ_ENABLE_AGENTFUSE_PROOF?: string;
+  readonly VITE_KERNIQ_PROJECT_COMMAND_REAL_PROOF?: string;
 }
 
 interface ImportMeta {
