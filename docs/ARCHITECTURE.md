@@ -239,9 +239,9 @@ The package version is independent of the preserved DHMS historical evidence
 milestone `v3.5.2`; both continue using evidence schema
 `agentfuse-evidence-schema-v0.1`.
 
-This v0.6 foundation is merged and frozen. The source-grounded v0.6.1 Project
-Command adapter plan is ready for review; implementation has not started.
-The planned boundary keeps KerniQ as trusted catalog/risk/approval/native owner.
+This v0.6 foundation is merged and frozen. The bounded native Desktop v0.6.1
+Project Command path now connects the reviewed boundaries while keeping KerniQ
+as trusted catalog/risk/approval/native owner.
 KerniQ Action Runtime validates proposal, digest, approval, expiry, generation,
 and action identity. The bridge maps validated context into an AgentFuse
 `ToolCallRequest`; AgentFuse evaluates configured policy and emits canonical
@@ -250,11 +250,16 @@ and action identity. The bridge maps validated context into an AgentFuse
 `hold`. The plan persists command-linked `ACTION_DECIDED` and retains
 `COMMAND_STARTED` / `COMMAND_COMPLETED` as the single physical command
 lifecycle. Rust catalog re-resolution and no-shell execution remain mandatory.
-Patch is not included.
+Real Tauri proof covers the allow and deny paths, decision/start persistence
+barriers, settlement uncertainty, restart no-replay, stale authority
+invalidation, and controlled duplicate approval. Patch, browser execution,
+other KerniQ actions, and permanent global exactly-once behavior for arbitrary
+direct IPC calls are not included.
 
-Planning details:
+Details:
 
 - [`kerniq_project_command_action_runtime_adapter_planning_v0_6_1.md`](development/kerniq_project_command_action_runtime_adapter_planning_v0_6_1.md)
+- [`kerniq_project_command_real_tauri_proof_v0_6_1_6.md`](development/kerniq_project_command_real_tauri_proof_v0_6_1_6.md)
 - [`ADR-021`](../qodex-config/adr/ADR-021-Project-Command-Action-Runtime-Adapter.md)
 
 ### 5. Diff Engine (`packages/diff-engine`)

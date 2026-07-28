@@ -22,7 +22,7 @@ Command migration remained outside that proof milestone.
 
 ### v0.6.1 - Project Command Action Runtime Adapter
 
-**Status:** v0.6.1.1 through v0.6.1.4 merged; v0.6.1.5 implemented in Draft PR; v0.6.1.6 not started
+**Status:** v0.6.1.1 through v0.6.1.5 merged; v0.6.1.6 real proof complete and ready for Draft PR review
 
 The source audit, responsibility boundary, typed contracts, lifecycle decision,
 threat model, six implementation slices, automated test plan, and real Tauri
@@ -55,14 +55,23 @@ re-resolution, project authorization, and no-shell implementation are
 unchanged. This claim applies only to the bounded native Desktop Project
 Command path, not Patch, Git, MCP, browser actions, or arbitrary shell.
 
-The v0.6.1.5 Draft PR adds deterministic persistence-fault, cancellation,
+The merged v0.6.1.5 slice adds deterministic persistence-fault, cancellation,
 duplicate, restart, drift, timeout, result-bound, cache-cleanup, and no-replay
 coverage. It resets unstarted pre-restart allow evidence before fresh
 reapproval, releases transient live decision state on every terminal path, and
-prevents raw runner diagnostics from reaching model-visible results. It does
-not claim real Tauri proof or frozen status. v0.6.1.6 has not started.
+prevents raw runner diagnostics from reaching model-visible results.
+
+The v0.6.1.6 review branch adds a dual-gated real Tauri proof and one bounded
+native request-admission correction exposed by that proof. The isolated proof
+uses the actual SQLite store, managed Python bridge, pinned AgentFuse
+`RuntimeGuard.evaluate()`, Tauri IPC, Rust catalog re-resolution, and no-shell
+process. It proves allow, human deny, canonical block, zero-dispatch
+persistence barriers, settlement interruption, restart no-replay, stale
+authority invalidation, and controlled lifecycle at-most-once behavior. Final
+freeze remains pending Draft PR CI, review, and merge.
 
 - [v0.6.1 planning document](kerniq_project_command_action_runtime_adapter_planning_v0_6_1.md)
+- [v0.6.1.6 real Tauri proof](kerniq_project_command_real_tauri_proof_v0_6_1_6.md)
 - [ADR-021](../../qodex-config/adr/ADR-021-Project-Command-Action-Runtime-Adapter.md)
 
 ### v0.7 - Coding Pack Product Integration
