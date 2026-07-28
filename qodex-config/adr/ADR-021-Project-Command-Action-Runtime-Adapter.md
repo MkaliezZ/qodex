@@ -1,8 +1,8 @@
 # ADR-021
 
-**Status:** Accepted plan; v0.6.1.1 through v0.6.1.4 merged; v0.6.1.5 implemented in Draft PR; v0.6.1.6 not started
+**Status:** Accepted plan; v0.6.1.1 through v0.6.1.5 merged; v0.6.1.6 real proof ready for Draft PR review
 **Date:** 2026-07-26
-**Updated:** 2026-07-27
+**Updated:** 2026-07-29
 
 ## Context
 
@@ -185,7 +185,7 @@ Project Command paths.
 
 ### v0.6.1.5 implementation boundary
 
-The v0.6.1.5 Draft PR adds deterministic fault and recovery evidence around the
+The merged v0.6.1.5 slice adds deterministic fault and recovery evidence around the
 merged command path. It covers proposal, approval, decision, start, execution,
 and settlement boundaries; cancellation races; duplicate submissions; restart
 positions; project and catalog drift; timeout/output fixtures; cache release;
@@ -197,8 +197,28 @@ until matching settlement evidence exists and is never automatically replayed.
 The native Rust runner, managed Python bridge, Session schema version, package
 manifests, workflow, and lockfile remain unchanged.
 
-This slice is not frozen and does not claim a real Tauri smoke. v0.6.1.6 real
-Tauri proof, result review, and freeze have not started.
+This slice did not claim a real Tauri smoke or frozen status.
+
+### v0.6.1.6 proof and correction boundary
+
+The v0.6.1.6 review branch adds a dual-gated proof surface that uses the actual
+Tauri process, SQLite Session store, managed Python bridge, pinned canonical
+AgentFuse source, `RuntimeGuard.evaluate()`, Tauri IPC, Rust catalog
+re-resolution, and direct no-shell process.
+
+The real proof exposed one bounded native admission defect: Rust still accepted
+only the older trusted proof fixture while the merged Project Command request
+correctly supplied the frozen profile and digest. The correction accepts
+exactly one trusted fixture or exactly the fixed
+`kerniq-project-command-v1` profile/digest pair, and rejects unknown,
+incomplete, or ambiguous selection. It does not change the Python bridge,
+AgentFuse identity, Session schema, catalog, or physical runner.
+
+The rerun proves allow, human deny, canonical block, decision/start
+zero-dispatch barriers, settlement interruption, restart no-replay,
+allowed-unstarted authority invalidation, controlled duplicate approval, and
+active-run identity coalescing. Final freeze remains pending Draft PR CI,
+review, and merge.
 
 ### Target lifecycle
 

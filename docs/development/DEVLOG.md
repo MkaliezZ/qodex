@@ -1003,7 +1003,7 @@ decision and immutable trusted command snapshot. It merged through merge commit
 
 ### KerniQ v0.6.1.5 Project Command Fault and Recovery Hardening
 
-**Date:** 2026-07-27  |  **Status:** Implemented in Draft PR; not merged or frozen
+**Date:** 2026-07-27  |  **Status:** Merged through `c5e214a43f9102c23f9c0a973782d227606a5c2b`; not frozen
 
 Added deterministic fault, cancellation, duplicate, restart, drift, timeout,
 bounded-result, and cache-lifecycle coverage around the merged Project Command
@@ -1018,6 +1018,57 @@ paths release proposal and decision caches. Native runner rejection is reduced
 to a generic model-visible failure instead of forwarding raw diagnostics.
 
 The native Rust runner, managed Python bridge, package manifests, workflow,
-lockfile, and Session schema version are unchanged. Timeout and output
-properties remain unit-fixture and existing Rust-test evidence only. The final
-real Tauri proof and freeze are reserved for v0.6.1.6, which has not started.
+lockfile, and Session schema version were unchanged. Timeout and output
+properties remained unit-fixture and existing Rust-test evidence only at this
+slice. PR #13 merged by merge commit after all five CI jobs and post-merge
+validation passed.
+
+### KerniQ v0.6.1.6 Project Command Real Tauri Proof
+
+**Date:** 2026-07-29  |  **Status:** Real proof complete; Draft PR review pending
+
+Added a dual-gated development harness that drives the actual Tauri application,
+native directory picker, SQLite Session store, managed Python bridge, pinned
+AgentFuse source, public `RuntimeGuard.evaluate()`, `agentfuse_decide` IPC,
+`run_project_command` IPC, Rust catalog re-resolution, and direct no-shell
+fixture process. The ordinary build does not render the proof UI.
+
+The isolated macOS x86_64 matrix proved one durable allow-to-completion
+lifecycle; human deny with zero AgentFuse requests; a canonical proof-only block
+with zero native dispatch; zero dispatch when `ACTION_DECIDED` or
+`COMMAND_STARTED` persistence was rejected; honest interruption when
+`COMMAND_COMPLETED` persistence was rejected after one physical execution; and
+zero provider, policy, or native replay after a real restart.
+
+An allowed-but-unstarted restart projected `RecoveryRequired`, incremented the
+approval generation, and cleared the old approval and decision authority.
+Nearly concurrent approval calls produced one approval, policy request,
+decision, start, physical invocation, and completion. The actual runner
+coalesced a same-identity active `runId` and rejected identity transfer.
+
+The first real allow attempt exposed a bounded Tauri integration defect:
+native request validation accepted only the older trusted proof fixture and
+rejected the already merged frozen Project Command profile/digest before
+Python. The correction admits exactly one trusted fixture or exactly the fixed
+profile/digest pair and rejects unknown, incomplete, or ambiguous selection.
+A Rust regression test covers the corrected boundary. AgentFuse source,
+managed Python bridge, bridge digest, Session schema, command catalog, package
+manifests, workflow, and lockfile remain unchanged.
+
+The supported claim is limited to the controlled native Desktop Project Command
+lifecycle. It does not cover browser execution, Patch, Git, MCP, Office,
+provider actions, arbitrary shell, every project script, or permanent global
+exactly-once behavior for arbitrary direct IPC callers. Evidence and freeze
+preparation are recorded in:
+
+- [`kerniq_project_command_real_tauri_proof_v0_6_1_6.md`](kerniq_project_command_real_tauri_proof_v0_6_1_6.md)
+- [`kerniq_v0_6_1_project_command_result_review_and_freeze.md`](kerniq_v0_6_1_project_command_result_review_and_freeze.md)
+
+Final branch validation passed frozen install, workspace build, all 1,605
+workspace tests, focused Agent (100), Action (35), AgentFuse Adapter (25),
+Session (88), and Desktop (139) suites, and Desktop E2E with 56 passed plus
+four credential-gated skips. Python bridge validation passed 15 tests with two
+canonical-source-gated skips and compileall. Cargo formatting/check passed;
+native tests passed 35 with two explicit maintenance tests ignored. Ordinary
+and proof-enabled Tauri debug builds passed, the ordinary artifact contained no
+proof UI, and `git diff --check` plus privacy/secret scanning passed.

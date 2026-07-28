@@ -1,8 +1,8 @@
 # KerniQ v0.6.1 Project Command Action Runtime Adapter Planning
 
 **Date:** 2026-07-26
-**Updated:** 2026-07-27
-**Status:** v0.6.1.1 through v0.6.1.4 merged; v0.6.1.5 implemented in Draft PR; v0.6.1.6 not started
+**Updated:** 2026-07-29
+**Status:** v0.6.1.1 through v0.6.1.5 merged; v0.6.1.6 real proof complete and ready for Draft PR review
 **Source baseline:** `c7a0b0adf7a0dab4729a2db1a77a58d8c2366beb`
 **v0.6.1.1 implementation baseline:** `7be4a7d69699eeac7498be1d75e17c7c1dc599ad`
 **v0.6.1.1 merge:** `be32ca0caa764aa86e3de341557fedbc2acba0a5`
@@ -13,6 +13,8 @@
 **v0.6.1.4 implementation baseline:** `ca005397b88534ba3663f1f19b0b539de0f94766`
 **v0.6.1.4 merge:** `a36503f198c016daa1f6c1c8f2af1d894c0e95ef`
 **v0.6.1.5 implementation baseline:** `a36503f198c016daa1f6c1c8f2af1d894c0e95ef`
+**v0.6.1.5 merge:** `c5e214a43f9102c23f9c0a973782d227606a5c2b`
+**v0.6.1.6 proof baseline:** `c5e214a43f9102c23f9c0a973782d227606a5c2b`
 
 ## Executive Summary
 
@@ -791,8 +793,9 @@ v0.6.1.1 merged=true
 v0.6.1.2 merged=true
 v0.6.1.3 merged=true
 v0.6.1.4 merged=true
-v0.6.1.5 implemented in Draft PR=true
-v0.6.1.6 implementation started=false
+v0.6.1.5 merged=true
+v0.6.1.6 real Tauri proof complete=true
+v0.6.1.6 Draft PR merged=false
 Project Command native Desktop path migrated=true
 Project Command all environments migrated=false
 Project Command decision path implemented=true
@@ -840,14 +843,19 @@ commands, arbitrary Python, and production claims beyond Project Command.
 
 ## Final Planning Verdict
 
-The current source implements the bounded adapter without altering the native
-runner or introducing a duplicate lifecycle. v0.6.1.1 through v0.6.1.4 are
-merged. v0.6.1.5 is implemented in a Draft PR with deterministic fault,
-cancellation, duplicate, restart, drift, bound, cache-cleanup, and no-replay
-coverage. The claim is limited to the native Desktop Project Command path.
-Real Tauri proof, result review, and freeze remain v0.6.1.6 work and have not
-started.
+The current source implements the bounded adapter without introducing a
+duplicate lifecycle. v0.6.1.1 through v0.6.1.5 are merged. The v0.6.1.6 review
+branch completes the isolated real Tauri proof and fixes the one bounded native
+policy-profile admission defect it exposed. The full matrix was rerun through
+actual SQLite, managed Python, canonical AgentFuse, Tauri IPC, Rust catalog
+resolution, and no-shell execution.
+
+The evidence supports the controlled native Desktop lifecycle only. Final
+freeze remains pending Draft PR CI, review, and merge. See
+[`kerniq_project_command_real_tauri_proof_v0_6_1_6.md`](kerniq_project_command_real_tauri_proof_v0_6_1_6.md)
+and
+[`kerniq_v0_6_1_project_command_result_review_and_freeze.md`](kerniq_v0_6_1_project_command_result_review_and_freeze.md).
 
 ```text
-KERNIQ_V0_6_1_PROJECT_COMMAND_ADAPTER_PLAN_READY_FOR_REVIEW
+READY_FOR_V0_6_1_6_RESULT_REVIEW
 ```

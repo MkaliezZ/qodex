@@ -15,7 +15,7 @@ v0.2.0-beta.1 may still reference the Qodex name.
 
 ![Beta](https://img.shields.io/badge/status-beta-blue)
 ![License](https://img.shields.io/badge/license-MIT-blue)
-![Tests](https://img.shields.io/badge/tests-1404%20passing-green)
+![Tests](https://img.shields.io/badge/tests-1605%20passing-green)
 ![Platform](https://img.shields.io/badge/platform-Desktop%20(Tauri)-purple)
 ![TypeScript](https://img.shields.io/badge/TypeScript-5.5-blue)
 [![CI](https://github.com/MkaliezZ/qodex/actions/workflows/ci.yml/badge.svg)](https://github.com/MkaliezZ/qodex/actions/workflows/ci.yml)
@@ -125,7 +125,7 @@ Full guide: [QUICK_START.md](docs/QUICK_START.md)
 pnpm -r test
 ```
 
-**1,404 tests** across 15 tested workspace projects - all passing.
+**1,605 tests** across 18 tested workspace projects - all passing.
 
 ## Minimal Agent Loop v0.4
 
@@ -239,21 +239,23 @@ The DHMS historical evidence milestone remains `v3.5.2`; the package version
 is independent, and the evidence schema remains
 `agentfuse-evidence-schema-v0.1`.
 
-## Project Command Adapter Planning v0.6.1
+## Project Command AgentFuse Gate v0.6.1
 
-The source-grounded v0.6.1 plan is ready for review. KerniQ owns trusted command
-risk, proposal and approval validation, request/response identity, dispatch,
-and native execution. The KerniQ bridge maps validated context into an
-AgentFuse `ToolCallRequest`; AgentFuse evaluates configured policy and returns
-canonical `allow|block` evidence; KerniQ maps that result to
-`allow|deny|error`. The plan keeps Rust catalog re-resolution and no-shell
-execution, and selects `COMMAND_STARTED` / `COMMAND_COMPLETED` as the single
-physical command lifecycle. No adapter implementation or Project Command
-migration has started.
+KerniQ has one bounded native Desktop Project Command path protected by
+explicit approval, canonical AgentFuse decision evidence, durable start
+evidence, and native catalog re-resolution. It retains direct no-shell
+execution and honest interruption when final persistence is uncertain.
+
+The real Tauri proof covers allow, human deny, canonical block, decision/start
+persistence barriers, settlement uncertainty, restart no-replay, invalidation
+of unstarted pre-restart authority, and controlled duplicate approval. This
+does not claim that every project script is harmless, every KerniQ action is
+AgentFuse-protected, browser execution is protected, or arbitrary direct IPC
+calls have permanent global exactly-once semantics.
 
 See the
 [Project Command adapter plan](docs/development/kerniq_project_command_action_runtime_adapter_planning_v0_6_1.md)
-and [ADR-021](qodex-config/adr/ADR-021-Project-Command-Action-Runtime-Adapter.md).
+and [real Tauri proof](docs/development/kerniq_project_command_real_tauri_proof_v0_6_1_6.md).
 
 ---
 
@@ -262,10 +264,11 @@ and [ADR-021](qodex-config/adr/ADR-021-Project-Command-Action-Runtime-Adapter.md
 The authoritative roadmap is maintained in
 [PRODUCT_ROADMAP.md](docs/development/PRODUCT_ROADMAP.md). v0.4.1 is frozen;
 v0.6 is merged and frozen as the managed Python and universal action
-foundation. v0.6.1 Project Command adapter planning is ready for review, but
-implementation and migration have not started. Patch remains outside the
-planned scope. Installer work is planned for v0.8, and the Stage 2
-namespace-wide rename remains explicitly deferred.
+foundation. The bounded native Desktop Project Command path is implemented and
+its v0.6.1.6 real Tauri result is ready for Draft PR review; final freeze still
+requires review and merge. Patch remains outside this scope. Installer work is
+planned for v0.8, and the Stage 2 namespace-wide rename remains explicitly
+deferred.
 
 ---
 
