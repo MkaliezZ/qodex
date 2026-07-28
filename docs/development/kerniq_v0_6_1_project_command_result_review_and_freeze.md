@@ -1,8 +1,8 @@
 # KerniQ v0.6.1 Project Command Result Review and Freeze Preparation
 
 **Date:** 2026-07-29
-**Status:** Ready for Draft PR #14 result review; PR CI passed; not merged or
-release-frozen
+**Status:** v0.6.1.6 implementation and real proof merged; final freeze seal
+prepared in a separate Draft PR and not yet merged
 **Proof base:** `c5e214a43f9102c23f9c0a973782d227606a5c2b`
 **Verdict:** `READY_FOR_V0_6_1_6_RESULT_REVIEW`
 
@@ -14,7 +14,11 @@ release-frozen
 | Reviewed Draft PR head before status correction | `291534a12b49fd41f5944e9863d0feb1b30c6cd5` |
 | Draft PR | `#14` |
 | Successful PR CI | `30383355384` |
-| PR merged | `false` |
+| Corrected reviewed head | `1d600e7eb4493c7f7e41b7f6fea22ba907c94d4e` |
+| Corrected PR CI | `30389533518` |
+| v0.6.1.6 merge | `4eb7c24c493b0fc135a750f07ed46cbb86ddd461` |
+| Post-merge CI | `30389964085` |
+| PR merged | `true` |
 | Release frozen | `false` |
 
 ## Review Basis
@@ -140,21 +144,17 @@ ALL_KERNIQ_ACTIONS_AGENTFUSE_PROTECTED=false
 
 ## Freeze Procedure
 
-This document prepares, but does not perform, the final freeze. The remaining
-administrative gates are:
-
-1. commit the proof harness/correction and documentation separately;
-2. push the v0.6.1.6 branch;
-3. open the required Draft PR;
-4. pass all Draft PR CI jobs;
-5. complete human result review; and
-6. merge only under a separately authorized release-integration task.
-
-Until those gates complete:
+The implementation and proof PR has passed review and merged. This document
+still does not perform the final freeze. The separate
+[`kerniq_v0_6_1_project_command_final_freeze.md`](kerniq_v0_6_1_project_command_final_freeze.md)
+seal must pass docs-only review and merge before the proposed freeze verdict
+becomes repository state.
 
 ```text
-V0_6_1_6_DRAFT_PR_MERGED=false
+V0_6_1_6_DRAFT_PR_MERGED=true
+FINAL_FREEZE_SEAL_DRAFT_PR_MERGED=false
 V0_6_1_PROJECT_COMMAND_RELEASE_FROZEN=false
+NEXT_IMPLEMENTATION_MILESTONE_STARTED=false
 ```
 
 ## Recommended Review Verdict

@@ -1025,7 +1025,7 @@ validation passed.
 
 ### KerniQ v0.6.1.6 Project Command Real Tauri Proof
 
-**Date:** 2026-07-29  |  **Status:** Real proof complete; Draft PR review pending
+**Date:** 2026-07-29  |  **Status:** Merged through `4eb7c24c493b0fc135a750f07ed46cbb86ddd461`
 
 Added a dual-gated development harness that drives the actual Tauri application,
 native directory picker, SQLite Session store, managed Python bridge, pinned
@@ -1072,3 +1072,23 @@ canonical-source-gated skips and compileall. Cargo formatting/check passed;
 native tests passed 35 with two explicit maintenance tests ignored. Ordinary
 and proof-enabled Tauri debug builds passed, the ordinary artifact contained no
 proof UI, and `git diff --check` plus privacy/secret scanning passed.
+
+PR #14 was corrected with a docs-only evidence-anchor commit, reviewed at
+`1d600e7eb4493c7f7e41b7f6fea22ba907c94d4e`, and merged with an exact-head
+guard. Its corrected CI run `30389533518` and post-merge CI run `30389964085`
+both passed all five jobs. The merge tree is identical to the reviewed head
+tree.
+
+### KerniQ v0.6.1 Project Command Final Freeze Seal Preparation
+
+**Date:** 2026-07-29  |  **Status:** Docs-only Draft PR prepared; not merged
+
+Recorded the exact v0.6.1.1 through v0.6.1.6 merge chain, real proof execution
+code head, frozen AgentFuse identity, bounded native Desktop Project Command
+scope, and explicit non-claims in
+[`kerniq_v0_6_1_project_command_final_freeze.md`](kerniq_v0_6_1_project_command_final_freeze.md).
+
+The proposed verdict is
+`KERNIQ_V0_6_1_PROJECT_COMMAND_AGENTFUSE_GATE_FROZEN`, but it does not become
+the repository freeze state until this separate documentation PR is reviewed
+and merged. No next implementation milestone has started.
