@@ -282,10 +282,13 @@ owns one export lifecycle, while a narrow native adapter owns staged,
 no-overwrite physical export. Session Runtime may reference a verified
 completed artifact but is not a competing lifecycle owner.
 
-Read-only deterministic selection uses project capability and privacy controls.
-Writing/export requires explicit product authorization. AgentFuse participation
-remains an explicit future policy decision and does not judge content quality.
-The v0.6.1 Project Command freeze is unchanged.
+Read-only deterministic selection uses project capability and privacy controls
+without an AgentFuse decision. Writing/export requires explicit product
+authorization plus a separately versioned AgentFuse export-policy decision,
+durably recorded before export start. AgentFuse does not select files or judge
+content quality. Atomic promotion requires same-filesystem staging and has no
+silent cross-filesystem copy fallback. The v0.6.1 Project Command freeze is
+unchanged.
 
 Details:
 

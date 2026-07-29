@@ -36,7 +36,8 @@ repository artifact:
 5. Export is a `write` side effect with an exact proposal and explicit user
    approval.
 6. A narrow native module revalidates source and destination identities and
-   uses operation-owned staging plus atomic no-overwrite promotion.
+   uses operation-owned same-filesystem staging plus atomic no-overwrite
+   promotion.
 7. A dedicated versioned `CodingPackStore` is the sole export lifecycle
    authority. Exported files are the content authority.
 8. Session Runtime may reference a verified completed pack with
@@ -45,14 +46,26 @@ repository artifact:
 
 ## Deterministic Identity
 
-The pack uses relative paths, SHA-256 source digests, byte counts, UTF-8
-encoding, inclusion reasons, exclusion reasons, project fingerprint, purpose,
-and selection-rules version.
+Local-only authority consists of `projectBindingId`, a private-root-derived
+`projectFingerprint`, and an optional opaque destination handle. It is stored
+only in trusted operation metadata for authorization and revalidation. It is
+never written into the portable manifest, included in `sourceFingerprint` or
+`packId`, or exposed to downstream consumers.
 
-`sourceFingerprint` hashes the stable canonical source selection.
-`manifestDigest` hashes the full canonical manifest instance. `packId` derives
-from `sourceFingerprint`. Raw credentials, private roots, home directories, and
-absolute export destinations are forbidden in exported or durable metadata.
+Portable project metadata contains only an optional `projectLabel`. The label
+is absent by default and, when supplied, is explicitly user-controlled,
+bounded, trimmed, control-character-free, and non-authoritative. KerniQ never
+copies the local directory name automatically.
+
+`sourceFingerprint` hashes the canonical schema version, pack version, purpose,
+selection-rules version, sorted source entries, and sorted exclusions. It
+excludes `generatedAt`, `manifestDigest`, `projectLabel`, all local authority,
+private roots, and destinations. Identical source bytes and rules therefore
+have the same fingerprint and `packId` across different local roots or labels.
+`manifestDigest` hashes the full portable manifest instance excluding
+`manifestDigest`, so `generatedAt` or `projectLabel` may change it. Preventing
+local-root inference is a design goal, not an absolute cryptographic
+non-inference claim.
 
 ## Authorization and AgentFuse
 
@@ -60,14 +73,20 @@ Read-only deterministic repository inspection uses ordinary capability and
 privacy controls. It must not be sent through AgentFuse merely because the
 policy engine exists.
 
-Writing or exporting requires explicit product authorization. Action Runtime is
-the proposed provider-neutral in-process contract. Whether AgentFuse supplies a
-policy decision for the new export action remains undecided and requires a
-separate review. AgentFuse does not select files, summarize content, judge
-quality, or certify the absence of secrets.
+Writing or exporting requires explicit product authorization and a separately
+versioned AgentFuse policy decision. The future profile ID is
+`kerniq-coding-pack-export-v1`; its digest and implementation belong to v0.7.4.
+The Coding Pack mapper validates the proposal and approval, the KerniQ bridge
+maps bounded export identity to `ToolCallRequest`, AgentFuse evaluates policy,
+and the adapter maps `allow|block|protocol failure` to `allow|deny|error`.
+AgentFuse does not select or rank files, summarize content, judge quality,
+certify the absence of secrets, or interpret repository instructions as
+policy.
 
 ```text
-CODING_PACK_READ_SELECTION_AGENTFUSE_REQUIRED=UNDECIDED_AFTER_AUDIT
+CODING_PACK_READ_SELECTION_AGENTFUSE_REQUIRED=false
+CODING_PACK_EXPORT_AGENTFUSE_DECISION_REQUIRED=true
+PACK_DECIDED_BEFORE_EXPORT_START=true
 CODING_PACK_WRITE_OR_EXPORT_BOUNDARY_REQUIRED=true
 PROJECT_COMMAND_FREEZE_CHANGED=false
 ```
@@ -79,9 +98,11 @@ The authoritative future operation sequence is:
 ```text
 PACK_PROPOSED
 PACK_CONFIRMED
+PACK_DECIDED allow
 PACK_EXPORT_STARTED
 PACK_EXPORT_COMPLETED
-or PACK_EXPORT_INTERRUPTED
+or PACK_CONFIRMED -> PACK_DECIDED deny|error
+or PACK_EXPORT_STARTED -> PACK_EXPORT_INTERRUPTED
 ```
 
 These are dedicated Coding Pack store states, not Session events. The store
@@ -89,6 +110,26 @@ persists identities, status, bounded warnings, and receipts, not source text or
 private paths. Started operations never auto-resume after restart. Only a
 temporary path carrying the matching operation marker may be inspected or
 cleaned.
+
+The store rejects export start without durable `PACK_DECIDED allow`. Deny,
+error, decision-persistence failure, or start-persistence failure causes zero
+physical writes. Session may append `ARTIFACT_CREATED` only after verified
+completion and never mirrors this lifecycle.
+
+## Atomic Promotion
+
+Staging is created under the approved destination parent or another path proven
+to be on the same filesystem, with an unpredictable operation-owned name.
+Source digests and destination authority are revalidated before the first
+write. All staged files are closed before a platform-reviewed atomic
+no-overwrite promotion. Existing unrelated destinations are never overwritten.
+If same-filesystem atomic promotion cannot be proven, export fails closed; no
+cross-filesystem copy fallback is described as atomic.
+
+```text
+CODING_PACK_ATOMIC_PROMOTION_REQUIRES_SAME_FILESYSTEM=true
+CROSS_FILESYSTEM_COPY_FALLBACK=false
+```
 
 ## Privacy Defaults
 
@@ -154,7 +195,7 @@ paths, provider behavior, managed Python identity, and the v0.6.1 Project
 Command freeze.
 
 ```text
-v0.7 implementation started=false
+V0_7_IMPLEMENTATION_STARTED=false
 Session schema changed=false
 Patch migrated=false
 Git migrated=false

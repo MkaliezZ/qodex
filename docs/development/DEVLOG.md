@@ -1113,8 +1113,12 @@ The planning result is `CURRENT_CODING_PACK_STATE=PLANNED_ONLY`. The
 [v0.7 plan](kerniq_v0_7_coding_pack_product_integration_planning.md) and
 [ADR-022](../../qodex-config/adr/ADR-022-Coding-Pack-Product-Integration.md)
 define a deterministic manifest, explicit write/export authorization, a
-dedicated authoritative export lifecycle, privacy controls, 25-threat model,
-six bounded implementation slices, and real Desktop proof plan.
+dedicated authoritative export lifecycle, privacy controls, 31-threat model,
+six bounded implementation slices, and real Desktop proof plan. The portable
+manifest excludes local binding and private-root-derived identity; read-only
+selection uses ordinary project/privacy controls, while future physical export
+requires a durable, separately versioned AgentFuse decision before start and
+same-filesystem atomic promotion.
 
 No v0.7 implementation, Session schema, workflow, package, test, runtime,
 Project Command freeze, Patch, Git, MCP, browser-native access, or arbitrary

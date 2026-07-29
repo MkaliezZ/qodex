@@ -198,10 +198,10 @@ filesystem access.
 |:--|:--|
 | Who creates a Coding Pack? | The user creates it through the Desktop; KerniQ performs deterministic generation after project authorization. |
 | What problem does it solve? | It turns ephemeral file selection into inspectable, repeatable, provenance-bound repository context. |
-| What inputs are included? | Purpose, project binding/fingerprint, versioned rules, explicit choices, bounded UTF-8 full-file bytes, relative paths, and source evidence. |
+| What inputs are included? | Purpose, versioned rules, explicit choices, bounded UTF-8 full-file bytes, relative paths, source evidence, and local-only authority used to authorize the operation. |
 | What is excluded? | Unsafe, ignored, private, secret-like, binary, invalid, oversized, generated, vendor, linked, submodule, nested-repository, unreadable, or user-removed files; partial ranges are excluded in v0.7. |
 | What identifies a pack? | Canonical `sourceFingerprint`, derived `packId`, and instance `manifestDigest`. |
-| How is provenance retained? | Per-file relative path, digest, bytes, encoding, reason, project fingerprint, purpose, and rules version. |
+| How is provenance retained? | Portable per-file relative path, digest, bytes, encoding, reason, purpose, and rules version; local project authority remains only in trusted operation metadata. |
 | How does the user approve it? | The Desktop shows included files, exclusions, warnings, limits, and digests; confirmation binds that exact preview and destination. |
 | How is it updated? | Re-discovery creates a new fingerprint and preview; no approved pack is silently changed. |
 | How is staleness detected? | Recompute included digests and rules identity before confirmation, before write, and when reopening. |
@@ -210,7 +210,7 @@ filesystem access.
 | Which layer owns UI and persistence? | Desktop React owns UI; a Desktop `CodingPackStore` owns one durable export lifecycle. |
 | Is native filesystem access required? | No for pure manifest logic; yes for real Desktop discovery evidence and atomic physical export. |
 | What physical side effects occur? | Preview has none. Export writes only the explicitly approved pack artifact and bounded operation metadata; it runs no command or network request. |
-| Does AgentFuse participate? | Read-selection use is undecided after audit; export policy use requires separate review; content-quality judgment is prohibited. |
+| Does AgentFuse participate? | Read-only deterministic selection does not require AgentFuse. Physical export requires a separately versioned AgentFuse policy decision; content-quality judgment is prohibited. |
 
 ## Package and Ownership Map
 
@@ -220,7 +220,7 @@ filesystem access.
 | Selection rules, exclusion evidence, source hashing, canonical manifest, staleness | New `@qodex/coding-pack-runtime` | Pure deterministic core; browser-safe exports |
 | Prompt use of a confirmed pack | `@qodex/context-engine` adapter | Consumes confirmed sources; does not mutate the manifest |
 | Preview and confirmation | Desktop React | User sees all included/excluded paths, warnings, sizes, and digest |
-| Approval and in-process side-effect state | `@qodex/action-runtime` | Export is risk `write`; decision provider remains separately reviewed |
+| Approval and in-process side-effect state | `@qodex/action-runtime` plus the future Coding Pack mapper and bridge | Export is risk `write`; AgentFuse evaluates the separately reviewed export profile |
 | Durable pack operation metadata | Desktop `CodingPackStore` adapter | Separate versioned store; no raw source content or absolute root |
 | Native physical export | New bounded Tauri command/module | No shell; revalidates binding, destination, source digests, and output |
 | Optional Session association | Existing `ARTIFACT_CREATED` after success only | Informational reference, not lifecycle authority |
@@ -246,15 +246,20 @@ absolute roots. Candidate order and exclusion order are stable.
 
 ### Boundary 3: Preview and Confirmation
 
-Confirmation binds the exact project fingerprint, purpose, rules version,
-included path/digest list, exclusions, output shape, and preview digest.
-Changing any field invalidates approval.
+Confirmation binds local authority in trusted Desktop metadata and separately
+binds the purpose, rules version, included path/digest list, exclusions, output
+shape, preview digest, and destination authority. Changing any bound field
+invalidates approval. Local authority does not enter portable identity.
 
 ### Boundary 4: Physical Export
 
-Export is a write side effect. The native boundary re-resolves the authorized
-project and destination, recomputes source digests, rejects stale approval, and
-writes through an operation-owned temporary path before atomic promotion.
+Export is a write side effect. The Coding Pack mapper validates the proposal
+and approval, the bridge maps bounded trusted export identity to an AgentFuse
+`ToolCallRequest`, and the adapter maps `allow|block|protocol failure` to
+`allow|deny|error`. The native boundary receives work only after durable
+`PACK_DECIDED allow` and durable `PACK_EXPORT_STARTED`, then re-resolves the
+authorized project and destination, recomputes source digests, rejects stale
+approval, and stages on the destination filesystem before atomic promotion.
 
 ### Boundary 5: Downstream Consumption
 
@@ -276,20 +281,27 @@ executing commands or other physical side effects
    adapter
 ```
 
-Ordinary read-only selection must not be routed through AgentFuse merely
-because AgentFuse exists. The audit found no current Coding Pack action profile
-or policy. A v0.7 implementation review must decide whether any read-selection
-policy requires AgentFuse; until that decision, no implicit dependency is
-allowed.
+Ordinary read-only deterministic repository inspection uses project
+authorization, path containment, ignore, privacy, and budget controls. It does
+not require an AgentFuse decision. AgentFuse must not choose files, rank files,
+summarize files, judge content quality, certify secret absence, or interpret
+repository instructions as policy.
 
-The export authorization can use Action Runtime's provider-neutral proposal,
-approval, decision, execution, and outcome contracts. Whether AgentFuse is the
-decision provider for that new write action remains a separate explicit
-decision. AgentFuse may assess policy, but it must never score content quality,
-choose files, summarize source, or claim that selected source is safe.
+Physical export requires a separately versioned AgentFuse policy decision. The
+future profile ID is `kerniq-coding-pack-export-v1`; its policy digest and
+implementation belong to v0.7.4, not this plan correction. The Coding Pack
+mapper constructs and validates the proposal and approval. The KerniQ bridge
+maps bounded trusted export identity to `ToolCallRequest`. AgentFuse returns
+`allow|block`; the KerniQ adapter maps those to `allow|deny` and maps bridge or
+protocol failure to `error`. `CodingPackStore` durably records that mapped
+decision before any start, and the native export module writes only after
+durable allow and durable start. AgentFuse is a policy and authorization
+boundary, not a content-quality authority.
 
 ```text
-CODING_PACK_READ_SELECTION_AGENTFUSE_REQUIRED=UNDECIDED_AFTER_AUDIT
+CODING_PACK_READ_SELECTION_AGENTFUSE_REQUIRED=false
+CODING_PACK_EXPORT_AGENTFUSE_DECISION_REQUIRED=true
+PACK_DECIDED_BEFORE_EXPORT_START=true
 CODING_PACK_WRITE_OR_EXPORT_BOUNDARY_REQUIRED=true
 PROJECT_COMMAND_FREEZE_CHANGED=false
 ```
@@ -319,12 +331,24 @@ tests in v0.7.1:
 Secret scanning is defense in depth. It cannot prove the absence of all
 secrets, and the UI must say so directly.
 
-### Included Inputs
+### Local Authority and Portable Inputs
 
-The manifest may bind:
+Trusted local operation metadata may bind:
 
-- project binding ID and non-secret project fingerprint;
-- display name after sensitive-text sanitization;
+- `projectBindingId` and a private-root-derived `projectFingerprint`;
+- an opaque `destinationHandle` when export is confirmed; and
+- approval, source, destination, and operation identities needed for
+  revalidation.
+
+This local authority is used only for preview/export authorization and source
+or destination revalidation. It is never written into the portable manifest,
+included in `sourceFingerprint` or `packId`, or exposed to downstream pack
+consumers.
+
+The portable manifest may bind:
+
+- an optional, explicitly user-controlled `projectLabel` that is bounded,
+  trimmed, control-character-free, non-authoritative, and absent by default;
 - purpose and selection-rules version;
 - explicit include/remove choices;
 - normalized relative path;
@@ -339,6 +363,9 @@ The manifest may bind:
 
 It must not include raw credentials, source text in ledger metadata, private
 absolute roots, home directories, provider keys, or export destination paths.
+It also must not contain local `projectBindingId`, a private-root-derived
+`projectFingerprint`, an automatically copied local folder name, or a
+`destinationHandle`.
 
 ### Excluded Files and Ranges
 
@@ -376,7 +403,7 @@ separators.
 
 ```text
 sourceFingerprint =
-  sha256(canonical(projectFingerprint, purpose, rulesVersion,
+  sha256(canonical(schemaVersion, packVersion, purpose, rulesVersion,
                    included sources, exclusions))
 
 packId =
@@ -386,10 +413,15 @@ manifestDigest =
   sha256(canonical(full manifest excluding manifestDigest))
 ```
 
-`sourceFingerprint` is deterministic for the same source bytes and rules.
-`generatedAt` is included in the instance manifest and therefore in
-`manifestDigest`, but not in `sourceFingerprint`. This distinguishes stable
-source identity from one export instance.
+`sourceFingerprint` identifies exported source content and deterministic
+selection, not the local directory. It excludes `generatedAt`,
+`manifestDigest`, local binding/fingerprint, private root, destination, local
+directory display name, and optional `projectLabel`. The same source bytes and
+rules in two different local roots therefore produce the same
+`sourceFingerprint`; changing only `projectLabel` also leaves it unchanged.
+`projectLabel` and `generatedAt` may change the instance `manifestDigest`.
+Preventing local-root inference is a required design goal, not an absolute
+cryptographic non-inference claim.
 
 ### Proposed Manifest Fields
 
@@ -399,11 +431,7 @@ interface CodingPackManifest {
   packVersion: "0.7";
   packId: string;
   purpose: CodingPackPurpose;
-  project: {
-    bindingId: string;
-    displayName: string;
-    fingerprint: string;
-  };
+  project: CodingPackPortableProject;
   selectionRulesVersion: string;
   sources: CodingPackFileEntry[];
   exclusions: CodingPackExclusion[];
@@ -413,8 +441,9 @@ interface CodingPackManifest {
 }
 ```
 
-The exported manifest contains relative paths and digests, never the private
-root or destination.
+The exported manifest contains relative paths, digests, and at most an
+explicitly supplied portable label. It never contains local authority, a
+private root, an automatic directory name, or a destination.
 
 ## Proposed Product Flow
 
@@ -429,10 +458,14 @@ Open authorized project
 -> user removes optional files or refreshes
 -> revalidate source fingerprint
 -> user explicitly confirms exact export proposal and destination
--> persist PACK_CONFIRMED and PACK_EXPORT_STARTED in the Coding Pack store
+-> persist PACK_CONFIRMED in the Coding Pack store
+-> evaluate the versioned AgentFuse export policy
+-> persist PACK_DECIDED allow in the Coding Pack store
+-> persist PACK_EXPORT_STARTED in the Coding Pack store
 -> native boundary revalidates project, destination, and every source digest
--> stage manifest and source files in an operation-owned temporary directory
--> atomically promote without overwriting unrelated data
+-> stage closed files under the approved destination parent or another proven
+   same-filesystem path using an unpredictable operation-owned name
+-> use a platform-reviewed atomic no-overwrite promotion
 -> persist PACK_EXPORT_COMPLETED and a bounded receipt
 -> optionally append an informational Session ARTIFACT_CREATED reference
 ```
@@ -445,8 +478,8 @@ discovery, hashing, manifesting, preview, staleness, or export.
 
 - Recompute every included digest immediately before confirmation.
 - Recompute again at the native pre-dispatch boundary.
-- Compare selection rules version, project binding, included paths, digests,
-  byte counts, and exclusion set.
+- Compare local project authority separately from the portable selection rules
+  version, included paths, digests, byte counts, and exclusion set.
 - Mark a durable pack stale when the current source fingerprint differs.
 - Never silently update an approved pack.
 - Refresh creates a new source fingerprint and requires new confirmation.
@@ -462,11 +495,19 @@ type CodingPackPurpose =
   | "review_handoff";
 
 interface CodingPackSource {
-  projectBindingId: string;
-  projectFingerprint: string;
   relativePath: string;
   content: Uint8Array;
   encoding: "utf-8";
+}
+
+interface CodingPackLocalAuthority {
+  projectBindingId: string;
+  projectFingerprint: string;
+  destinationHandle?: string;
+}
+
+interface CodingPackPortableProject {
+  projectLabel?: string;
 }
 
 interface CodingPackFileEntry {
@@ -549,10 +590,12 @@ interface CodingPackFailure {
 }
 ```
 
-Raw source text, private roots, and absolute destinations are prohibited in
-action parameters, durable receipts, Session entries, and exported provenance.
-The native adapter resolves an opaque destination handle held in private
-Desktop state.
+`CodingPackLocalAuthority` is trusted local operation metadata only. It is not
+accepted by the manifest builder and is never serialized into portable
+provenance. Raw source text, private roots, and absolute destinations are
+prohibited in action parameters, durable receipts, Session entries, and
+exported provenance. The native adapter resolves an opaque destination handle
+held in private Desktop state.
 
 ## Persistence and Lifecycle Decision
 
@@ -567,22 +610,30 @@ Use a combination:
 3. optional Session `ARTIFACT_CREATED` association only after verified success.
 
 Do not add pack events to `SessionEventType` in the first implementation. The
-current generic Session action projection requires policy fields including
-`agentFuseCommit`, while AgentFuse participation in Coding Pack export remains
-undecided. Reusing it now would either make a false AgentFuse claim or couple
-the pack to a policy decision that has not been reviewed.
+future Coding Pack export profile is separately versioned and is not
+implemented until v0.7.4. Reusing Session's generic action projection would
+create a competing lifecycle and prematurely couple this plan to policy
+evidence fields that have not yet been implemented.
 
 The dedicated store is authoritative for one export lifecycle:
 
 ```text
 PACK_PROPOSED
 -> PACK_CONFIRMED
+-> PACK_DECIDED allow
 -> PACK_EXPORT_STARTED
 -> PACK_EXPORT_COMPLETED
 
 or
 
-PACK_EXPORT_INTERRUPTED
+PACK_PROPOSED
+-> PACK_CONFIRMED
+-> PACK_DECIDED deny|error
+
+or
+
+PACK_EXPORT_STARTED
+-> PACK_EXPORT_INTERRUPTED
 ```
 
 These are Coding Pack store states, not new Session events. One operation ID,
@@ -590,6 +641,35 @@ pack ID, approval ID, source fingerprint, manifest digest, and destination
 fingerprint bind the sequence. The store contains no source bytes or private
 absolute path. A separate versioned SQLite database or equivalent transactional
 store is preferred so Session schema remains unchanged.
+
+The store enforces these invariants:
+
+- `PACK_EXPORT_STARTED` without `PACK_DECIDED allow` is rejected;
+- `PACK_DECIDED deny` or `PACK_DECIDED error` causes no export start and no
+  physical write;
+- decision persistence failure causes no export start and no physical write;
+- start persistence failure causes no physical write; and
+- Session may append `ARTIFACT_CREATED` only after verified completion.
+
+### Atomic Promotion
+
+- Create staging under the approved destination parent or another path proven
+  to be on the same filesystem.
+- Use an unpredictable, operation-owned temporary name.
+- Revalidate source digests and destination authority before the first write.
+- Close every staged file before promotion.
+- Create the target with no-overwrite semantics and use a platform-reviewed
+  same-filesystem atomic primitive.
+- Never overwrite an existing unrelated destination.
+- Do not silently describe a cross-filesystem fallback copy as atomic.
+- If same-filesystem atomic promotion cannot be established, fail closed. A
+  future truthful non-atomic operation would require a separate specification
+  and interruption evidence.
+
+```text
+CODING_PACK_ATOMIC_PROMOTION_REQUIRES_SAME_FILESYSTEM=true
+CROSS_FILESYSTEM_COPY_FALLBACK=false
+```
 
 ### Recovery
 
@@ -636,6 +716,12 @@ but cannot prove that a pack contains no secret or private information.
 | Duplicate export | Coding Pack store/native | Idempotency key from operation and manifest; no blind overwrite | Existing verified receipt/artifact digest | Return verified receipt or fail collision | Concurrent double click and repeated request |
 | Partial export failure | Native exporter | Operation-owned staging plus atomic promotion | Durable started/interrupted status and temp marker | Leave no claimed completion; preserve recoverable temp | Inject failure at each file and rename boundary |
 | Restart after interrupted export | Coding Pack store/native | Recover started operations without auto-resume | Store status plus owned marker/digest inspection | Mark interrupted; offer bounded retry/cleanup | Kill process before/after promotion and restart |
+| Portable manifest leaks local binding ID | Coding Pack core | Portable schema excludes local authority fields | Serialize and scan manifest before acceptance | Reject manifest and block export | Attempt to inject `projectBindingId` into portable input |
+| Portable manifest leaks private-root-derived fingerprint | Coding Pack core | Source identity excludes local fingerprint and root | Privacy regression scans canonical manifest and identities | Reject manifest and block export | Different-root fixtures plus path-derived fingerprint sentinel |
+| Portable manifest copies local directory name without consent | Desktop/Coding Pack core | `projectLabel` absent by default and accepted only as explicit bounded input | Preview identifies optional user label provenance | Omit label or reject invalid label | Local folder sentinel absent unless explicitly supplied |
+| Same source in different roots receives different source fingerprint | Coding Pack core | Canonical source identity hashes only portable content and deterministic rules | Cross-root fixture compares fingerprint and pack ID | Fail identity verification | Identical bytes/rules under POSIX and Windows root fixtures |
+| Cross-volume staging presented as atomic | Native exporter | Prove staging and target share a filesystem before write | Operation evidence records reviewed promotion primitive and filesystem check | Fail closed before physical write | Cross-volume destination fixture with zero-write assertion |
+| Export starts without durable AgentFuse allow | Coding Pack store/native | Require persisted `PACK_DECIDED allow` before persisted start | Ordered lifecycle evidence and decision identity | Reject start and perform zero writes | Missing, deny, error, and decision-persistence-failure cases |
 
 ## Compatibility Constraints
 
@@ -814,7 +900,7 @@ CI_NODE20_DEPRECATION_REVIEW_REQUIRED=true
 ## Explicit Non-Goals
 
 ```text
-v0.7 implementation started=false
+V0_7_IMPLEMENTATION_STARTED=false
 Coding Pack generation implemented=false
 Coding Pack export implemented=false
 Session schema changed=false
@@ -837,25 +923,21 @@ upload, collaboration sync, and claims that a secret scanner proves safety.
 
 ## Open Questions
 
-1. Should read-only deterministic selection remain entirely outside AgentFuse,
-   or is there a separately justified privacy policy use case?
-2. Should Coding Pack export use AgentFuse as Action Runtime's decision
-   provider, or a bounded local product policy with explicit approval?
-3. Which `.gitignore` implementation meets compatibility and dependency
+1. Which `.gitignore` implementation meets compatibility and dependency
    constraints without broadening the package surface?
-4. Are the proposed 500-file, 512-KiB-per-file, and 10-MiB-total defaults
+2. Are the proposed 500-file, 512-KiB-per-file, and 10-MiB-total defaults
    appropriate after real repository benchmarks?
-5. Should v0.7 export only to a new user-selected directory, or also support a
+3. Should v0.7 export only to a new user-selected directory, or also support a
    fixed project-relative artifact root after explicit opt-in?
-6. Should external destinations be reopenable through an OS bookmark/capability
+4. Should external destinations be reopenable through an OS bookmark/capability
    rather than a stored path?
-7. Is a separate Coding Pack SQLite database preferable to a versioned atomic
+5. Is a separate Coding Pack SQLite database preferable to a versioned atomic
    metadata file under app data?
-8. Should a completed pack be attachable to Context Engine directly, or only
+6. Should a completed pack be attachable to Context Engine directly, or only
    after the user confirms it is current?
-9. Which license/provenance warnings are required before exporting third-party
+7. Which license/provenance warnings are required before exporting third-party
    code?
-10. Should source ranges remain excluded for all v0.7 slices?
+8. Should source ranges remain excluded for all v0.7 slices?
 
 ## Final Planning Verdict
 
@@ -867,7 +949,14 @@ physical writes to a narrow native boundary. It preserves the frozen Project
 Command gate and keeps AgentFuse out of content-quality judgment.
 
 ```text
-CODING_PACK_READ_SELECTION_AGENTFUSE_REQUIRED=UNDECIDED_AFTER_AUDIT
+PORTABLE_MANIFEST_CONTAINS_LOCAL_BINDING_ID=false
+PORTABLE_MANIFEST_CONTAINS_PRIVATE_ROOT_FINGERPRINT=false
+PORTABLE_MANIFEST_AUTO_COPIES_LOCAL_DISPLAY_NAME=false
+CODING_PACK_READ_SELECTION_AGENTFUSE_REQUIRED=false
+CODING_PACK_EXPORT_AGENTFUSE_DECISION_REQUIRED=true
+PACK_DECIDED_BEFORE_EXPORT_START=true
+CODING_PACK_ATOMIC_PROMOTION_REQUIRES_SAME_FILESYSTEM=true
+CROSS_FILESYSTEM_COPY_FALLBACK=false
 CODING_PACK_WRITE_OR_EXPORT_BOUNDARY_REQUIRED=true
 PROJECT_COMMAND_FREEZE_CHANGED=false
 CI_NODE20_DEPRECATION_REVIEW_REQUIRED=true
