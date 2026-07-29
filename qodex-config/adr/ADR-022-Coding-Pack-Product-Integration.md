@@ -215,12 +215,13 @@ CI_NODE20_DEPRECATION_REVIEW_REQUIRED=true
 
 ## v0.7.1 Implementation Boundary
 
-The first bounded slice is implemented for Draft PR review in
+The first bounded slice merged through PR #18 and merge commit
+`d01ad3b71a83efe906c262fa466417d325969946` in
 `@qodex/coding-pack-runtime`. It contains only browser-safe contracts, exact
 UTF-8 source hashing, fixed bounds, canonical portable manifest identity,
 deep-freeze, serialization, and verification. It has no runtime dependencies.
 
-The unmerged manifest contract was corrected in place: source entries use
+The then-unmerged manifest contract was corrected in place: source entries use
 `inclusionReasonCode`, selection rules versions are portable machine
 identifiers, metadata privacy checks target the actual portable fields,
 ill-formed UTF-16 is rejected, and RFC 3339 `-00:00` is not accepted as a known
@@ -233,17 +234,59 @@ PORTABLE_INCLUSION_REASON_FREE_TEXT=false
 INCLUSION_REASON_MACHINE_CODE=true
 SELECTION_RULES_VERSION_PORTABLE_IDENTIFIER=true
 ILL_FORMED_UTF16_ACCEPTED=false
-V0_7_2_STARTED=false
+V0_7_2_STARTED_AT_V0_7_1_MERGE=false
 FILESYSTEM_DISCOVERY_IMPLEMENTED=false
-GITIGNORE_PARSING_IMPLEMENTED=false
-SECRET_SCANNING_IMPLEMENTED=false
+GITIGNORE_PARSER_IMPLEMENTED=false
+CONTENT_SECRET_SCANNING_IMPLEMENTED=false
 CODING_PACK_UI_IMPLEMENTED=false
-CODING_PACK_PERSISTENCE_IMPLEMENTED=false
+CODING_PACK_STORE_IMPLEMENTED=false
 CODING_PACK_EXPORT_IMPLEMENTED=false
 CODING_PACK_NATIVE_MODULE_IMPLEMENTED=false
-CODING_PACK_ACTION_RUNTIME_INTEGRATION=false
-CODING_PACK_AGENTFUSE_INTEGRATION=false
+ACTION_RUNTIME_CONNECTED=false
+AGENTFUSE_CONNECTED=false
 PACK_DECIDED_PERSISTENCE_IMPLEMENTED=false
+SESSION_SCHEMA_CHANGED=false
+PROJECT_COMMAND_FREEZE_CHANGED=false
+PATCH_MIGRATED=false
+ARBITRARY_FILE_READ_ADDED=false
+ARBITRARY_FILE_WRITE_ADDED=false
+ARBITRARY_SHELL_ADDED=false
+WORKFLOW_CHANGED=false
+```
+
+## v0.7.2 Implementation Boundary
+
+The second bounded slice adds only a pure browser-safe selection and
+path-classification API to `@qodex/coding-pack-runtime`. The caller supplies
+project-relative candidate paths, exact bytes, reviewed origin codes, and
+optional project-ignore decisions. The package does not discover, open, or
+write files.
+
+The selector validates and defensively copies the complete input, rejects exact
+duplicates and fail-closed case-fold/NFC collisions, orders candidates by exact
+UTF-8 bytes, applies non-overridable private, credential, generated, vendor,
+and obvious binary path rules, validates UTF-8 without replacement, and applies
+the reviewed fixed budgets in deterministic order. Its deep-frozen result is
+manifest-compatible but does not create a manifest.
+
+Path and filename classification does not prove that included text contains no
+secret. v0.7.2 does not parse `.gitignore`, scan content, emit source snippets,
+or connect the authorized Project Runtime adapter.
+
+```text
+V0_7_1_MERGED=true
+CODING_PACK_SELECTION_CORE_IMPLEMENTED=true
+AUTHORIZED_PROJECT_DISCOVERY_CONNECTED=false
+GITIGNORE_PARSER_IMPLEMENTED=false
+PROJECT_IGNORE_DECISION_CALLER_SUPPLIED=true
+CONTENT_SECRET_SCANNING_IMPLEMENTED=false
+PATH_BASED_PRIVACY_CLASSIFICATION_IMPLEMENTED=true
+SECRET_ABSENCE_PROVEN=false
+CODING_PACK_UI_IMPLEMENTED=false
+CODING_PACK_STORE_IMPLEMENTED=false
+CODING_PACK_EXPORT_IMPLEMENTED=false
+ACTION_RUNTIME_CONNECTED=false
+AGENTFUSE_CONNECTED=false
 SESSION_SCHEMA_CHANGED=false
 PROJECT_COMMAND_FREEZE_CHANGED=false
 PATCH_MIGRATED=false

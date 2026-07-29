@@ -763,15 +763,19 @@ End in one reviewable Draft PR.
 
 ### v0.7.2 - Selection, Privacy, and Source Evidence
 
-**Objective:** Add bounded discovery over Project Runtime adapters with real
-size/encoding evidence, `.gitignore` semantics, hard privacy exclusions, and
-explicit exclusion reasons.
+**Objective:** Add a pure deterministic selector over an explicit
+caller-supplied set of project-relative candidate paths and exact bytes, with
+UTF-8 evidence, hard path-based privacy exclusions, collision checks, fixed
+budgets, and explicit exclusion reason codes.
 
-**Tests:** Ignore rules, secrets, binary/encoding, size caps, symlinks,
-traversal, submodules, nested repositories, generated/vendor paths, malicious
-filenames, and large repositories.
+**Tests:** Input-order independence, caller-supplied project-ignore decisions,
+credential-like and generated/vendor paths, binary/encoding classification,
+size caps, malformed paths, case and normalization collisions, malicious
+filenames, deep immutability, and manifest compatibility.
 
-**Boundary:** Read-only preview inputs only. No artifact write. End in one
+**Boundary:** No filesystem discovery, `.gitignore` parser, content secret
+scanner, Desktop preview, persistence, or artifact write. A future authorized
+Project Runtime adapter supplies candidates and ignore decisions. End in one
 reviewable Draft PR.
 
 ### v0.7.3 - Preview and User Confirmation UI
@@ -974,7 +978,7 @@ CI_NODE20_DEPRECATION_REVIEW_REQUIRED=true
 V0_7_PLANNING_APPROVED_AND_MERGED
 ```
 
-## v0.7.1 Implementation Status
+## v0.7.1 and v0.7.2 Implementation Status
 
 The corrected product plan was approved and merged through PR #17:
 
@@ -984,7 +988,8 @@ V0_7_PLANNING_MERGE_COMMIT=46ae1d405a5519477de7da3d1eba51c7e0ae5640
 V0_7_PLANNING_MERGED=true
 ```
 
-v0.7.1 is implemented for review in a Draft PR as the pure browser-safe
+v0.7.1 merged through PR #18 and merge commit
+`d01ad3b71a83efe906c262fa466417d325969946` as the pure browser-safe
 `@qodex/coding-pack-runtime` package. It includes typed portable/local
 contracts, strict portable path validation, exact UTF-8 byte hashing, the
 reviewed default limits, deterministic canonical identity, deep-frozen
@@ -1006,24 +1011,34 @@ PROJECT_LABEL_EXPLICIT_USER_FIELD=true
 PROJECT_LABEL_AUTOMATIC_LOCAL_COPY=false
 ```
 
-The implementation stops before v0.7.2:
-
-Case-fold collision policy and Unicode-normalization collision policy remain
-v0.7.2 work; v0.7.1 preserves exact code points and does not claim universal
-cross-platform collision protection.
+v0.7.2 adds the pure `selectCodingPackSources` core for explicit caller-supplied
+candidates. It validates all candidate identities before UTF-8-byte sorting,
+fails closed on case-fold and NFC-equivalent path collisions, applies
+non-overridable private/credential/generated/vendor rules, classifies obvious
+binary extensions and invalid UTF-8, and deterministically applies fixed
+per-file, file-count, and aggregate-byte limits. The deep-frozen result is
+directly usable by the separate manifest builder.
 
 ```text
-V0_7_1_IMPLEMENTED_IN_DRAFT_PR=true
-V0_7_2_STARTED=false
+V0_7_1_MERGED=true
+V0_7_2_DETERMINISTIC_SELECTION_CORE_IMPLEMENTED_IN_DRAFT_PR=true
+CODING_PACK_SELECTION_CORE_IMPLEMENTED=true
+CASE_FOLD_COLLISION_POLICY=FAIL_CLOSED
+UNICODE_NORMALIZATION_COLLISION_POLICY=FAIL_CLOSED
+INPUT_ORDER_AFFECTS_SELECTION=false
+AUTHORIZED_PROJECT_DISCOVERY_CONNECTED=false
 FILESYSTEM_DISCOVERY_IMPLEMENTED=false
-GITIGNORE_PARSING_IMPLEMENTED=false
-SECRET_SCANNING_IMPLEMENTED=false
+GITIGNORE_PARSER_IMPLEMENTED=false
+PROJECT_IGNORE_DECISION_CALLER_SUPPLIED=true
+CONTENT_SECRET_SCANNING_IMPLEMENTED=false
+PATH_BASED_PRIVACY_CLASSIFICATION_IMPLEMENTED=true
+SECRET_ABSENCE_PROVEN=false
 CODING_PACK_UI_IMPLEMENTED=false
-CODING_PACK_PERSISTENCE_IMPLEMENTED=false
+CODING_PACK_STORE_IMPLEMENTED=false
 CODING_PACK_EXPORT_IMPLEMENTED=false
 CODING_PACK_NATIVE_MODULE_IMPLEMENTED=false
-CODING_PACK_ACTION_RUNTIME_INTEGRATION=false
-CODING_PACK_AGENTFUSE_INTEGRATION=false
+ACTION_RUNTIME_CONNECTED=false
+AGENTFUSE_CONNECTED=false
 PACK_DECIDED_PERSISTENCE_IMPLEMENTED=false
 SESSION_SCHEMA_CHANGED=false
 PROJECT_COMMAND_FREEZE_CHANGED=false

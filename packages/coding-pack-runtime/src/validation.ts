@@ -300,7 +300,18 @@ function rejectPortablePrivateIdentity(value: string, label: string): void {
   if (
     value.includes("/")
     || value.includes("\\")
-    || LOCAL_IDENTITY_FIELD_PATTERN.test(value)
+  ) {
+    throw new CodingPackManifestError(
+      "invalid_input",
+      `${label} must not contain local authority identity or path material.`,
+    );
+  }
+  rejectPortableLocalIdentity(value, label);
+}
+
+export function rejectPortableLocalIdentity(value: string, label: string): void {
+  if (
+    LOCAL_IDENTITY_FIELD_PATTERN.test(value)
     || LOCAL_PROJECT_ID_PATTERN.test(value)
     || LOCAL_FINGERPRINT_PATTERN.test(value)
     || DESTINATION_HANDLE_PATTERN.test(value)

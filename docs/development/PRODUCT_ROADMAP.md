@@ -81,7 +81,9 @@ scope is frozen and the next implementation milestone has not started.
 
 **Status:** Product planning merged in
 `46ae1d405a5519477de7da3d1eba51c7e0ae5640`; v0.7.1 contracts and deterministic
-portable manifest implemented for Draft PR review; v0.7.2 not started
+portable manifest merged in `d01ad3b71a83efe906c262fa466417d325969946`;
+v0.7.2 deterministic selection and path-based privacy core implemented for
+Draft PR review
 
 The source audit found authorized project reads, selected-file context
 assembly, project binding, action contracts, and Session persistence, but no
@@ -100,13 +102,16 @@ not change.
 Repo2Prompt, Agent Doctor, Agent Rules Kit, and Git Task Checkpoints remain
 roadmap context, not currently integrated Coding Pack capabilities.
 
-v0.7.1 is a pure browser-safe package slice only. Its pre-merge contract uses
+v0.7.1 is a pure browser-safe package slice only. Its contract uses
 portable machine codes for inclusion reasons and selection-rule versions,
 rejects ill-formed UTF-16 before canonical UTF-8 processing, and keeps an
 optional project label explicit rather than deriving it from a local folder.
-Filesystem discovery,
-`.gitignore` parsing, secret scanning, UI, persistence, export, native
-commands, Action Runtime and AgentFuse integration remain unimplemented.
+
+v0.7.2 adds pure caller-supplied candidate selection, fixed hard exclusions,
+strict UTF-8 classification, fail-closed case/normalization collisions, and
+deterministic budgets. Authorized filesystem discovery, `.gitignore` parsing,
+content secret scanning, UI, persistence, export, native commands, Action
+Runtime, and AgentFuse integration remain unimplemented.
 
 ### v0.8 - Product Packaging and Closed Beta
 

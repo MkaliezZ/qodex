@@ -1128,9 +1128,9 @@ recorded for a separate maintenance PR.
 ### KerniQ v0.7.1 Coding Pack Contracts and Deterministic Portable Manifest
 
 PR #17 planning merged through merge commit
-`46ae1d405a5519477de7da3d1eba51c7e0ae5640`. v0.7.1 is implemented for review
-in a Draft PR as the new browser-safe, zero-runtime-dependency
-`@qodex/coding-pack-runtime` package.
+`46ae1d405a5519477de7da3d1eba51c7e0ae5640`. PR #18 merged v0.7.1 through merge
+commit `d01ad3b71a83efe906c262fa466417d325969946` as the browser-safe,
+zero-runtime-dependency `@qodex/coding-pack-runtime` package.
 
 The slice adds portable and local identity type separation, strict
 project-relative path contracts, fatal UTF-8 validation, exact-byte SHA-256
@@ -1161,7 +1161,53 @@ ILL_FORMED_UTF16_ACCEPTED=false
 PROJECT_LABEL_AUTOMATIC_LOCAL_COPY=false
 ```
 
-v0.7.2 has not started. This slice performs no filesystem discovery,
-`.gitignore` parsing, secret scanning, UI, persistence, export, native command,
-Action Runtime, AgentFuse, Session, network, or Project Command work. The
-v0.6.1 Project Command freeze and GitHub workflows are unchanged.
+This slice performs no filesystem discovery, `.gitignore` parsing, secret
+scanning, UI, persistence, export, native command, Action Runtime, AgentFuse,
+Session, network, or Project Command work. The v0.6.1 Project Command freeze
+and GitHub workflows are unchanged.
+
+### KerniQ v0.7.2 Deterministic Selection and Privacy Classification Core
+
+v0.7.2 is implemented for review in a Draft PR as a pure extension of
+`@qodex/coding-pack-runtime`. `selectCodingPackSources` accepts only an explicit
+caller-supplied array of project-relative paths and exact `Uint8Array` bytes.
+It validates and copies the complete input before processing, rejects duplicate
+and cross-platform-colliding paths, sorts by exact UTF-8 bytes, applies
+non-overridable private, credential, generated, vendor, and binary path rules,
+then applies explicit/project-ignore decisions and fixed per-file, file-count,
+and aggregate-byte budgets. Invalid UTF-8 is an exclusion; unexpected contract
+errors fail the selection.
+
+The result contains deep-frozen manifest-compatible file evidence, exclusions,
+empty bounded warnings, and aggregate totals. It never includes source bytes,
+raw scanner output, caught exception text, local authority identifiers, or
+destination handles. Classification is path- and filename-based only and does
+not prove that selected text contains no secret.
+
+The package now has 181 focused tests, including 55 selection tests for input
+order independence, manifest identity compatibility, hard-deny override
+resistance, Windows case collisions, macOS normalization collisions, valid
+non-BMP paths, exact LF/CRLF evidence, invalid UTF-8, deep immutability,
+privacy sentinels, and deterministic budget overflow.
+
+```text
+V0_7_1_MERGED=true
+CODING_PACK_SELECTION_CORE_IMPLEMENTED=true
+AUTHORIZED_PROJECT_DISCOVERY_CONNECTED=false
+GITIGNORE_PARSER_IMPLEMENTED=false
+CONTENT_SECRET_SCANNING_IMPLEMENTED=false
+PATH_BASED_PRIVACY_CLASSIFICATION_IMPLEMENTED=true
+SECRET_ABSENCE_PROVEN=false
+CODING_PACK_UI_IMPLEMENTED=false
+CODING_PACK_STORE_IMPLEMENTED=false
+CODING_PACK_EXPORT_IMPLEMENTED=false
+ACTION_RUNTIME_CONNECTED=false
+AGENTFUSE_CONNECTED=false
+SESSION_SCHEMA_CHANGED=false
+PROJECT_COMMAND_FREEZE_CHANGED=false
+PATCH_MIGRATED=false
+ARBITRARY_FILE_READ_ADDED=false
+ARBITRARY_FILE_WRITE_ADDED=false
+ARBITRARY_SHELL_ADDED=false
+WORKFLOW_CHANGED=false
+```
