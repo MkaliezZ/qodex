@@ -15,27 +15,29 @@ import {
   source,
 } from "./helpers.js";
 
+const PRIVATE_SENTINELS = [
+  "/Users/example/private-project",
+  "C:\\Users\\example\\private-project",
+  "project-0123456789abcdef",
+  `sha256:${"a".repeat(64)}`,
+  "secret-local-folder-name",
+  "destination-handle-private",
+] as const;
+
 describe("Coding Pack portable privacy boundary", () => {
   it("does not serialize local authority or private path regression sentinels", async () => {
-    const privateSentinels = [
-      "/Users/example/private-project",
-      "C:\\Users\\example\\private-project",
-      "project-0123456789abcdef",
-      "sha256:<path-derived-value>",
-      `sha256:${"f".repeat(64)}`,
-    ];
     const result = await createCodingPackManifest({
       purpose: "repository_orientation",
       selectionRules: rules(),
       sources: [
-        await source("src/private-fixture.ts", privateSentinels.join("\n")),
+        await source("src/private-fixture.ts", PRIVATE_SENTINELS.join("\n")),
       ],
       exclusions: [],
       generatedAt: GENERATED_AT,
     });
     const serialized = serializeCodingPackManifest(result);
 
-    for (const sentinel of privateSentinels) {
+    for (const sentinel of PRIVATE_SENTINELS) {
       expect(serialized).not.toContain(sentinel);
     }
     expect(serialized).not.toContain("projectBindingId");
@@ -52,7 +54,12 @@ describe("Coding Pack portable privacy boundary", () => {
 
   it("accepts only an explicit bounded portable project label", async () => {
     const result = await manifest({ projectLabel: "Reviewed Label" });
+    const serialized = serializeCodingPackManifest(result);
     expect(result.project).toEqual({ projectLabel: "Reviewed Label" });
+    expect(serialized).toContain("Reviewed Label");
+    for (const sentinel of PRIVATE_SENTINELS) {
+      expect(serialized).not.toContain(sentinel);
+    }
     await expect(manifest({ projectLabel: "  untrimmed  " })).rejects.toThrow();
     await expect(manifest({ projectLabel: "unsafe\u0000label" })).rejects.toThrow();
     await expect(manifest({ projectLabel: "x".repeat(129) })).rejects.toThrow();
@@ -71,6 +78,7 @@ describe("Coding Pack portable privacy boundary", () => {
       localAuthority: {
         projectBindingId: "project-private",
         projectFingerprint: `sha256:${"d".repeat(64)}`,
+        destinationHandle: "destination-handle-private",
       },
     } as unknown as CodingPackManifestInput)).rejects.toThrow(/unsupported field/u);
   });
@@ -88,6 +96,19 @@ describe("Coding Pack portable privacy boundary", () => {
       generatedAt: GENERATED_AT,
     } as unknown as CodingPackManifestInput)).rejects.toThrow(/unsupported field/u);
   });
+
+  it.each([
+    ["/Users/example/private-project", "absolute POSIX path"],
+    ["Excluded from C:\\Users\\example\\private-project", "absolute Windows path"],
+    ["project-0123456789abcdef", "private project binding"],
+    [`sha256:${"a".repeat(64)}`, "private root fingerprint"],
+    ["destination-handle-private", "destination handle"],
+    ["unsafe\u0007detail", "control character"],
+  ])("rejects exclusion detail containing %s (%s)", async (detail) => {
+    await expect(manifest({
+      exclusions: [{ relativePath: "private/file.ts", reasonCode: "private", detail }],
+    })).rejects.toThrow();
+  });
 });
 
 describe("portable path validation", () => {
@@ -95,10 +116,12 @@ describe("portable path validation", () => {
     ["/absolute/file.ts", "absolute POSIX"],
     ["C:/Users/example/file.ts", "Windows drive"],
     ["//server/share/file.ts", "UNC"],
+    ["\\\\server\\share\\file.ts", "backslash UNC"],
     ["src/../secret.ts", "traversal"],
     ["src\\file.ts", "backslash"],
     ["src/\u0000file.ts", "NUL"],
     ["src/\u0007file.ts", "control character"],
+    ["src/\u007ffile.ts", "DEL control character"],
     ["src//file.ts", "empty segment"],
     ["src/./file.ts", "dot segment"],
     ["src/folder/", "trailing slash"],
@@ -168,6 +191,17 @@ describe("portable path validation", () => {
 });
 
 describe("exact UTF-8 source evidence", () => {
+  it("accepts valid multibyte UTF-8 and records exact bytes", async () => {
+    const bytes = new TextEncoder().encode("KerniQ 你好");
+    const result = await createCodingPackFileEntry({
+      relativePath: "src/unicode.txt",
+      bytes,
+      inclusionReason: "test fixture",
+    });
+    expect(result.byteCount).toBe(bytes.byteLength);
+    expect(result.encoding).toBe("utf-8");
+  });
+
   it("rejects invalid UTF-8 bytes", async () => {
     await expect(createCodingPackFileEntry({
       relativePath: "src/invalid.txt",

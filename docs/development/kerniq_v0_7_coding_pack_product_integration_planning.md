@@ -720,8 +720,11 @@ but cannot prove that a pack contains no secret or private information.
 | Portable manifest leaks private-root-derived fingerprint | Coding Pack core | Source identity excludes local fingerprint and root | Privacy regression scans canonical manifest and identities | Reject manifest and block export | Different-root fixtures plus path-derived fingerprint sentinel |
 | Portable manifest copies local directory name without consent | Desktop/Coding Pack core | `projectLabel` absent by default and accepted only as explicit bounded input | Preview identifies optional user label provenance | Omit label or reject invalid label | Local folder sentinel absent unless explicitly supplied |
 | Same source in different roots receives different source fingerprint | Coding Pack core | Canonical source identity hashes only portable content and deterministic rules | Cross-root fixture compares fingerprint and pack ID | Fail identity verification | Identical bytes/rules under POSIX and Windows root fixtures |
+| Exclusion detail leaks an absolute or private path | Coding Pack core | Accept only bounded sanitized detail with no absolute path, local binding, private-root fingerprint, or destination identity | Portable-manifest privacy regression scan | Reject the exclusion and block manifest creation | POSIX path, Windows path, binding ID, fingerprint, destination handle, and control-character fixtures |
 | Cross-volume staging presented as atomic | Native exporter | Prove staging and target share a filesystem before write | Operation evidence records reviewed promotion primitive and filesystem check | Fail closed before physical write | Cross-volume destination fixture with zero-write assertion |
-| Export starts without durable AgentFuse allow | Coding Pack store/native | Require persisted `PACK_DECIDED allow` before persisted start | Ordered lifecycle evidence and decision identity | Reject start and perform zero writes | Missing, deny, error, and decision-persistence-failure cases |
+| Export starts without durable AgentFuse allow | Coding Pack store/native | Require persisted `PACK_DECIDED allow` before persisted start | Ordered lifecycle evidence and decision identity | Reject start and perform zero writes | Missing, deny, and error decision cases |
+| Decision persistence fails but export starts | Coding Pack store/native | Treat durable decision commit as a hard precondition for export start | Missing decision record plus zero-write evidence | Return error before start and perform zero writes | Inject decision-store failure before start |
+| Start persistence fails but physical write begins | Coding Pack store/native | Persist `PACK_EXPORT_STARTED` before native dispatch | Missing start record plus zero-write evidence | Return error before native dispatch and perform zero writes | Inject start-store failure before first write |
 
 ## Compatibility Constraints
 
@@ -981,6 +984,10 @@ reviewed default limits, deterministic canonical identity, deep-frozen
 manifests, canonical serialization, and recomputing verification.
 
 The implementation stops before v0.7.2:
+
+Case-fold collision policy and Unicode-normalization collision policy remain
+v0.7.2 work; v0.7.1 preserves exact code points and does not claim universal
+cross-platform collision protection.
 
 ```text
 V0_7_1_IMPLEMENTED_IN_DRAFT_PR=true

@@ -19,6 +19,7 @@ export type CodingPackEncoding = "utf-8";
 export interface CodingPackLocalAuthority {
   readonly projectBindingId: string;
   readonly projectFingerprint: string;
+  readonly destinationHandle?: string;
 }
 
 export interface CodingPackPortableProject {

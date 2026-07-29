@@ -44,10 +44,12 @@ describe("Coding Pack deterministic identity", () => {
     const authorityA: CodingPackLocalAuthority = {
       projectBindingId: "project-a",
       projectFingerprint: `sha256:${"a".repeat(64)}`,
+      destinationHandle: "destination-a",
     };
     const authorityB: CodingPackLocalAuthority = {
       projectBindingId: "project-b",
       projectFingerprint: `sha256:${"b".repeat(64)}`,
+      destinationHandle: "destination-b",
     };
     expect(authorityA).not.toEqual(authorityB);
 
@@ -101,6 +103,20 @@ describe("Coding Pack deterministic identity", () => {
     });
     const second = await manifest({
       exclusions: [{ relativePath: "dist/b.js", reasonCode: "generated" }],
+    });
+    expect(first.sourceFingerprint).not.toBe(second.sourceFingerprint);
+  });
+
+  it("includes portable-safe exclusion detail in source identity", async () => {
+    const first = await manifest({
+      exclusions: [
+        { relativePath: "dist/a.js", reasonCode: "generated", detail: "build output" },
+      ],
+    });
+    const second = await manifest({
+      exclusions: [
+        { relativePath: "dist/a.js", reasonCode: "generated", detail: "vendor output" },
+      ],
     });
     expect(first.sourceFingerprint).not.toBe(second.sourceFingerprint);
   });

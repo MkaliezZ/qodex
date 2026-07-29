@@ -20,6 +20,11 @@ const SHA256_PATTERN = /^sha256:[0-9a-f]{64}$/;
 const REASON_CODE_PATTERN = /^[a-z0-9][a-z0-9._-]{0,63}$/;
 const RFC3339_PATTERN =
   /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.(\d{1,9}))?(Z|[+-]\d{2}:\d{2})$/;
+const LOCAL_IDENTITY_FIELD_PATTERN =
+  /\b(?:projectBindingId|projectFingerprint|privateRootPath|destinationHandle)\b/iu;
+const LOCAL_PROJECT_ID_PATTERN = /\bproject-[0-9a-f]{16,}\b/iu;
+const LOCAL_FINGERPRINT_PATTERN = /\bsha256:[0-9a-f]{64}\b/iu;
+const DESTINATION_HANDLE_PATTERN = /\bdestination[-_]handle(?:[-_:][a-z0-9._-]+)?\b/iu;
 
 export const CODING_PACK_PURPOSES: ReadonlySet<CodingPackPurpose> = new Set([
   "repository_orientation",
@@ -173,12 +178,34 @@ export function validateExclusion(value: unknown): Readonly<CodingPackExclusion>
   if (!Object.prototype.hasOwnProperty.call(record, "detail")) {
     return Object.freeze({ relativePath, reasonCode: record.reasonCode });
   }
+  const detail = validateExclusionDetail(record.detail);
+  return Object.freeze({ relativePath, reasonCode: record.reasonCode, detail });
+}
+
+function validateExclusionDetail(value: unknown): string {
   const detail = requireBoundedText(
-    record.detail,
+    value,
     "exclusion.detail",
     CODING_PACK_MAX_EXCLUSION_DETAIL_BYTES,
   );
-  return Object.freeze({ relativePath, reasonCode: record.reasonCode, detail });
+  if (detail.includes("/") || detail.includes("\\")) {
+    throw new CodingPackManifestError(
+      "invalid_input",
+      "exclusion.detail must not contain path separators.",
+    );
+  }
+  if (
+    LOCAL_IDENTITY_FIELD_PATTERN.test(detail)
+    || LOCAL_PROJECT_ID_PATTERN.test(detail)
+    || LOCAL_FINGERPRINT_PATTERN.test(detail)
+    || DESTINATION_HANDLE_PATTERN.test(detail)
+  ) {
+    throw new CodingPackManifestError(
+      "invalid_input",
+      "exclusion.detail must not contain local authority identity.",
+    );
+  }
+  return detail;
 }
 
 export function validateDigest(value: unknown, label: string): string {

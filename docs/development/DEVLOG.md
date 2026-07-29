@@ -1137,9 +1137,11 @@ project-relative path contracts, fatal UTF-8 validation, exact-byte SHA-256
 source evidence, fixed selection limits, UTF-8-byte-ordered canonical JSON,
 deterministic `sourceFingerprint` and `packId`, instance `manifestDigest`,
 deep-frozen manifests, canonical serialization, and verification that
-recomputes identity and bounds. The package has 61 focused tests including
+recomputes identity and bounds. Portable exclusion details reject absolute
+paths, local binding IDs, private-root fingerprints, and destination identity.
+The package has 87 focused tests including
 privacy sentinels, order independence, root/label separation, malformed paths,
-CRLF/LF identity, zero-byte input, bounds, and tampering.
+CRLF/LF identity, zero-byte input, caller immutability, bounds, and tampering.
 
 v0.7.2 has not started. This slice performs no filesystem discovery,
 `.gitignore` parsing, secret scanning, UI, persistence, export, native command,
