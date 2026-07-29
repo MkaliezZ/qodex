@@ -79,7 +79,25 @@ scope is frozen and the next implementation milestone has not started.
 
 ### v0.7 - Coding Pack Product Integration
 
-Repo2Prompt, Agent Doctor, Agent Rules Kit, and Git Task Checkpoints.
+**Status:** Planning-only; current product state `PLANNED_ONLY`; implementation
+not started
+
+The source audit found authorized project reads, selected-file context
+assembly, project binding, action contracts, and Session persistence, but no
+Coding Pack contract, manifest, preview, durable lifecycle, staleness, receipt,
+or export implementation.
+
+The proposed product creates a deterministic, inspectable source manifest from
+an authorized project, applies explicit privacy and size rules, requires user
+confirmation, and exports through a bounded durable write lifecycle. AgentFuse
+is not a content-quality judge, and the frozen v0.6.1 Project Command scope does
+not change.
+
+- [v0.7 planning document](kerniq_v0_7_coding_pack_product_integration_planning.md)
+- [ADR-022](../../qodex-config/adr/ADR-022-Coding-Pack-Product-Integration.md)
+
+Repo2Prompt, Agent Doctor, Agent Rules Kit, and Git Task Checkpoints remain
+roadmap context, not currently integrated Coding Pack capabilities.
 
 ### v0.8 - Product Packaging and Closed Beta
 

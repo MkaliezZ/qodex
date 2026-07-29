@@ -260,6 +260,17 @@ The [final freeze seal](docs/development/kerniq_v0_6_1_project_command_final_fre
 records the exact merged evidence chain and bounded non-claims. It is active on
 `main`; the next implementation milestone has not started.
 
+## Coding Pack v0.7 Planning
+
+The current source audit classifies Coding Pack as `PLANNED_ONLY`: KerniQ has
+authorized project reads and ephemeral selected-file context, but no Coding
+Pack manifest, preview, persistence, staleness, or export implementation. The
+[v0.7 plan](docs/development/kerniq_v0_7_coding_pack_product_integration_planning.md)
+and [ADR-022](qodex-config/adr/ADR-022-Coding-Pack-Product-Integration.md)
+define a deterministic manifest, explicit export authorization, privacy
+controls, and one durable export lifecycle. Implementation has not started, and
+the v0.6.1 Project Command freeze is unchanged.
+
 ---
 
 ## Roadmap
@@ -269,9 +280,10 @@ The authoritative roadmap is maintained in
 v0.6 is merged and frozen as the managed Python and universal action
 foundation. The bounded native Desktop Project Command path is implemented and
 its v0.6.1.6 implementation, real proof, and final freeze seal are merged. The
-v0.6.1 Project Command scope is frozen; the next implementation milestone has
-not started. Patch remains outside this scope. Installer work is planned for
-v0.8, and the Stage 2 namespace-wide rename remains explicitly deferred.
+v0.6.1 Project Command scope is frozen. v0.7 Coding Pack is in planning review
+only; implementation has not started. Patch remains outside this scope.
+Installer work is planned for v0.8, and the Stage 2 namespace-wide rename
+remains explicitly deferred.
 
 ---
 

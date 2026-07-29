@@ -267,6 +267,34 @@ Details:
 - [`kerniq_v0_6_1_project_command_final_freeze.md`](development/kerniq_v0_6_1_project_command_final_freeze.md)
 - [`ADR-021`](../qodex-config/adr/ADR-021-Project-Command-Action-Runtime-Adapter.md)
 
+### Coding Pack v0.7 Planning
+
+Coding Pack is currently `PLANNED_ONLY`. Existing Project Runtime and Desktop
+adapters authorize bounded relative-path reads; Context Engine assembles
+ephemeral selected-file prompt context; Session Runtime persists project and
+action evidence. No current package creates a pack manifest, preview, durable
+pack state, staleness check, or export artifact.
+
+The proposed design assigns deterministic selection, exclusions, source
+fingerprints, and canonical manifests to a new browser-safe Coding Pack
+runtime. Desktop owns preview and confirmation. A dedicated versioned store
+owns one export lifecycle, while a narrow native adapter owns staged,
+no-overwrite physical export. Session Runtime may reference a verified
+completed artifact but is not a competing lifecycle owner.
+
+Read-only deterministic selection uses project capability and privacy controls
+without an AgentFuse decision. Writing/export requires explicit product
+authorization plus a separately versioned AgentFuse export-policy decision,
+durably recorded before export start. AgentFuse does not select files or judge
+content quality. Atomic promotion requires same-filesystem staging and has no
+silent cross-filesystem copy fallback. The v0.6.1 Project Command freeze is
+unchanged.
+
+Details:
+
+- [`kerniq_v0_7_coding_pack_product_integration_planning.md`](development/kerniq_v0_7_coding_pack_product_integration_planning.md)
+- [`ADR-022`](../qodex-config/adr/ADR-022-Coding-Pack-Product-Integration.md)
+
 ### 5. Diff Engine (`packages/diff-engine`)
 
 **Purpose:** Safe code modifications through patch proposals.
