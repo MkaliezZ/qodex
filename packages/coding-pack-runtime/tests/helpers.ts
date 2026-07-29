@@ -26,11 +26,12 @@ export function rules(
 export async function source(
   relativePath: string,
   text = `content:${relativePath}`,
+  inclusionReasonCode = "explicit_selection",
 ): Promise<CodingPackFileEntry> {
   return createCodingPackFileEntry({
     relativePath,
     bytes: new TextEncoder().encode(text),
-    inclusionReason: "test fixture",
+    inclusionReasonCode,
   });
 }
 
@@ -44,7 +45,7 @@ export function evidence(
     sourceDigest,
     byteCount,
     encoding: "utf-8",
-    inclusionReason: "test fixture",
+    inclusionReasonCode: "explicit_selection",
   };
 }
 

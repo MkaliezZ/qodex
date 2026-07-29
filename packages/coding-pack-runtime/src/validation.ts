@@ -5,6 +5,7 @@ import {
   CODING_PACK_MAX_RELATIVE_PATH_BYTES,
   DEFAULT_CODING_PACK_SELECTION_RULES,
 } from "./constants.js";
+import { requireWellFormedUnicode } from "./canonical.js";
 import { CodingPackManifestError } from "./errors.js";
 import type {
   CodingPackExclusion,
@@ -17,7 +18,7 @@ import type {
 const encoder = new TextEncoder();
 const CONTROL_CHARACTER_PATTERN = /[\u0000-\u001f\u007f-\u009f]/u;
 const SHA256_PATTERN = /^sha256:[0-9a-f]{64}$/;
-const REASON_CODE_PATTERN = /^[a-z0-9][a-z0-9._-]{0,63}$/;
+const PORTABLE_IDENTIFIER_PATTERN = /^[a-z0-9][a-z0-9._-]*$/;
 const RFC3339_PATTERN =
   /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.(\d{1,9}))?(Z|[+-]\d{2}:\d{2})$/;
 const LOCAL_IDENTITY_FIELD_PATTERN =
@@ -69,26 +70,27 @@ export function validatePortablePath(value: unknown): string {
   if (typeof value !== "string" || value.length === 0) {
     throw new CodingPackManifestError("invalid_path", "Portable path must be non-empty.");
   }
-  if (encoder.encode(value).byteLength > CODING_PACK_MAX_RELATIVE_PATH_BYTES) {
+  const path = requireWellFormedUnicode(value, "Portable path");
+  if (encoder.encode(path).byteLength > CODING_PACK_MAX_RELATIVE_PATH_BYTES) {
     throw new CodingPackManifestError("invalid_path", "Portable path exceeds its UTF-8 byte limit.");
   }
-  if (CONTROL_CHARACTER_PATTERN.test(value)) {
+  if (CONTROL_CHARACTER_PATTERN.test(path)) {
     throw new CodingPackManifestError("invalid_path", "Portable path contains a control character.");
   }
-  if (value.includes("\\")) {
+  if (path.includes("\\")) {
     throw new CodingPackManifestError("invalid_path", "Portable path must use forward slashes.");
   }
-  if (value.startsWith("/") || /^[A-Za-z]:/u.test(value) || value.startsWith("//")) {
+  if (path.startsWith("/") || /^[A-Za-z]:/u.test(path) || path.startsWith("//")) {
     throw new CodingPackManifestError("invalid_path", "Portable path must be project-relative.");
   }
-  if (value.endsWith("/")) {
+  if (path.endsWith("/")) {
     throw new CodingPackManifestError("invalid_path", "Portable path must not end with a slash.");
   }
-  const segments = value.split("/");
+  const segments = path.split("/");
   if (segments.some((segment) => segment === "" || segment === "." || segment === "..")) {
     throw new CodingPackManifestError("invalid_path", "Portable path contains an unsafe segment.");
   }
-  return value;
+  return path;
 }
 
 export function validateSelectionRules(value: unknown): Readonly<CodingPackSelectionRules> {
@@ -98,7 +100,11 @@ export function validateSelectionRules(value: unknown): Readonly<CodingPackSelec
     ["version", "maxFiles", "maxFileBytes", "maxTotalBytes"],
     "selectionRules",
   );
-  const version = requireBoundedText(record.version, "selectionRules.version", 128);
+  const version = requirePortableMachineIdentifier(
+    record.version,
+    "selectionRules.version",
+    128,
+  );
   const maxFiles = requirePositiveSafeInteger(record.maxFiles, "selectionRules.maxFiles");
   const maxFileBytes = requirePositiveSafeInteger(
     record.maxFileBytes,
@@ -142,7 +148,7 @@ export function validateFileEntry(value: unknown): Readonly<CodingPackFileEntry>
   const record = requirePlainRecord(value, "source");
   requireExactKeys(
     record,
-    ["relativePath", "sourceDigest", "byteCount", "encoding", "inclusionReason"],
+    ["relativePath", "sourceDigest", "byteCount", "encoding", "inclusionReasonCode"],
     "source",
   );
   const relativePath = validatePortablePath(record.relativePath);
@@ -151,9 +157,9 @@ export function validateFileEntry(value: unknown): Readonly<CodingPackFileEntry>
   if (record.encoding !== "utf-8") {
     throw new CodingPackManifestError("invalid_input", "source.encoding must be utf-8.");
   }
-  const inclusionReason = requireBoundedText(
-    record.inclusionReason,
-    "source.inclusionReason",
+  const inclusionReasonCode = requirePortableMachineIdentifier(
+    record.inclusionReasonCode,
+    "source.inclusionReasonCode",
     CODING_PACK_MAX_REASON_BYTES,
   );
   return Object.freeze({
@@ -161,7 +167,7 @@ export function validateFileEntry(value: unknown): Readonly<CodingPackFileEntry>
     sourceDigest,
     byteCount,
     encoding: "utf-8",
-    inclusionReason,
+    inclusionReasonCode,
   });
 }
 
@@ -169,17 +175,16 @@ export function validateExclusion(value: unknown): Readonly<CodingPackExclusion>
   const record = requirePlainRecord(value, "exclusion");
   requireExactKeys(record, ["relativePath", "reasonCode", "detail"], "exclusion");
   const relativePath = validatePortablePath(record.relativePath);
-  if (typeof record.reasonCode !== "string" || !REASON_CODE_PATTERN.test(record.reasonCode)) {
-    throw new CodingPackManifestError(
-      "invalid_input",
-      "exclusion.reasonCode must be a bounded machine-readable code.",
-    );
-  }
+  const reasonCode = requirePortableMachineIdentifier(
+    record.reasonCode,
+    "exclusion.reasonCode",
+    CODING_PACK_MAX_REASON_BYTES,
+  );
   if (!Object.prototype.hasOwnProperty.call(record, "detail")) {
-    return Object.freeze({ relativePath, reasonCode: record.reasonCode });
+    return Object.freeze({ relativePath, reasonCode });
   }
   const detail = validateExclusionDetail(record.detail);
-  return Object.freeze({ relativePath, reasonCode: record.reasonCode, detail });
+  return Object.freeze({ relativePath, reasonCode, detail });
 }
 
 function validateExclusionDetail(value: unknown): string {
@@ -188,23 +193,7 @@ function validateExclusionDetail(value: unknown): string {
     "exclusion.detail",
     CODING_PACK_MAX_EXCLUSION_DETAIL_BYTES,
   );
-  if (detail.includes("/") || detail.includes("\\")) {
-    throw new CodingPackManifestError(
-      "invalid_input",
-      "exclusion.detail must not contain path separators.",
-    );
-  }
-  if (
-    LOCAL_IDENTITY_FIELD_PATTERN.test(detail)
-    || LOCAL_PROJECT_ID_PATTERN.test(detail)
-    || LOCAL_FINGERPRINT_PATTERN.test(detail)
-    || DESTINATION_HANDLE_PATTERN.test(detail)
-  ) {
-    throw new CodingPackManifestError(
-      "invalid_input",
-      "exclusion.detail must not contain local authority identity.",
-    );
-  }
+  rejectPortablePrivateIdentity(detail, "exclusion.detail");
   return detail;
 }
 
@@ -226,7 +215,8 @@ export function validateTimestamp(value: unknown): string {
   if (typeof value !== "string") {
     throw new CodingPackManifestError("invalid_timestamp", "generatedAt must be RFC 3339.");
   }
-  const match = RFC3339_PATTERN.exec(value);
+  const timestamp = requireWellFormedUnicode(value, "generatedAt");
+  const match = RFC3339_PATTERN.exec(timestamp);
   if (!match) {
     throw new CodingPackManifestError("invalid_timestamp", "generatedAt must be RFC 3339.");
   }
@@ -249,6 +239,12 @@ export function validateTimestamp(value: unknown): string {
     throw new CodingPackManifestError("invalid_timestamp", "generatedAt is not a real timestamp.");
   }
   const zone = match[8];
+  if (zone === "-00:00") {
+    throw new CodingPackManifestError(
+      "invalid_timestamp",
+      "generatedAt must use a known RFC 3339 offset.",
+    );
+  }
   if (zone !== "Z") {
     const zoneHour = Number(zone.slice(1, 3));
     const zoneMinute = Number(zone.slice(4, 6));
@@ -256,26 +252,64 @@ export function validateTimestamp(value: unknown): string {
       throw new CodingPackManifestError("invalid_timestamp", "generatedAt has an invalid offset.");
     }
   }
-  if (Number.isNaN(Date.parse(value))) {
+  if (Number.isNaN(Date.parse(timestamp))) {
     throw new CodingPackManifestError("invalid_timestamp", "generatedAt is not parseable.");
   }
-  return value;
+  return timestamp;
 }
 
 export function requireBoundedText(value: unknown, label: string, maxBytes: number): string {
+  if (typeof value !== "string") {
+    throw new CodingPackManifestError(
+      "invalid_input",
+      `${label} must be non-empty, trimmed, control-free, and bounded.`,
+    );
+  }
+  const text = requireWellFormedUnicode(value, label);
   if (
-    typeof value !== "string"
-    || value.length === 0
-    || value !== value.trim()
-    || CONTROL_CHARACTER_PATTERN.test(value)
-    || encoder.encode(value).byteLength > maxBytes
+    text.length === 0
+    || text !== text.trim()
+    || CONTROL_CHARACTER_PATTERN.test(text)
+    || encoder.encode(text).byteLength > maxBytes
   ) {
     throw new CodingPackManifestError(
       "invalid_input",
       `${label} must be non-empty, trimmed, control-free, and bounded.`,
     );
   }
-  return value;
+  return text;
+}
+
+export function requirePortableMachineIdentifier(
+  value: unknown,
+  label: string,
+  maxBytes: number,
+): string {
+  const identifier = requireBoundedText(value, label, maxBytes);
+  rejectPortablePrivateIdentity(identifier, label);
+  if (!PORTABLE_IDENTIFIER_PATTERN.test(identifier)) {
+    throw new CodingPackManifestError(
+      "invalid_input",
+      `${label} must be a portable machine-readable identifier.`,
+    );
+  }
+  return identifier;
+}
+
+function rejectPortablePrivateIdentity(value: string, label: string): void {
+  if (
+    value.includes("/")
+    || value.includes("\\")
+    || LOCAL_IDENTITY_FIELD_PATTERN.test(value)
+    || LOCAL_PROJECT_ID_PATTERN.test(value)
+    || LOCAL_FINGERPRINT_PATTERN.test(value)
+    || DESTINATION_HANDLE_PATTERN.test(value)
+  ) {
+    throw new CodingPackManifestError(
+      "invalid_input",
+      `${label} must not contain local authority identity or path material.`,
+    );
+  }
 }
 
 function requirePositiveSafeInteger(value: unknown, label: string): number {

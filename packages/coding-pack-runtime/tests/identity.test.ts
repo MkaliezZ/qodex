@@ -97,6 +97,17 @@ describe("Coding Pack deterministic identity", () => {
     expect(first.sourceFingerprint).not.toBe(second.sourceFingerprint);
   });
 
+  it("includes inclusionReasonCode in source identity", async () => {
+    const first = await manifest({
+      sources: [await source("src/index.ts", "same bytes", "explicit_selection")],
+    });
+    const second = await manifest({
+      sources: [await source("src/index.ts", "same bytes", "purpose_rule")],
+    });
+    expect(first.sources[0].sourceDigest).toBe(second.sources[0].sourceDigest);
+    expect(first.sourceFingerprint).not.toBe(second.sourceFingerprint);
+  });
+
   it("changes source identity when an exclusion changes", async () => {
     const first = await manifest({
       exclusions: [{ relativePath: "dist/a.js", reasonCode: "generated" }],

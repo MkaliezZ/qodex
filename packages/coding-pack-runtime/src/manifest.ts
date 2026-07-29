@@ -22,8 +22,8 @@ import type {
   CodingPackSourceInput,
 } from "./types.js";
 import {
-  requireBoundedText,
   requireExactKeys,
+  requirePortableMachineIdentifier,
   requirePlainRecord,
   validateDigest,
   validateExclusion,
@@ -40,7 +40,7 @@ export async function createCodingPackFileEntry(
   input: CodingPackSourceInput,
 ): Promise<Readonly<CodingPackFileEntry>> {
   const record = requirePlainRecord(input, "source input");
-  requireExactKeys(record, ["relativePath", "bytes", "inclusionReason"], "source input");
+  requireExactKeys(record, ["relativePath", "bytes", "inclusionReasonCode"], "source input");
   const relativePath = validatePortablePath(record.relativePath);
   if (!(record.bytes instanceof Uint8Array)) {
     throw new CodingPackManifestError("invalid_input", "source input bytes must be Uint8Array.");
@@ -50,9 +50,9 @@ export async function createCodingPackFileEntry(
   } catch {
     throw new CodingPackManifestError("invalid_utf8", "source input is not valid UTF-8.");
   }
-  const inclusionReason = requireBoundedText(
-    record.inclusionReason,
-    "source input inclusionReason",
+  const inclusionReasonCode = requirePortableMachineIdentifier(
+    record.inclusionReasonCode,
+    "source input inclusionReasonCode",
     CODING_PACK_MAX_REASON_BYTES,
   );
   return Object.freeze({
@@ -60,7 +60,7 @@ export async function createCodingPackFileEntry(
     sourceDigest: await sha256Bytes(record.bytes),
     byteCount: record.bytes.byteLength,
     encoding: "utf-8",
-    inclusionReason,
+    inclusionReasonCode,
   });
 }
 
@@ -166,7 +166,7 @@ function validateManifestShape(value: unknown): CodingPackManifest {
   const packId = validatePackId(record.packId);
   const purpose = validatePurpose(record.purpose);
   const project = validatePortableProject(record.project);
-  const selectionRulesVersion = requireBoundedText(
+  const selectionRulesVersion = requirePortableMachineIdentifier(
     record.selectionRulesVersion,
     "manifest.selectionRulesVersion",
     128,

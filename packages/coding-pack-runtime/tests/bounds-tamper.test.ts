@@ -101,6 +101,7 @@ describe("Coding Pack bounds", () => {
     "2026-07-29 12:00:00Z",
     "2026-07-29T25:00:00Z",
     "2026-07-29T12:00:00+24:00",
+    "2026-07-29T12:00:00-00:00",
     "now",
   ])("rejects invalid explicit generatedAt value %s", async (generatedAt) => {
     await expect(manifest({ generatedAt })).rejects.toThrow(/generatedAt/u);
@@ -257,7 +258,7 @@ interface MutableManifest {
     sourceDigest: string;
     byteCount: number;
     encoding: string;
-    inclusionReason: string;
+    inclusionReasonCode: string;
   }>;
   exclusions: Array<{
     relativePath: string;

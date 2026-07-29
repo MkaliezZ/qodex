@@ -4,6 +4,7 @@ import {
   createCodingPackFileEntry,
   createCodingPackManifest,
   serializeCodingPackManifest,
+  verifyCodingPackManifest,
   type CodingPackManifestInput,
 } from "../src/index.js";
 import {
@@ -20,12 +21,13 @@ const PRIVATE_SENTINELS = [
   "C:\\Users\\example\\private-project",
   "project-0123456789abcdef",
   `sha256:${"a".repeat(64)}`,
-  "secret-local-folder-name",
   "destination-handle-private",
+  "privateRootPath",
+  "projectFingerprint",
 ] as const;
 
 describe("Coding Pack portable privacy boundary", () => {
-  it("does not serialize local authority or private path regression sentinels", async () => {
+  it("does not embed source content in the portable manifest", async () => {
     const result = await createCodingPackManifest({
       purpose: "repository_orientation",
       selectionRules: rules(),
@@ -65,6 +67,15 @@ describe("Coding Pack portable privacy boundary", () => {
     await expect(manifest({ projectLabel: "x".repeat(129) })).rejects.toThrow();
   });
 
+  it("serializes an explicitly approved project label exactly as supplied", async () => {
+    const approvedLabel = "privateRootPath";
+    const serialized = serializeCodingPackManifest(
+      await manifest({ projectLabel: approvedLabel }),
+    );
+    expect(JSON.parse(serialized).project).toEqual({ projectLabel: approvedLabel });
+    expect(serialized).toContain(approvedLabel);
+  });
+
   it("rejects injected local authority at the manifest input boundary", async () => {
     const base = {
       purpose: "repository_orientation",
@@ -97,17 +108,72 @@ describe("Coding Pack portable privacy boundary", () => {
     } as unknown as CodingPackManifestInput)).rejects.toThrow(/unsupported field/u);
   });
 
+  it.each(PRIVATE_SENTINELS)(
+    "rejects private metadata in selectionRules.version: %s",
+    async (sentinel) => {
+      await expect(manifest({ selectionRules: rules(sentinel) })).rejects.toThrow();
+    },
+  );
+
+  it.each(PRIVATE_SENTINELS)(
+    "rejects private metadata in inclusionReasonCode: %s",
+    async (sentinel) => {
+      await expect(createCodingPackFileEntry({
+        relativePath: "src/index.ts",
+        bytes: new Uint8Array(),
+        inclusionReasonCode: sentinel,
+      })).rejects.toThrow();
+    },
+  );
+
+  it.each(PRIVATE_SENTINELS)(
+    "rejects private metadata in exclusion.reasonCode: %s",
+    async (sentinel) => {
+      await expect(manifest({
+        exclusions: [{ relativePath: "private/file.ts", reasonCode: sentinel }],
+      })).rejects.toThrow();
+    },
+  );
+
+  it.each([...PRIVATE_SENTINELS, "unsafe\u0007detail"])(
+    "rejects private metadata in exclusion.detail: %s",
+    async (detail) => {
+      await expect(manifest({
+        exclusions: [{ relativePath: "private/file.ts", reasonCode: "private", detail }],
+      })).rejects.toThrow();
+    },
+  );
+
   it.each([
-    ["/Users/example/private-project", "absolute POSIX path"],
-    ["Excluded from C:\\Users\\example\\private-project", "absolute Windows path"],
-    ["project-0123456789abcdef", "private project binding"],
-    [`sha256:${"a".repeat(64)}`, "private root fingerprint"],
-    ["destination-handle-private", "destination handle"],
-    ["unsafe\u0007detail", "control character"],
-  ])("rejects exclusion detail containing %s (%s)", async (detail) => {
-    await expect(manifest({
-      exclusions: [{ relativePath: "private/file.ts", reasonCode: "private", detail }],
+    "has whitespace",
+    "has/slash",
+    "has\\backslash",
+    "unsafe\u0007code",
+    "Uppercase",
+  ])("rejects non-portable machine identifier %s", async (identifier) => {
+    await expect(createCodingPackFileEntry({
+      relativePath: "src/index.ts",
+      bytes: new Uint8Array(),
+      inclusionReasonCode: identifier,
     })).rejects.toThrow();
+    await expect(manifest({
+      selectionRules: rules(identifier),
+    })).rejects.toThrow();
+    await expect(manifest({
+      exclusions: [{ relativePath: "private/file.ts", reasonCode: identifier }],
+    })).rejects.toThrow();
+  });
+
+  it("enforces machine identifier field limits", async () => {
+    await expect(createCodingPackFileEntry({
+      relativePath: "src/index.ts",
+      bytes: new Uint8Array(),
+      inclusionReasonCode: "a".repeat(65),
+    })).rejects.toThrow();
+    await expect(manifest({
+      exclusions: [{ relativePath: "private/file.ts", reasonCode: "a".repeat(65) }],
+    })).rejects.toThrow();
+    await expect(manifest({ selectionRules: rules("a".repeat(129)) })).rejects.toThrow();
   });
 });
 
@@ -129,15 +195,64 @@ describe("portable path validation", () => {
     await expect(createCodingPackFileEntry({
       relativePath,
       bytes: new Uint8Array(),
-      inclusionReason: "test fixture",
+      inclusionReasonCode: "explicit_selection",
     })).rejects.toThrow();
+  });
+
+  it.each([
+    "\uD800.ts",
+    "\uD801.ts",
+    "\uDC00.ts",
+    "\uD800\uD801.ts",
+    "src/\uD800/file.ts",
+  ])("rejects ill-formed UTF-16 path %s", async (relativePath) => {
+    await expect(createCodingPackFileEntry({
+      relativePath,
+      bytes: new Uint8Array(),
+      inclusionReasonCode: "explicit_selection",
+    })).rejects.toThrow(/well-formed Unicode/u);
+  });
+
+  it("rejects ill-formed UTF-16 across every portable string boundary", async () => {
+    const malformed = "\uD800";
+    await expect(manifest({ projectLabel: malformed })).rejects.toThrow(/well-formed Unicode/u);
+    await expect(manifest({ selectionRules: rules(malformed) }))
+      .rejects.toThrow(/well-formed Unicode/u);
+    await expect(createCodingPackFileEntry({
+      relativePath: "src/index.ts",
+      bytes: new Uint8Array(),
+      inclusionReasonCode: malformed,
+    })).rejects.toThrow(/well-formed Unicode/u);
+    await expect(manifest({
+      exclusions: [{ relativePath: "private/file.ts", reasonCode: malformed }],
+    })).rejects.toThrow(/well-formed Unicode/u);
+    await expect(manifest({
+      exclusions: [
+        { relativePath: "private/file.ts", reasonCode: "private", detail: malformed },
+      ],
+    })).rejects.toThrow(/well-formed Unicode/u);
+    await expect(manifest({ generatedAt: malformed })).rejects.toThrow(/well-formed Unicode/u);
+  });
+
+  it("accepts, preserves, sorts, serializes, and verifies valid non-BMP paths", async () => {
+    const deseret = await source("src/𐐷.ts");
+    const emoji = await source("src/😀.ts");
+    const first = await manifest({ sources: [emoji, deseret] });
+    const second = await manifest({ sources: [deseret, emoji] });
+
+    expect(first.sources.map((entry) => entry.relativePath)).toEqual([
+      "src/𐐷.ts",
+      "src/😀.ts",
+    ]);
+    expect(serializeCodingPackManifest(first)).toBe(serializeCodingPackManifest(second));
+    await expect(verifyCodingPackManifest(first)).resolves.toBeUndefined();
   });
 
   it("rejects a path above the UTF-8 byte limit", async () => {
     await expect(createCodingPackFileEntry({
       relativePath: `${"a".repeat(CODING_PACK_MAX_RELATIVE_PATH_BYTES)}.ts`,
       bytes: new Uint8Array(),
-      inclusionReason: "test fixture",
+      inclusionReasonCode: "explicit_selection",
     })).rejects.toThrow();
   });
 
@@ -184,9 +299,21 @@ describe("portable path validation", () => {
     await expect(createCodingPackFileEntry({
       relativePath: "src/a.ts",
       bytes: new Uint8Array(),
-      inclusionReason: "test fixture",
+      inclusionReasonCode: "explicit_selection",
       projectBindingId: "project-private",
     } as never)).rejects.toThrow(/unsupported field/u);
+    await expect(createCodingPackFileEntry({
+      relativePath: "src/a.ts",
+      bytes: new Uint8Array(),
+      inclusionReason: "legacy free text",
+    } as never)).rejects.toThrow(/unsupported field/u);
+    await expect(manifest({
+      sources: [{
+        ...evidence("src/a.ts"),
+        inclusionReasonCode: undefined,
+        inclusionReason: "legacy free text",
+      } as never],
+    })).rejects.toThrow(/unsupported field/u);
   });
 });
 
@@ -196,7 +323,7 @@ describe("exact UTF-8 source evidence", () => {
     const result = await createCodingPackFileEntry({
       relativePath: "src/unicode.txt",
       bytes,
-      inclusionReason: "test fixture",
+      inclusionReasonCode: "explicit_selection",
     });
     expect(result.byteCount).toBe(bytes.byteLength);
     expect(result.encoding).toBe("utf-8");
@@ -206,7 +333,7 @@ describe("exact UTF-8 source evidence", () => {
     await expect(createCodingPackFileEntry({
       relativePath: "src/invalid.txt",
       bytes: new Uint8Array([0xc3, 0x28]),
-      inclusionReason: "test fixture",
+      inclusionReasonCode: "explicit_selection",
     })).rejects.toThrow(/valid UTF-8/u);
   });
 
@@ -214,12 +341,12 @@ describe("exact UTF-8 source evidence", () => {
     const crlf = await createCodingPackFileEntry({
       relativePath: "src/a.txt",
       bytes: new TextEncoder().encode("one\r\ntwo\r\n"),
-      inclusionReason: "test fixture",
+      inclusionReasonCode: "explicit_selection",
     });
     const lf = await createCodingPackFileEntry({
       relativePath: "src/a.txt",
       bytes: new TextEncoder().encode("one\ntwo\n"),
-      inclusionReason: "test fixture",
+      inclusionReasonCode: "explicit_selection",
     });
     expect(crlf.sourceDigest).not.toBe(lf.sourceDigest);
   });
@@ -228,7 +355,7 @@ describe("exact UTF-8 source evidence", () => {
     const result = await createCodingPackFileEntry({
       relativePath: "src/empty.txt",
       bytes: new Uint8Array(),
-      inclusionReason: "test fixture",
+      inclusionReasonCode: "explicit_selection",
     });
     expect(result.byteCount).toBe(0);
     expect(result.sourceDigest).toBe(

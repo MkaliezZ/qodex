@@ -423,6 +423,13 @@ rules in two different local roots therefore produce the same
 Preventing local-root inference is a required design goal, not an absolute
 cryptographic non-inference claim.
 
+`inclusionReasonCode` and `selectionRulesVersion` are bounded portable machine
+identifiers, not free text. The inclusion reason remains part of each source
+entry and therefore participates in `sourceFingerprint`. All caller-supplied
+portable strings must be well-formed Unicode before UTF-8 byte counting,
+ordering, hashing, or canonical serialization. No Unicode normalization is
+performed.
+
 ### Proposed Manifest Fields
 
 ```ts
@@ -516,7 +523,7 @@ interface CodingPackFileEntry {
   byteCount: number;
   encoding: "utf-8";
   language?: string;
-  inclusionReason: string;
+  inclusionReasonCode: string;
 }
 
 interface CodingPackSelectionRule {
@@ -981,7 +988,23 @@ v0.7.1 is implemented for review in a Draft PR as the pure browser-safe
 `@qodex/coding-pack-runtime` package. It includes typed portable/local
 contracts, strict portable path validation, exact UTF-8 byte hashing, the
 reviewed default limits, deterministic canonical identity, deep-frozen
-manifests, canonical serialization, and recomputing verification.
+manifests, canonical serialization, and recomputing verification. Before
+merge, unrestricted inclusion reason text was replaced by
+`inclusionReasonCode`; portable machine metadata rejects local authority
+material, ill-formed UTF-16 is rejected before UTF-8 processing, and RFC 3339
+unknown offset `-00:00` is invalid.
+
+```text
+PRE_MERGE_CONTRACT_CORRECTION=true
+BACKWARD_COMPATIBILITY_REQUIRED=false
+PORTABLE_INCLUSION_REASON_FREE_TEXT=false
+INCLUSION_REASON_MACHINE_CODE=true
+SELECTION_RULES_VERSION_PORTABLE_IDENTIFIER=true
+ILL_FORMED_UTF16_ACCEPTED=false
+VALID_NON_BMP_UNICODE_ACCEPTED=true
+PROJECT_LABEL_EXPLICIT_USER_FIELD=true
+PROJECT_LABEL_AUTOMATIC_LOCAL_COPY=false
+```
 
 The implementation stops before v0.7.2:
 

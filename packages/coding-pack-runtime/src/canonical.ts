@@ -14,9 +14,31 @@ export interface CanonicalObject {
 
 const encoder = new TextEncoder();
 
+export function requireWellFormedUnicode(value: string, label: string): string {
+  for (let index = 0; index < value.length; index += 1) {
+    const codeUnit = value.charCodeAt(index);
+    if (codeUnit >= 0xd800 && codeUnit <= 0xdbff) {
+      const next = value.charCodeAt(index + 1);
+      if (!(next >= 0xdc00 && next <= 0xdfff)) {
+        throw new CodingPackManifestError(
+          "invalid_input",
+          `${label} must contain well-formed Unicode.`,
+        );
+      }
+      index += 1;
+    } else if (codeUnit >= 0xdc00 && codeUnit <= 0xdfff) {
+      throw new CodingPackManifestError(
+        "invalid_input",
+        `${label} must contain well-formed Unicode.`,
+      );
+    }
+  }
+  return value;
+}
+
 export function compareUtf8(left: string, right: string): number {
-  const leftBytes = encoder.encode(left);
-  const rightBytes = encoder.encode(right);
+  const leftBytes = encoder.encode(requireWellFormedUnicode(left, "UTF-8 comparison value"));
+  const rightBytes = encoder.encode(requireWellFormedUnicode(right, "UTF-8 comparison value"));
   const length = Math.min(leftBytes.byteLength, rightBytes.byteLength);
 
   for (let index = 0; index < length; index += 1) {
@@ -28,7 +50,11 @@ export function compareUtf8(left: string, right: string): number {
 }
 
 export function canonicalJson(value: CanonicalValue): string {
-  if (value === null || typeof value === "string" || typeof value === "boolean") {
+  if (typeof value === "string") {
+    return JSON.stringify(requireWellFormedUnicode(value, "Canonical Coding Pack string"));
+  }
+
+  if (value === null || typeof value === "boolean") {
     return JSON.stringify(value);
   }
 
@@ -48,7 +74,9 @@ export function canonicalJson(value: CanonicalValue): string {
 
   const entries = Object.entries(value).sort(([left], [right]) => compareUtf8(left, right));
   return `{${entries
-    .map(([key, item]) => `${JSON.stringify(key)}:${canonicalJson(item)}`)
+    .map(([key, item]) => `${
+      JSON.stringify(requireWellFormedUnicode(key, "Canonical Coding Pack key"))
+    }:${canonicalJson(item)}`)
     .join(",")}}`;
 }
 

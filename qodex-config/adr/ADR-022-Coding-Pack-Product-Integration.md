@@ -68,6 +68,12 @@ have the same fingerprint and `packId` across different local roots or labels.
 local-root inference is a design goal, not an absolute cryptographic
 non-inference claim.
 
+Portable inclusion reasons and selection-rules versions are strict
+machine-readable identifiers. They are not explanatory free text. All
+caller-supplied portable strings must be well-formed Unicode before UTF-8 byte
+counting, ordering, hashing, or canonical serialization. KerniQ does not
+normalize those strings or replace malformed surrogate code units.
+
 ## Authorization and AgentFuse
 
 Read-only deterministic repository inspection uses ordinary capability and
@@ -214,7 +220,19 @@ The first bounded slice is implemented for Draft PR review in
 UTF-8 source hashing, fixed bounds, canonical portable manifest identity,
 deep-freeze, serialization, and verification. It has no runtime dependencies.
 
+The unmerged manifest contract was corrected in place: source entries use
+`inclusionReasonCode`, selection rules versions are portable machine
+identifiers, metadata privacy checks target the actual portable fields,
+ill-formed UTF-16 is rejected, and RFC 3339 `-00:00` is not accepted as a known
+instant. No backward compatibility layer or second schema version is required.
+
 ```text
+PRE_MERGE_CONTRACT_CORRECTION=true
+BACKWARD_COMPATIBILITY_REQUIRED=false
+PORTABLE_INCLUSION_REASON_FREE_TEXT=false
+INCLUSION_REASON_MACHINE_CODE=true
+SELECTION_RULES_VERSION_PORTABLE_IDENTIFIER=true
+ILL_FORMED_UTF16_ACCEPTED=false
 V0_7_2_STARTED=false
 FILESYSTEM_DISCOVERY_IMPLEMENTED=false
 GITIGNORE_PARSING_IMPLEMENTED=false

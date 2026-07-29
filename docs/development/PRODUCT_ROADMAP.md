@@ -100,7 +100,11 @@ not change.
 Repo2Prompt, Agent Doctor, Agent Rules Kit, and Git Task Checkpoints remain
 roadmap context, not currently integrated Coding Pack capabilities.
 
-v0.7.1 is a pure browser-safe package slice only. Filesystem discovery,
+v0.7.1 is a pure browser-safe package slice only. Its pre-merge contract uses
+portable machine codes for inclusion reasons and selection-rule versions,
+rejects ill-formed UTF-16 before canonical UTF-8 processing, and keeps an
+optional project label explicit rather than deriving it from a local folder.
+Filesystem discovery,
 `.gitignore` parsing, secret scanning, UI, persistence, export, native
 commands, Action Runtime and AgentFuse integration remain unimplemented.
 

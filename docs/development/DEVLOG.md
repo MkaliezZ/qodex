@@ -1139,9 +1139,27 @@ deterministic `sourceFingerprint` and `packId`, instance `manifestDigest`,
 deep-frozen manifests, canonical serialization, and verification that
 recomputes identity and bounds. Portable exclusion details reject absolute
 paths, local binding IDs, private-root fingerprints, and destination identity.
-The package has 87 focused tests including
+Before merge, the portable source contract was corrected from unrestricted
+`inclusionReason` text to the machine-readable `inclusionReasonCode`; selection
+rules versions and exclusion reason codes use the same portable metadata
+privacy boundary. All externally supplied portable strings reject ill-formed
+UTF-16 before UTF-8 comparison, hashing, or serialization, and RFC 3339
+`-00:00` is rejected because it does not identify a known offset.
+
+The package has 126 focused tests including
 privacy sentinels, order independence, root/label separation, malformed paths,
-CRLF/LF identity, zero-byte input, caller immutability, bounds, and tampering.
+valid non-BMP ordering, malformed UTF-16, CRLF/LF identity, zero-byte input,
+caller immutability, bounds, and tampering.
+
+```text
+PRE_MERGE_CONTRACT_CORRECTION=true
+BACKWARD_COMPATIBILITY_REQUIRED=false
+PORTABLE_INCLUSION_REASON_FREE_TEXT=false
+INCLUSION_REASON_MACHINE_CODE=true
+SELECTION_RULES_VERSION_PORTABLE_IDENTIFIER=true
+ILL_FORMED_UTF16_ACCEPTED=false
+PROJECT_LABEL_AUTOMATIC_LOCAL_COPY=false
+```
 
 v0.7.2 has not started. This slice performs no filesystem discovery,
 `.gitignore` parsing, secret scanning, UI, persistence, export, native command,

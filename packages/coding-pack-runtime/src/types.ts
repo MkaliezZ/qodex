@@ -36,7 +36,7 @@ export interface CodingPackSelectionRules {
 export interface CodingPackSourceInput {
   readonly relativePath: string;
   readonly bytes: Uint8Array;
-  readonly inclusionReason: string;
+  readonly inclusionReasonCode: string;
 }
 
 export interface CodingPackFileEntry {
@@ -44,7 +44,7 @@ export interface CodingPackFileEntry {
   readonly sourceDigest: string;
   readonly byteCount: number;
   readonly encoding: CodingPackEncoding;
-  readonly inclusionReason: string;
+  readonly inclusionReasonCode: string;
 }
 
 export interface CodingPackExclusion {
