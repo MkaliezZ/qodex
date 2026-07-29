@@ -1,8 +1,9 @@
 # ADR-022 - Coding Pack Product Integration
 
-**Status:** Proposed
+**Status:** Accepted
 **Date:** 2026-07-29
 **Planning base:** `0486704d613ea203672d75bee455346cceafb225`
+**Decision merge:** `46ae1d405a5519477de7da3d1eba51c7e0ae5640`
 **Depends on:** ADR-004, ADR-010, ADR-019, ADR-020, ADR-021
 
 ## Context
@@ -204,4 +205,32 @@ arbitrary shell added=false
 AgentFuse content-quality judgment added=false
 workflow changed=false
 CI_NODE20_DEPRECATION_REVIEW_REQUIRED=true
+```
+
+## v0.7.1 Implementation Boundary
+
+The first bounded slice is implemented for Draft PR review in
+`@qodex/coding-pack-runtime`. It contains only browser-safe contracts, exact
+UTF-8 source hashing, fixed bounds, canonical portable manifest identity,
+deep-freeze, serialization, and verification. It has no runtime dependencies.
+
+```text
+V0_7_2_STARTED=false
+FILESYSTEM_DISCOVERY_IMPLEMENTED=false
+GITIGNORE_PARSING_IMPLEMENTED=false
+SECRET_SCANNING_IMPLEMENTED=false
+CODING_PACK_UI_IMPLEMENTED=false
+CODING_PACK_PERSISTENCE_IMPLEMENTED=false
+CODING_PACK_EXPORT_IMPLEMENTED=false
+CODING_PACK_NATIVE_MODULE_IMPLEMENTED=false
+CODING_PACK_ACTION_RUNTIME_INTEGRATION=false
+CODING_PACK_AGENTFUSE_INTEGRATION=false
+PACK_DECIDED_PERSISTENCE_IMPLEMENTED=false
+SESSION_SCHEMA_CHANGED=false
+PROJECT_COMMAND_FREEZE_CHANGED=false
+PATCH_MIGRATED=false
+ARBITRARY_FILE_READ_ADDED=false
+ARBITRARY_FILE_WRITE_ADDED=false
+ARBITRARY_SHELL_ADDED=false
+WORKFLOW_CHANGED=false
 ```

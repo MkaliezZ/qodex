@@ -961,5 +961,45 @@ CODING_PACK_WRITE_OR_EXPORT_BOUNDARY_REQUIRED=true
 PROJECT_COMMAND_FREEZE_CHANGED=false
 CI_NODE20_DEPRECATION_REVIEW_REQUIRED=true
 
-READY_FOR_V0_7_PLANNING_REVIEW
+V0_7_PLANNING_APPROVED_AND_MERGED
+```
+
+## v0.7.1 Implementation Status
+
+The corrected product plan was approved and merged through PR #17:
+
+```text
+PR_17_CORRECTED_HEAD=3a944e2daacb4981144e33d07913e4eedb9c506a
+V0_7_PLANNING_MERGE_COMMIT=46ae1d405a5519477de7da3d1eba51c7e0ae5640
+V0_7_PLANNING_MERGED=true
+```
+
+v0.7.1 is implemented for review in a Draft PR as the pure browser-safe
+`@qodex/coding-pack-runtime` package. It includes typed portable/local
+contracts, strict portable path validation, exact UTF-8 byte hashing, the
+reviewed default limits, deterministic canonical identity, deep-frozen
+manifests, canonical serialization, and recomputing verification.
+
+The implementation stops before v0.7.2:
+
+```text
+V0_7_1_IMPLEMENTED_IN_DRAFT_PR=true
+V0_7_2_STARTED=false
+FILESYSTEM_DISCOVERY_IMPLEMENTED=false
+GITIGNORE_PARSING_IMPLEMENTED=false
+SECRET_SCANNING_IMPLEMENTED=false
+CODING_PACK_UI_IMPLEMENTED=false
+CODING_PACK_PERSISTENCE_IMPLEMENTED=false
+CODING_PACK_EXPORT_IMPLEMENTED=false
+CODING_PACK_NATIVE_MODULE_IMPLEMENTED=false
+CODING_PACK_ACTION_RUNTIME_INTEGRATION=false
+CODING_PACK_AGENTFUSE_INTEGRATION=false
+PACK_DECIDED_PERSISTENCE_IMPLEMENTED=false
+SESSION_SCHEMA_CHANGED=false
+PROJECT_COMMAND_FREEZE_CHANGED=false
+PATCH_MIGRATED=false
+ARBITRARY_FILE_READ_ADDED=false
+ARBITRARY_FILE_WRITE_ADDED=false
+ARBITRARY_SHELL_ADDED=false
+WORKFLOW_CHANGED=false
 ```

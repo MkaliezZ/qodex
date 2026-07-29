@@ -1124,3 +1124,24 @@ No v0.7 implementation, Session schema, workflow, package, test, runtime,
 Project Command freeze, Patch, Git, MCP, browser-native access, or arbitrary
 shell behavior changed. The GitHub Actions Node 20 deprecation annotation is
 recorded for a separate maintenance PR.
+
+### KerniQ v0.7.1 Coding Pack Contracts and Deterministic Portable Manifest
+
+PR #17 planning merged through merge commit
+`46ae1d405a5519477de7da3d1eba51c7e0ae5640`. v0.7.1 is implemented for review
+in a Draft PR as the new browser-safe, zero-runtime-dependency
+`@qodex/coding-pack-runtime` package.
+
+The slice adds portable and local identity type separation, strict
+project-relative path contracts, fatal UTF-8 validation, exact-byte SHA-256
+source evidence, fixed selection limits, UTF-8-byte-ordered canonical JSON,
+deterministic `sourceFingerprint` and `packId`, instance `manifestDigest`,
+deep-frozen manifests, canonical serialization, and verification that
+recomputes identity and bounds. The package has 61 focused tests including
+privacy sentinels, order independence, root/label separation, malformed paths,
+CRLF/LF identity, zero-byte input, bounds, and tampering.
+
+v0.7.2 has not started. This slice performs no filesystem discovery,
+`.gitignore` parsing, secret scanning, UI, persistence, export, native command,
+Action Runtime, AgentFuse, Session, network, or Project Command work. The
+v0.6.1 Project Command freeze and GitHub workflows are unchanged.
