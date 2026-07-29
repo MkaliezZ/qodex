@@ -22,7 +22,8 @@ Command migration remained outside that proof milestone.
 
 ### v0.6.1 - Project Command Action Runtime Adapter
 
-**Status:** v0.6.1.1 through v0.6.1.5 merged; v0.6.1.6 real proof complete and ready for Draft PR review
+**Status:** v0.6.1.6 implementation and real proof merged; final freeze seal in
+Draft PR and not yet merged
 
 The source audit, responsibility boundary, typed contracts, lifecycle decision,
 threat model, six implementation slices, automated test plan, and real Tauri
@@ -61,17 +62,19 @@ coverage. It resets unstarted pre-restart allow evidence before fresh
 reapproval, releases transient live decision state on every terminal path, and
 prevents raw runner diagnostics from reaching model-visible results.
 
-The v0.6.1.6 review branch adds a dual-gated real Tauri proof and one bounded
+The merged v0.6.1.6 result adds a dual-gated real Tauri proof and one bounded
 native request-admission correction exposed by that proof. The isolated proof
 uses the actual SQLite store, managed Python bridge, pinned AgentFuse
 `RuntimeGuard.evaluate()`, Tauri IPC, Rust catalog re-resolution, and no-shell
 process. It proves allow, human deny, canonical block, zero-dispatch
 persistence barriers, settlement interruption, restart no-replay, stale
-authority invalidation, and controlled lifecycle at-most-once behavior. Final
-freeze remains pending Draft PR CI, review, and merge.
+authority invalidation, and controlled lifecycle at-most-once behavior. A
+separate docs-only Draft PR prepares the final freeze seal; the seal is not yet
+merged and the next implementation milestone has not started.
 
 - [v0.6.1 planning document](kerniq_project_command_action_runtime_adapter_planning_v0_6_1.md)
 - [v0.6.1.6 real Tauri proof](kerniq_project_command_real_tauri_proof_v0_6_1_6.md)
+- [v0.6.1 final freeze seal](kerniq_v0_6_1_project_command_final_freeze.md)
 - [ADR-021](../../qodex-config/adr/ADR-021-Project-Command-Action-Runtime-Adapter.md)
 
 ### v0.7 - Coding Pack Product Integration

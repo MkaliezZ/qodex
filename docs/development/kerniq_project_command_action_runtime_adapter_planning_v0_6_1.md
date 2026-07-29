@@ -2,7 +2,8 @@
 
 **Date:** 2026-07-26
 **Updated:** 2026-07-29
-**Status:** v0.6.1.1 through v0.6.1.5 merged; v0.6.1.6 real proof complete and ready for Draft PR review
+**Status:** v0.6.1.6 implementation and real proof merged; final freeze seal
+prepared in a docs-only Draft PR and not yet merged
 **Source baseline:** `c7a0b0adf7a0dab4729a2db1a77a58d8c2366beb`
 **v0.6.1.1 implementation baseline:** `7be4a7d69699eeac7498be1d75e17c7c1dc599ad`
 **v0.6.1.1 merge:** `be32ca0caa764aa86e3de341557fedbc2acba0a5`
@@ -15,6 +16,10 @@
 **v0.6.1.5 implementation baseline:** `a36503f198c016daa1f6c1c8f2af1d894c0e95ef`
 **v0.6.1.5 merge:** `c5e214a43f9102c23f9c0a973782d227606a5c2b`
 **v0.6.1.6 proof baseline:** `c5e214a43f9102c23f9c0a973782d227606a5c2b`
+**v0.6.1.6 real proof execution code head:** `1ec336c4d5aaa1f0ba902117532bf2b610be1a4a`
+**v0.6.1.6 reviewed head:** `1d600e7eb4493c7f7e41b7f6fea22ba907c94d4e`
+**v0.6.1.6 merge:** `4eb7c24c493b0fc135a750f07ed46cbb86ddd461`
+**v0.6.1.6 post-merge CI:** `30389964085`
 
 ## Executive Summary
 
@@ -634,7 +639,7 @@ not frozen.
 
 ### v0.6.1.5 - Duplicate, interruption, timeout, cancellation, and recovery tests
 
-**Status:** Implemented in Draft PR; not merged or frozen.
+**Status:** Merged through `c5e214a43f9102c23f9c0a973782d227606a5c2b`.
 
 - Exercise stale approvals/digests, catalog and project mismatch, duplicate
   clicks/execute calls, cancellation windows, timeout, output truncation,
@@ -648,6 +653,10 @@ not frozen.
 - Keep model-visible execution failures generic and bounded.
 
 ### v0.6.1.6 - Real Tauri proof, result review, and freeze
+
+**Status:** Implementation and real proof merged through
+`4eb7c24c493b0fc135a750f07ed46cbb86ddd461`; final docs-only freeze seal not
+yet merged.
 
 - Run one real cataloged harmless command and one policy-denied command in an
   isolated project.
@@ -795,7 +804,8 @@ v0.6.1.3 merged=true
 v0.6.1.4 merged=true
 v0.6.1.5 merged=true
 v0.6.1.6 real Tauri proof complete=true
-v0.6.1.6 Draft PR merged=false
+v0.6.1.6 Draft PR merged=true
+v0.6.1 final freeze seal Draft PR merged=false
 Project Command native Desktop path migrated=true
 Project Command all environments migrated=false
 Project Command decision path implemented=true
@@ -844,18 +854,19 @@ commands, arbitrary Python, and production claims beyond Project Command.
 ## Final Planning Verdict
 
 The current source implements the bounded adapter without introducing a
-duplicate lifecycle. v0.6.1.1 through v0.6.1.5 are merged. The v0.6.1.6 review
-branch completes the isolated real Tauri proof and fixes the one bounded native
-policy-profile admission defect it exposed. The full matrix was rerun through
-actual SQLite, managed Python, canonical AgentFuse, Tauri IPC, Rust catalog
-resolution, and no-shell execution.
+duplicate lifecycle. v0.6.1.1 through v0.6.1.6 are merged. The isolated real
+Tauri proof exposed and verified the bounded native policy-profile admission
+correction. The full matrix was rerun through actual SQLite, managed Python,
+canonical AgentFuse, Tauri IPC, Rust catalog resolution, and no-shell
+execution.
 
-The evidence supports the controlled native Desktop lifecycle only. Final
-freeze remains pending Draft PR CI, review, and merge. See
+The evidence supports the controlled native Desktop lifecycle only. A separate
+docs-only Draft PR prepares the final freeze seal; it is not yet merged and the
+next implementation milestone has not started. See
 [`kerniq_project_command_real_tauri_proof_v0_6_1_6.md`](kerniq_project_command_real_tauri_proof_v0_6_1_6.md)
 and
-[`kerniq_v0_6_1_project_command_result_review_and_freeze.md`](kerniq_v0_6_1_project_command_result_review_and_freeze.md).
+[`kerniq_v0_6_1_project_command_final_freeze.md`](kerniq_v0_6_1_project_command_final_freeze.md).
 
 ```text
-READY_FOR_V0_6_1_6_RESULT_REVIEW
+READY_FOR_V0_6_1_FINAL_FREEZE_REVIEW
 ```

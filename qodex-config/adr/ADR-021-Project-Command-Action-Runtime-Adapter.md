@@ -1,6 +1,7 @@
 # ADR-021
 
-**Status:** Accepted plan; v0.6.1.1 through v0.6.1.5 merged; v0.6.1.6 real proof ready for Draft PR review
+**Status:** Accepted and implemented through v0.6.1.6; final docs-only freeze
+seal prepared in Draft PR and not yet merged
 **Date:** 2026-07-26
 **Updated:** 2026-07-29
 
@@ -19,12 +20,13 @@ KerniQ Project Command already has a reviewed execution path:
 
 KerniQ v0.6.0 also introduced Universal Action Runtime and the canonical DHMS
 AgentFuse decision boundary. That foundation separates a digest-bound proposal,
-approval, decision, dispatch receipt, and outcome. Its only integrated action
-is a development proof. Project Command is not currently routed through it.
+approval, decision, dispatch receipt, and outcome. The merged v0.6.1
+implementation routes the bounded native Desktop Project Command path through
+that decision boundary.
 
-The next implementation must obtain a canonical policy decision before command
-dispatch without weakening the existing catalog, approval, native, settlement,
-or recovery boundaries and without representing one command as two competing
+The implementation obtains a canonical policy decision before command dispatch
+without weakening the existing catalog, approval, native, settlement, or
+recovery boundaries and without representing one command as two competing
 lifecycles.
 
 ## Decision
@@ -201,7 +203,7 @@ This slice did not claim a real Tauri smoke or frozen status.
 
 ### v0.6.1.6 proof and correction boundary
 
-The v0.6.1.6 review branch adds a dual-gated proof surface that uses the actual
+The merged v0.6.1.6 result adds a dual-gated proof surface that uses the actual
 Tauri process, SQLite Session store, managed Python bridge, pinned canonical
 AgentFuse source, `RuntimeGuard.evaluate()`, Tauri IPC, Rust catalog
 re-resolution, and direct no-shell process.
@@ -217,8 +219,8 @@ AgentFuse identity, Session schema, catalog, or physical runner.
 The rerun proves allow, human deny, canonical block, decision/start
 zero-dispatch barriers, settlement interruption, restart no-replay,
 allowed-unstarted authority invalidation, controlled duplicate approval, and
-active-run identity coalescing. Final freeze remains pending Draft PR CI,
-review, and merge.
+active-run identity coalescing. The implementation and proof are merged; the
+separate docs-only final freeze seal remains pending review and merge.
 
 ### Target lifecycle
 
@@ -380,7 +382,7 @@ preserving KerniQ's responsibility for risk, approval, native execution, and
 physical outcomes. Session history remains coherent because one physical
 command has one start receipt and one terminal settlement.
 
-The Session projector must be extended so a pending command can retain a linked
+The Session projector was extended so a pending command can retain a linked
 `ACTION_DECIDED` record. This is an event-validation change, not a Session or
 SQLite schema migration.
 
@@ -430,7 +432,7 @@ started work is uncertain and cannot be replayed or reapproved.
 
 ## Compatibility and Non-Goals
 
-The v0.6.1.4 implementation remains bounded and does not:
+The merged v0.6.1.6 result remains bounded and does not:
 
 - migrate Patch or actions beyond native Desktop Project Command;
 - add `ACTION_STARTED` or `ACTION_COMPLETED`;
@@ -446,3 +448,7 @@ The v0.6.1.4 implementation remains bounded and does not:
 The full source audit, threat model, typed-contract proposal, test plan, and
 real Tauri proof plan are recorded in
 `docs/development/kerniq_project_command_action_runtime_adapter_planning_v0_6_1.md`.
+The exact merged evidence chain and proposed final freeze are recorded in
+`docs/development/kerniq_v0_6_1_project_command_final_freeze.md`. The final
+freeze seal is not repository state until that docs-only Draft PR is reviewed
+and merged; the next implementation milestone has not started.

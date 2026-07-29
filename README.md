@@ -256,6 +256,8 @@ calls have permanent global exactly-once semantics.
 See the
 [Project Command adapter plan](docs/development/kerniq_project_command_action_runtime_adapter_planning_v0_6_1.md)
 and [real Tauri proof](docs/development/kerniq_project_command_real_tauri_proof_v0_6_1_6.md).
+The [final freeze seal](docs/development/kerniq_v0_6_1_project_command_final_freeze.md)
+records the exact merged evidence chain and bounded non-claims.
 
 ---
 
@@ -265,8 +267,9 @@ The authoritative roadmap is maintained in
 [PRODUCT_ROADMAP.md](docs/development/PRODUCT_ROADMAP.md). v0.4.1 is frozen;
 v0.6 is merged and frozen as the managed Python and universal action
 foundation. The bounded native Desktop Project Command path is implemented and
-its v0.6.1.6 real Tauri result is ready for Draft PR review; final freeze still
-requires review and merge. Patch remains outside this scope. Installer work is
+its v0.6.1.6 implementation and real proof are merged. The final freeze seal is
+prepared in a separate Draft PR and is not yet merged; the next implementation
+milestone has not started. Patch remains outside this scope. Installer work is
 planned for v0.8, and the Stage 2 namespace-wide rename remains explicitly
 deferred.
 

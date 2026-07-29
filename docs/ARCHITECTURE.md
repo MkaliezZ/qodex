@@ -256,10 +256,15 @@ invalidation, and controlled duplicate approval. Patch, browser execution,
 other KerniQ actions, and permanent global exactly-once behavior for arbitrary
 direct IPC calls are not included.
 
+The v0.6.1.6 implementation and real proof are merged. A separate docs-only
+Draft PR prepares the final freeze seal; that seal is not yet merged and the
+next implementation milestone has not started.
+
 Details:
 
 - [`kerniq_project_command_action_runtime_adapter_planning_v0_6_1.md`](development/kerniq_project_command_action_runtime_adapter_planning_v0_6_1.md)
 - [`kerniq_project_command_real_tauri_proof_v0_6_1_6.md`](development/kerniq_project_command_real_tauri_proof_v0_6_1_6.md)
+- [`kerniq_v0_6_1_project_command_final_freeze.md`](development/kerniq_v0_6_1_project_command_final_freeze.md)
 - [`ADR-021`](../qodex-config/adr/ADR-021-Project-Command-Action-Runtime-Adapter.md)
 
 ### 5. Diff Engine (`packages/diff-engine`)
