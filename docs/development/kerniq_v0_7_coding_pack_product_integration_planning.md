@@ -423,6 +423,13 @@ rules in two different local roots therefore produce the same
 Preventing local-root inference is a required design goal, not an absolute
 cryptographic non-inference claim.
 
+`inclusionReasonCode` and `selectionRulesVersion` are bounded portable machine
+identifiers, not free text. The inclusion reason remains part of each source
+entry and therefore participates in `sourceFingerprint`. All caller-supplied
+portable strings must be well-formed Unicode before UTF-8 byte counting,
+ordering, hashing, or canonical serialization. No Unicode normalization is
+performed.
+
 ### Proposed Manifest Fields
 
 ```ts
@@ -516,7 +523,7 @@ interface CodingPackFileEntry {
   byteCount: number;
   encoding: "utf-8";
   language?: string;
-  inclusionReason: string;
+  inclusionReasonCode: string;
 }
 
 interface CodingPackSelectionRule {
@@ -720,8 +727,11 @@ but cannot prove that a pack contains no secret or private information.
 | Portable manifest leaks private-root-derived fingerprint | Coding Pack core | Source identity excludes local fingerprint and root | Privacy regression scans canonical manifest and identities | Reject manifest and block export | Different-root fixtures plus path-derived fingerprint sentinel |
 | Portable manifest copies local directory name without consent | Desktop/Coding Pack core | `projectLabel` absent by default and accepted only as explicit bounded input | Preview identifies optional user label provenance | Omit label or reject invalid label | Local folder sentinel absent unless explicitly supplied |
 | Same source in different roots receives different source fingerprint | Coding Pack core | Canonical source identity hashes only portable content and deterministic rules | Cross-root fixture compares fingerprint and pack ID | Fail identity verification | Identical bytes/rules under POSIX and Windows root fixtures |
+| Exclusion detail leaks an absolute or private path | Coding Pack core | Accept only bounded sanitized detail with no absolute path, local binding, private-root fingerprint, or destination identity | Portable-manifest privacy regression scan | Reject the exclusion and block manifest creation | POSIX path, Windows path, binding ID, fingerprint, destination handle, and control-character fixtures |
 | Cross-volume staging presented as atomic | Native exporter | Prove staging and target share a filesystem before write | Operation evidence records reviewed promotion primitive and filesystem check | Fail closed before physical write | Cross-volume destination fixture with zero-write assertion |
-| Export starts without durable AgentFuse allow | Coding Pack store/native | Require persisted `PACK_DECIDED allow` before persisted start | Ordered lifecycle evidence and decision identity | Reject start and perform zero writes | Missing, deny, error, and decision-persistence-failure cases |
+| Export starts without durable AgentFuse allow | Coding Pack store/native | Require persisted `PACK_DECIDED allow` before persisted start | Ordered lifecycle evidence and decision identity | Reject start and perform zero writes | Missing, deny, and error decision cases |
+| Decision persistence fails but export starts | Coding Pack store/native | Treat durable decision commit as a hard precondition for export start | Missing decision record plus zero-write evidence | Return error before start and perform zero writes | Inject decision-store failure before start |
+| Start persistence fails but physical write begins | Coding Pack store/native | Persist `PACK_EXPORT_STARTED` before native dispatch | Missing start record plus zero-write evidence | Return error before native dispatch and perform zero writes | Inject start-store failure before first write |
 
 ## Compatibility Constraints
 
@@ -961,5 +971,65 @@ CODING_PACK_WRITE_OR_EXPORT_BOUNDARY_REQUIRED=true
 PROJECT_COMMAND_FREEZE_CHANGED=false
 CI_NODE20_DEPRECATION_REVIEW_REQUIRED=true
 
-READY_FOR_V0_7_PLANNING_REVIEW
+V0_7_PLANNING_APPROVED_AND_MERGED
+```
+
+## v0.7.1 Implementation Status
+
+The corrected product plan was approved and merged through PR #17:
+
+```text
+PR_17_CORRECTED_HEAD=3a944e2daacb4981144e33d07913e4eedb9c506a
+V0_7_PLANNING_MERGE_COMMIT=46ae1d405a5519477de7da3d1eba51c7e0ae5640
+V0_7_PLANNING_MERGED=true
+```
+
+v0.7.1 is implemented for review in a Draft PR as the pure browser-safe
+`@qodex/coding-pack-runtime` package. It includes typed portable/local
+contracts, strict portable path validation, exact UTF-8 byte hashing, the
+reviewed default limits, deterministic canonical identity, deep-frozen
+manifests, canonical serialization, and recomputing verification. Before
+merge, unrestricted inclusion reason text was replaced by
+`inclusionReasonCode`; portable machine metadata rejects local authority
+material, ill-formed UTF-16 is rejected before UTF-8 processing, and RFC 3339
+unknown offset `-00:00` is invalid.
+
+```text
+PRE_MERGE_CONTRACT_CORRECTION=true
+BACKWARD_COMPATIBILITY_REQUIRED=false
+PORTABLE_INCLUSION_REASON_FREE_TEXT=false
+INCLUSION_REASON_MACHINE_CODE=true
+SELECTION_RULES_VERSION_PORTABLE_IDENTIFIER=true
+ILL_FORMED_UTF16_ACCEPTED=false
+VALID_NON_BMP_UNICODE_ACCEPTED=true
+PROJECT_LABEL_EXPLICIT_USER_FIELD=true
+PROJECT_LABEL_AUTOMATIC_LOCAL_COPY=false
+```
+
+The implementation stops before v0.7.2:
+
+Case-fold collision policy and Unicode-normalization collision policy remain
+v0.7.2 work; v0.7.1 preserves exact code points and does not claim universal
+cross-platform collision protection.
+
+```text
+V0_7_1_IMPLEMENTED_IN_DRAFT_PR=true
+V0_7_2_STARTED=false
+FILESYSTEM_DISCOVERY_IMPLEMENTED=false
+GITIGNORE_PARSING_IMPLEMENTED=false
+SECRET_SCANNING_IMPLEMENTED=false
+CODING_PACK_UI_IMPLEMENTED=false
+CODING_PACK_PERSISTENCE_IMPLEMENTED=false
+CODING_PACK_EXPORT_IMPLEMENTED=false
+CODING_PACK_NATIVE_MODULE_IMPLEMENTED=false
+CODING_PACK_ACTION_RUNTIME_INTEGRATION=false
+CODING_PACK_AGENTFUSE_INTEGRATION=false
+PACK_DECIDED_PERSISTENCE_IMPLEMENTED=false
+SESSION_SCHEMA_CHANGED=false
+PROJECT_COMMAND_FREEZE_CHANGED=false
+PATCH_MIGRATED=false
+ARBITRARY_FILE_READ_ADDED=false
+ARBITRARY_FILE_WRITE_ADDED=false
+ARBITRARY_SHELL_ADDED=false
+WORKFLOW_CHANGED=false
 ```
