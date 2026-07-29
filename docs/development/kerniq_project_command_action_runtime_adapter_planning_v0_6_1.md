@@ -2,8 +2,8 @@
 
 **Date:** 2026-07-26
 **Updated:** 2026-07-29
-**Status:** v0.6.1.6 implementation and real proof merged; final freeze seal
-prepared in a docs-only Draft PR and not yet merged
+**Status:** v0.6.1.6 implementation, real proof, and final freeze seal merged;
+Project Command scope frozen
 **Source baseline:** `c7a0b0adf7a0dab4729a2db1a77a58d8c2366beb`
 **v0.6.1.1 implementation baseline:** `7be4a7d69699eeac7498be1d75e17c7c1dc599ad`
 **v0.6.1.1 merge:** `be32ca0caa764aa86e3de341557fedbc2acba0a5`
@@ -655,8 +655,8 @@ not frozen.
 ### v0.6.1.6 - Real Tauri proof, result review, and freeze
 
 **Status:** Implementation and real proof merged through
-`4eb7c24c493b0fc135a750f07ed46cbb86ddd461`; final docs-only freeze seal not
-yet merged.
+`4eb7c24c493b0fc135a750f07ed46cbb86ddd461`; final docs-only freeze seal merged
+through `7c594b05293e7d151c536a7b37f2f88b95135263`.
 
 - Run one real cataloged harmless command and one policy-denied command in an
   isolated project.
@@ -805,7 +805,9 @@ v0.6.1.4 merged=true
 v0.6.1.5 merged=true
 v0.6.1.6 real Tauri proof complete=true
 v0.6.1.6 Draft PR merged=true
-v0.6.1 final freeze seal Draft PR merged=false
+v0.6.1 final freeze seal merged=true
+v0.6.1 Project Command release frozen=true
+next implementation milestone started=false
 Project Command native Desktop path migrated=true
 Project Command all environments migrated=false
 Project Command decision path implemented=true
@@ -860,13 +862,14 @@ correction. The full matrix was rerun through actual SQLite, managed Python,
 canonical AgentFuse, Tauri IPC, Rust catalog resolution, and no-shell
 execution.
 
-The evidence supports the controlled native Desktop lifecycle only. A separate
-docs-only Draft PR prepares the final freeze seal; it is not yet merged and the
-next implementation milestone has not started. See
+The evidence supports the controlled native Desktop lifecycle only. The
+separate docs-only final freeze seal is merged, the bounded v0.6.1 Project
+Command scope is frozen, and the next implementation milestone has not started.
+See
 [`kerniq_project_command_real_tauri_proof_v0_6_1_6.md`](kerniq_project_command_real_tauri_proof_v0_6_1_6.md)
 and
 [`kerniq_v0_6_1_project_command_final_freeze.md`](kerniq_v0_6_1_project_command_final_freeze.md).
 
 ```text
-READY_FOR_V0_6_1_FINAL_FREEZE_REVIEW
+KERNIQ_V0_6_1_PROJECT_COMMAND_AGENTFUSE_GATE_FROZEN
 ```

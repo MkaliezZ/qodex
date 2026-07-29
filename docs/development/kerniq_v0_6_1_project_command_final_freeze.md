@@ -1,17 +1,17 @@
 # KerniQ v0.6.1 Project Command Final Freeze Seal
 
 **Date:** 2026-07-29
-**Status:** Proposed final freeze seal in a docs-only Draft PR; not merged
+**Status:** Active and merged final freeze seal
 **Next implementation milestone started:** `false`
 
-## Proposed Verdict
+## Active Verdict
 
 ```text
 KERNIQ_V0_6_1_PROJECT_COMMAND_AGENTFUSE_GATE_FROZEN
 ```
 
-This verdict is proposed for review. The repository is not finally frozen
-until this docs-only seal is reviewed and merged.
+This verdict is active on `main` after the docs-only final freeze seal passed
+review, merged, and passed post-merge CI.
 
 ## Exact Evidence Chain
 
@@ -26,6 +26,10 @@ until this docs-only seal is reviewed and merged.
 | v0.6.1.6 reviewed PR head | `1d600e7eb4493c7f7e41b7f6fea22ba907c94d4e` |
 | v0.6.1.6 merge | `4eb7c24c493b0fc135a750f07ed46cbb86ddd461` |
 | Post-merge CI | `30389964085` |
+| PR #15 reviewed head | `1328f40cf9caef1bb8f452553afcc9b2e5a9258d` |
+| PR #15 merge commit | `7c594b05293e7d151c536a7b37f2f88b95135263` |
+| PR #15 post-merge CI | `30431723082` |
+| Freeze activated on main | `true` |
 
 The v0.6.1.6 merge tree is identical to the reviewed PR head tree. The
 reviewed head is an ancestor of `main`; the merge introduced no conflict
@@ -48,7 +52,7 @@ head changed documentation only after that executed code anchor.
 
 ## Frozen Scope
 
-The proposed freeze covers exactly:
+The active freeze covers exactly:
 
 - the bounded native Desktop Project Command path;
 - trusted TypeScript and Rust catalog identity;
@@ -122,6 +126,7 @@ lockfiles, package versions, runtime behavior, or the frozen AgentFuse
 identity.
 
 ```text
-FINAL_FREEZE_SEAL_DRAFT_PR_MERGED=false
+FINAL_FREEZE_SEAL_MERGED=true
+V0_6_1_PROJECT_COMMAND_RELEASE_FROZEN=true
 NEXT_IMPLEMENTATION_MILESTONE_STARTED=false
 ```

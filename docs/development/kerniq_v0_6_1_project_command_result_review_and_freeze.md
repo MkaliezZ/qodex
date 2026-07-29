@@ -1,8 +1,8 @@
 # KerniQ v0.6.1 Project Command Result Review and Freeze Preparation
 
 **Date:** 2026-07-29
-**Status:** v0.6.1.6 implementation and real proof merged; final freeze seal
-prepared in a separate Draft PR and not yet merged
+**Status:** v0.6.1.6 implementation, real proof, and final freeze seal merged;
+Project Command scope frozen
 **Proof base:** `c5e214a43f9102c23f9c0a973782d227606a5c2b`
 **Verdict:** `READY_FOR_V0_6_1_6_RESULT_REVIEW`
 
@@ -18,8 +18,11 @@ prepared in a separate Draft PR and not yet merged
 | Corrected PR CI | `30389533518` |
 | v0.6.1.6 merge | `4eb7c24c493b0fc135a750f07ed46cbb86ddd461` |
 | Post-merge CI | `30389964085` |
+| Final freeze PR #15 reviewed head | `1328f40cf9caef1bb8f452553afcc9b2e5a9258d` |
+| Final freeze PR #15 merge | `7c594b05293e7d151c536a7b37f2f88b95135263` |
+| Final freeze PR #15 post-merge CI | `30431723082` |
 | PR merged | `true` |
-| Release frozen | `false` |
+| Release frozen | `true` |
 
 ## Review Basis
 
@@ -38,8 +41,7 @@ The full proof record is
 
 ## Evidence-Supported Freeze Candidate
 
-The following boundary is ready for review and may be frozen when this branch
-passes CI, receives review, and is merged:
+The following reviewed boundary is frozen:
 
 - bounded native Desktop Project Command only;
 - trusted TypeScript and Rust catalog command identity;
@@ -144,16 +146,16 @@ ALL_KERNIQ_ACTIONS_AGENTFUSE_PROTECTED=false
 
 ## Freeze Procedure
 
-The implementation and proof PR has passed review and merged. This document
-still does not perform the final freeze. The separate
+The implementation and proof PR passed review and merged. The separate
 [`kerniq_v0_6_1_project_command_final_freeze.md`](kerniq_v0_6_1_project_command_final_freeze.md)
-seal must pass docs-only review and merge before the proposed freeze verdict
-becomes repository state.
+seal also passed docs-only review, merged as
+`7c594b05293e7d151c536a7b37f2f88b95135263`, and passed post-merge CI run
+`30431723082`. The bounded freeze verdict is active repository state.
 
 ```text
 V0_6_1_6_DRAFT_PR_MERGED=true
-FINAL_FREEZE_SEAL_DRAFT_PR_MERGED=false
-V0_6_1_PROJECT_COMMAND_RELEASE_FROZEN=false
+FINAL_FREEZE_SEAL_MERGED=true
+V0_6_1_PROJECT_COMMAND_RELEASE_FROZEN=true
 NEXT_IMPLEMENTATION_MILESTONE_STARTED=false
 ```
 

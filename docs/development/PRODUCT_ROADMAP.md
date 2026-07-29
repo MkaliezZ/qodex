@@ -22,8 +22,8 @@ Command migration remained outside that proof milestone.
 
 ### v0.6.1 - Project Command Action Runtime Adapter
 
-**Status:** v0.6.1.6 implementation and real proof merged; final freeze seal in
-Draft PR and not yet merged
+**Status:** v0.6.1.6 implementation, real proof, and final freeze seal merged;
+Project Command scope frozen
 
 The source audit, responsibility boundary, typed contracts, lifecycle decision,
 threat model, six implementation slices, automated test plan, and real Tauri
@@ -69,8 +69,8 @@ uses the actual SQLite store, managed Python bridge, pinned AgentFuse
 process. It proves allow, human deny, canonical block, zero-dispatch
 persistence barriers, settlement interruption, restart no-replay, stale
 authority invalidation, and controlled lifecycle at-most-once behavior. A
-separate docs-only Draft PR prepares the final freeze seal; the seal is not yet
-merged and the next implementation milestone has not started.
+separate docs-only PR merged the final freeze seal. The v0.6.1 Project Command
+scope is frozen and the next implementation milestone has not started.
 
 - [v0.6.1 planning document](kerniq_project_command_action_runtime_adapter_planning_v0_6_1.md)
 - [v0.6.1.6 real Tauri proof](kerniq_project_command_real_tauri_proof_v0_6_1_6.md)
