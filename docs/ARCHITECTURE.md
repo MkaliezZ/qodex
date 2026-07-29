@@ -256,9 +256,9 @@ invalidation, and controlled duplicate approval. Patch, browser execution,
 other KerniQ actions, and permanent global exactly-once behavior for arbitrary
 direct IPC calls are not included.
 
-The v0.6.1.6 implementation and real proof are merged. A separate docs-only
-Draft PR prepares the final freeze seal; that seal is not yet merged and the
-next implementation milestone has not started.
+The v0.6.1.6 implementation, real proof, and docs-only final freeze seal are
+merged. The bounded v0.6.1 Project Command scope is frozen; the next
+implementation milestone has not started.
 
 Details:
 

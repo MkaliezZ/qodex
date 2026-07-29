@@ -1,7 +1,7 @@
 # ADR-021
 
-**Status:** Accepted and implemented through v0.6.1.6; final docs-only freeze
-seal prepared in Draft PR and not yet merged
+**Status:** Accepted, implemented, and frozen through the merged v0.6.1 final
+freeze seal
 **Date:** 2026-07-26
 **Updated:** 2026-07-29
 
@@ -219,8 +219,9 @@ AgentFuse identity, Session schema, catalog, or physical runner.
 The rerun proves allow, human deny, canonical block, decision/start
 zero-dispatch barriers, settlement interruption, restart no-replay,
 allowed-unstarted authority invalidation, controlled duplicate approval, and
-active-run identity coalescing. The implementation and proof are merged; the
-separate docs-only final freeze seal remains pending review and merge.
+active-run identity coalescing. The implementation, proof, and separate
+docs-only final freeze seal are merged. The bounded Project Command scope is
+frozen.
 
 ### Target lifecycle
 
@@ -448,7 +449,7 @@ The merged v0.6.1.6 result remains bounded and does not:
 The full source audit, threat model, typed-contract proposal, test plan, and
 real Tauri proof plan are recorded in
 `docs/development/kerniq_project_command_action_runtime_adapter_planning_v0_6_1.md`.
-The exact merged evidence chain and proposed final freeze are recorded in
-`docs/development/kerniq_v0_6_1_project_command_final_freeze.md`. The final
-freeze seal is not repository state until that docs-only Draft PR is reviewed
-and merged; the next implementation milestone has not started.
+The exact merged evidence chain and active final freeze are recorded in
+`docs/development/kerniq_v0_6_1_project_command_final_freeze.md`. The bounded
+Project Command freeze is repository state; the next implementation milestone
+has not started.

@@ -1079,16 +1079,17 @@ guard. Its corrected CI run `30389533518` and post-merge CI run `30389964085`
 both passed all five jobs. The merge tree is identical to the reviewed head
 tree.
 
-### KerniQ v0.6.1 Project Command Final Freeze Seal Preparation
+### KerniQ v0.6.1 Project Command Final Freeze Activation
 
-**Date:** 2026-07-29  |  **Status:** Docs-only Draft PR prepared; not merged
+**Date:** 2026-07-29  |  **Status:** Active and merged through `7c594b05293e7d151c536a7b37f2f88b95135263`
 
 Recorded the exact v0.6.1.1 through v0.6.1.6 merge chain, real proof execution
 code head, frozen AgentFuse identity, bounded native Desktop Project Command
 scope, and explicit non-claims in
 [`kerniq_v0_6_1_project_command_final_freeze.md`](kerniq_v0_6_1_project_command_final_freeze.md).
 
-The proposed verdict is
-`KERNIQ_V0_6_1_PROJECT_COMMAND_AGENTFUSE_GATE_FROZEN`, but it does not become
-the repository freeze state until this separate documentation PR is reviewed
-and merged. No next implementation milestone has started.
+PR #15 was reviewed at `1328f40cf9caef1bb8f452553afcc9b2e5a9258d`,
+merged as `7c594b05293e7d151c536a7b37f2f88b95135263`, and passed post-merge
+CI run `30431723082`. The active verdict is
+`KERNIQ_V0_6_1_PROJECT_COMMAND_AGENTFUSE_GATE_FROZEN`. No next implementation
+milestone has started.
