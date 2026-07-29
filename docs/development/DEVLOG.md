@@ -1093,3 +1093,30 @@ merged as `7c594b05293e7d151c536a7b37f2f88b95135263`, and passed post-merge
 CI run `30431723082`. The active verdict is
 `KERNIQ_V0_6_1_PROJECT_COMMAND_AGENTFUSE_GATE_FROZEN`. No next implementation
 milestone has started.
+
+The follow-up activation PR was reviewed at
+`12bd8dfb618b03ce86b3b547427087f7fe7bc5e3`, merged as
+`0486704d613ea203672d75bee455346cceafb225`, and passed post-merge CI run
+`30432376199`. The merge tree matched the reviewed head.
+
+### KerniQ v0.7 Coding Pack Product Integration Planning
+
+**Date:** 2026-07-29  |  **Status:** Planning-only Draft PR; implementation not started
+
+Audited Project Runtime, Context Engine, Desktop project access and UI, Action
+Runtime, Session Runtime and SQLite persistence, and Git checkpoints. The only
+direct Coding Pack implementation reference is the product roadmap; no
+`CodingPack` contracts, generator, manifest, preview/export UI, durable pack
+store, staleness check, receipt, or pack tests exist.
+
+The planning result is `CURRENT_CODING_PACK_STATE=PLANNED_ONLY`. The
+[v0.7 plan](kerniq_v0_7_coding_pack_product_integration_planning.md) and
+[ADR-022](../../qodex-config/adr/ADR-022-Coding-Pack-Product-Integration.md)
+define a deterministic manifest, explicit write/export authorization, a
+dedicated authoritative export lifecycle, privacy controls, 25-threat model,
+six bounded implementation slices, and real Desktop proof plan.
+
+No v0.7 implementation, Session schema, workflow, package, test, runtime,
+Project Command freeze, Patch, Git, MCP, browser-native access, or arbitrary
+shell behavior changed. The GitHub Actions Node 20 deprecation annotation is
+recorded for a separate maintenance PR.
