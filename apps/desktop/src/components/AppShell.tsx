@@ -71,6 +71,7 @@ interface RuntimeContextValue {
   chooseCurrentCodingPackDestination: () => Promise<void>;
   createCurrentCodingPackExportProposal: () => Promise<void>;
   confirmCurrentCodingPackExportProposal: () => Promise<void>;
+  evaluateCurrentCodingPackExportPolicy: () => Promise<void>;
   lastBundle: ContextBundle | null;
   estimatedTokens: number;
   pendingProposal: PatchProposal | null;

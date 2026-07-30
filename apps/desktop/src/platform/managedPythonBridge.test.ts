@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { TauriManagedPythonBridge } from "./managedPythonBridge";
 import type { AgentFuseDecisionRequest } from "@qodex/agentfuse-adapter";
+import type { CodingPackAgentFuseBridgeRequest } from "@qodex/coding-pack-agentfuse";
 
 const REQUEST: AgentFuseDecisionRequest = {
   protocolVersion: "kerniq.agentfuse.bridge.v1",
@@ -32,6 +33,31 @@ const REQUEST: AgentFuseDecisionRequest = {
   },
 };
 
+const CODING_PACK_REQUEST: CodingPackAgentFuseBridgeRequest = {
+  protocolVersion: "kerniq.agentfuse.bridge.v1",
+  messageId: "coding-pack-message-1",
+  messageType: "coding_pack_export_decision_request",
+  payload: {
+    request: {
+      protocolVersion: "kerniq.coding-pack.agentfuse-export.v1",
+      operationId: "operation-1",
+      proposalDigest: `sha256:${"1".repeat(64)}`,
+      approvalEvidenceDigest: `sha256:${"2".repeat(64)}`,
+      candidatePathsDigest: `sha256:${"3".repeat(64)}`,
+      sourceFingerprint: `sha256:${"4".repeat(64)}`,
+      packId: `pack-${"5".repeat(64)}`,
+      manifestDigest: `sha256:${"6".repeat(64)}`,
+      destinationBindingId: `destination-${"7".repeat(24)}`,
+      destinationFingerprint: `sha256:${"8".repeat(64)}`,
+      exportFormat: "kerniq-coding-pack-bundle-v1",
+    },
+    requestDigest: `sha256:${"9".repeat(64)}`,
+    policyProfileId: "kerniq-coding-pack-export-v1",
+    expectedPolicyDigest:
+      "sha256:752a8bf1f251e5c05f07ddd8d820af3c5554fb37e3a47fbcf41933f614167d07",
+  },
+};
+
 describe("TauriManagedPythonBridge", () => {
   it("maps runtime lifecycle calls to fixed native commands", async () => {
     const invoke = vi.fn(async (command: string) => ({ command }));
@@ -55,6 +81,14 @@ describe("TauriManagedPythonBridge", () => {
     const bridge = new TauriManagedPythonBridge(invoke);
     await bridge.requestDecision(REQUEST, new AbortController().signal);
     expect(invoke).toHaveBeenCalledWith("agentfuse_decide", { request: REQUEST });
+    await bridge.requestCodingPackExportDecision(
+      CODING_PACK_REQUEST,
+      new AbortController().signal,
+    );
+    expect(invoke).toHaveBeenLastCalledWith(
+      "agentfuse_decide",
+      { request: CODING_PACK_REQUEST },
+    );
   });
 
   it("does not invoke native code when already cancelled", async () => {

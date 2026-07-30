@@ -99,6 +99,48 @@ CODING_PACK_WRITE_OR_EXPORT_BOUNDARY_REQUIRED=true
 PROJECT_COMMAND_FREEZE_CHANGED=false
 ```
 
+## v0.7.4.2 AgentFuse Export Decision Boundary
+
+v0.7.4.1 merged through
+`c3f7c9cef73cb9660f9b4d39c325dc8c4e3f5170`. The next bounded slice migrates
+the dedicated store from `kerniq.coding-pack.store.v1` to v2 without rewriting
+historical events. Proposed and confirmed v1 operations remain unchanged and
+no migration triggers a decision or export.
+
+`@qodex/coding-pack-agentfuse` reconstructs one live confirmed operation and
+maps only its opaque/digest identity to
+`kerniq.coding-pack.agentfuse-export.v1`. The independent AgentFuse profile is
+`kerniq-coding-pack-export-v1` with frozen digest
+`sha256:752a8bf1f251e5c05f07ddd8d820af3c5554fb37e3a47fbcf41933f614167d07`.
+The request includes no absolute path, source content, destination label,
+shell, or command field. AgentFuse remains decision-only.
+
+Canonical allow becomes `decided_allow`, block becomes `decided_deny`, and
+bridge/protocol/policy failure becomes `decided_error`. Each outcome is one
+transactional `PACK_DECIDED` event bound to the proposal, durable
+`PACK_CONFIRMED` payload digest, request digest, AgentFuse source/package/
+protocol identity, and export policy identity. Persistence failure leaves the
+operation confirmed. TypeScript and native boundaries recompute the request
+digest and require `decidedAt` to precede proposal and approval expiry.
+Duplicate decisions fail closed.
+
+Restart does not evaluate, retry, or export. Decided records are historical and
+non-actionable. There is no `PACK_EXPORT_STARTED`, `PACK_EXPORT_COMPLETED`,
+destination write, staging, promotion, Action Runtime connection, Session
+schema change, Patch migration, Git automation, or shell.
+
+```text
+PACK_PROPOSED_IMPLEMENTED=true
+PACK_CONFIRMED_IMPLEMENTED=true
+PACK_DECIDED_IMPLEMENTED=true
+AGENTFUSE_EXPORT_POLICY_CONNECTED=true
+CODING_PACK_EXPORT_IMPLEMENTED=false
+DESTINATION_FILES_WRITTEN=false
+ACTION_RUNTIME_CONNECTED=false
+SESSION_SCHEMA_CHANGED=false
+PROJECT_COMMAND_FREEZE_CHANGED=false
+```
+
 ## Persistence
 
 The authoritative future operation sequence is:

@@ -48,6 +48,15 @@ export class TauriCodingPackStoreAdapter implements CodingPackStoreAdapter {
     });
   }
 
+  async appendDecision(
+    operation: CodingPackOperationRecord,
+    decidedEvent: CodingPackEvent,
+  ): Promise<void> {
+    await this.invokeCommand("coding_pack_store_decide", {
+      request: { operation, decidedEvent },
+    });
+  }
+
   getOperationSnapshotData(
     operationId: string,
   ): Promise<CodingPackStoredSnapshotData | null> {

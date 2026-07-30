@@ -6,7 +6,7 @@ import os
 import subprocess
 import sys
 from pathlib import Path
-from types import SimpleNamespace
+from types import MappingProxyType, SimpleNamespace
 
 import pytest
 
@@ -14,6 +14,7 @@ from python.kerniq_agentfuse_bridge.service import (
     BRIDGE_PROTOCOL_VERSION,
     BridgeService,
     CanonicalAgentFuse,
+    coding_pack_request_digest,
     run_loop,
 )
 
@@ -24,6 +25,11 @@ PROJECT_PROFILE = "kerniq-project-command-v1"
 PROJECT_POLICY_DIGEST = (
     "sha256:9c01df377b0cfd8db8392dc8966a2f12"
     "b38ad1b2ab9c89780ac049ac0eed38ad"
+)
+CODING_PACK_PROFILE = "kerniq-coding-pack-export-v1"
+CODING_PACK_POLICY_DIGEST = (
+    "sha256:752a8bf1f251e5c05f07ddd8d820af3"
+    "c5554fb37e3a47fbcf41933f614167d07"
 )
 SHA_A = f"sha256:{'a' * 64}"
 SHA_B = f"sha256:{'b' * 64}"
@@ -74,7 +80,10 @@ class FakeGuard:
         type(self).evaluate_calls += 1
         type(self).last_tool_call = tool_call
         if self.policy is not None:
-            return FakeDecision(self.policy(SimpleNamespace(**tool_call.values)))
+            values = dict(tool_call.values)
+            values["arguments"] = MappingProxyType(dict(values["arguments"]))
+            values["safe_metadata"] = MappingProxyType(dict(values["safe_metadata"]))
+            return FakeDecision(self.policy(SimpleNamespace(**values)))
         return FakeDecision("allow" if self.allowed else "block")
 
     async def aevaluate(self, tool_call: FakeToolCall) -> FakeDecision:
@@ -182,6 +191,28 @@ def project_command_payload() -> dict[str, object]:
     }
 
 
+def coding_pack_export_payload() -> dict[str, object]:
+    request = {
+        "protocolVersion": "kerniq.coding-pack.agentfuse-export.v1",
+        "operationId": "operation-1",
+        "proposalDigest": SHA_A,
+        "approvalEvidenceDigest": SHA_B,
+        "candidatePathsDigest": SHA_C,
+        "sourceFingerprint": SHA_A,
+        "packId": f"pack-{'b' * 64}",
+        "manifestDigest": SHA_C,
+        "destinationBindingId": f"destination-{'c' * 24}",
+        "destinationFingerprint": SHA_B,
+        "exportFormat": "kerniq-coding-pack-bundle-v1",
+    }
+    return {
+        "request": request,
+        "requestDigest": coding_pack_request_digest(request),
+        "policyProfileId": CODING_PACK_PROFILE,
+        "expectedPolicyDigest": CODING_PACK_POLICY_DIGEST,
+    }
+
+
 def test_handshake_reports_version_revision_schema_and_pid() -> None:
     response, stop = BridgeService(canonical()).handle(message("hello-1", "hello", {}))
     assert stop is False
@@ -244,6 +275,120 @@ def test_project_command_uses_public_evaluate_and_returns_canonical_allow() -> N
         forbidden not in encoded
         for forbidden in ["projectRoot", "executable", "rawCommand", "environment", "stdout"]
     )
+
+
+def test_coding_pack_export_uses_public_evaluate_without_export_side_effects() -> None:
+    payload = coding_pack_export_payload()
+    response, stop = BridgeService(canonical()).handle(
+        message(
+            "coding-pack-1",
+            "coding_pack_export_decision_request",
+            payload,
+        )
+    )
+    assert stop is False
+    assert response["messageType"] == "coding_pack_export_decision_result"
+    assert response["payload"]["decision"] == "allow"
+    assert response["payload"]["operationId"] == "operation-1"
+    assert response["payload"]["requestDigest"] == payload["requestDigest"]
+    assert response["payload"]["policyProfileId"] == CODING_PACK_PROFILE
+    assert response["payload"]["policyDigest"] == CODING_PACK_POLICY_DIGEST
+    assert FakeGuard.evaluate_calls == 1
+    assert FakeGuard.invoke_calls == 0
+    assert FakeGuard.last_tool_call is not None
+    assert FakeGuard.last_tool_call.values["tool_name"] == "kerniq.coding_pack.export"
+    encoded = json.dumps(FakeGuard.last_tool_call.values)
+    assert all(
+        forbidden not in encoded
+        for forbidden in [
+            "absoluteDestination",
+            "sourceContents",
+            "manifestContents",
+            "shell",
+            "commandArguments",
+            "displayLabel",
+            "privateRoot",
+        ]
+    )
+
+
+def test_coding_pack_request_digest_matches_the_typescript_vector() -> None:
+    assert coding_pack_export_payload()["requestDigest"] == (
+        "sha256:28c7e50774a4b51e62a476a73567886"
+        "b94b52367d7cc1b534ce6426d4762f917"
+    )
+
+
+@pytest.mark.parametrize(
+    "mutation",
+    [
+        lambda request: request.update(absoluteDestination="/private/export"),
+        lambda request: request.update(sourceContents="private source"),
+        lambda request: request.update(shell="rm -rf"),
+        lambda request: request.update(exportFormat="future-format"),
+        lambda request: request.pop("approvalEvidenceDigest"),
+        lambda request: request.update(unknownKey="unknown"),
+        lambda request: request.update(operationId="🌟" * 65),
+        lambda request: request.update(operationId="operation\nunsafe"),
+        lambda request: request.update(operationId="/private/export"),
+        lambda request: request.update(operationId=r"C:\private\export"),
+    ],
+)
+def test_coding_pack_export_policy_blocks_non_exact_requests(mutation) -> None:
+    payload = coding_pack_export_payload()
+    mutation(payload["request"])
+    payload["requestDigest"] = coding_pack_request_digest(payload["request"])
+    response, _ = BridgeService(canonical()).handle(
+        message(
+            f"coding-pack-block-{len(json.dumps(payload))}",
+            "coding_pack_export_decision_request",
+            payload,
+        )
+    )
+    assert response["messageType"] == "coding_pack_export_decision_result"
+    assert response["payload"]["decision"] == "block"
+    assert FakeGuard.evaluate_calls == 1
+    assert FakeGuard.invoke_calls == 0
+
+
+def test_coding_pack_export_identity_failures_are_protocol_errors() -> None:
+    wrong_profile = coding_pack_export_payload()
+    wrong_profile["policyProfileId"] = PROJECT_PROFILE
+    wrong_digest = coding_pack_export_payload()
+    wrong_digest["expectedPolicyDigest"] = PROJECT_POLICY_DIGEST
+    service = BridgeService(canonical())
+    first, _ = service.handle(
+        message(
+            "coding-pack-wrong-profile",
+            "coding_pack_export_decision_request",
+            wrong_profile,
+        )
+    )
+    second, _ = service.handle(
+        message(
+            "coding-pack-wrong-digest",
+            "coding_pack_export_decision_request",
+            wrong_digest,
+        )
+    )
+    assert first["messageType"] == "protocol_error"
+    assert second["messageType"] == "protocol_error"
+    assert FakeGuard.evaluate_calls == 0
+    assert FakeGuard.invoke_calls == 0
+
+
+def test_coding_pack_export_request_digest_mismatch_blocks() -> None:
+    payload = coding_pack_export_payload()
+    payload["requestDigest"] = SHA_A
+    response, _ = BridgeService(canonical()).handle(
+        message(
+            "coding-pack-wrong-request-digest",
+            "coding_pack_export_decision_request",
+            payload,
+        )
+    )
+    assert response["messageType"] == "coding_pack_export_decision_result"
+    assert response["payload"]["decision"] == "block"
 
 
 @pytest.mark.parametrize(
@@ -347,8 +492,12 @@ def test_actual_pinned_canonical_source_when_explicitly_provided() -> None:
     loaded = CanonicalAgentFuse.load(Path(source), COMMIT)
     allow = loaded.decide(decision_payload("kerniq-proof-allow-v1"))
     deny = loaded.decide(decision_payload("kerniq-proof-deny-v1"))
+    coding_pack = loaded.decide_coding_pack_export(coding_pack_export_payload())
     assert allow["decision"] == "allow"
     assert deny["decision"] == "deny"
+    assert coding_pack["decision"] == "allow"
+    assert coding_pack["policyProfileId"] == CODING_PACK_PROFILE
+    assert coding_pack["policyDigest"] == CODING_PACK_POLICY_DIGEST
     assert allow["evidence"]["schema_version"] == "agentfuse-evidence-schema-v0.1"
 
 

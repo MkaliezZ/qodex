@@ -272,8 +272,9 @@ are requested. Candidate count is checked before reading, cumulative eligible
 bytes are bounded during reading, and selected-path identity is recomputed from
 the complete selection evidence. The Tauri path rejects symlinks and junctions
 observed during bounded pre-read checks; it does not claim race-free protection
-against concurrent filesystem replacement. The v0.7.4.1 Draft implementation
-adds a dedicated durable Coding Pack store, opaque local destination bindings,
+against concurrent filesystem replacement. v0.7.4.1 merged in
+`c3f7c9cef73cb9660f9b4d39c325dc8c4e3f5170` and adds a dedicated durable
+Coding Pack store, opaque local destination bindings,
 exact export proposals, and separate export approvals. It records only
 `PACK_PROPOSED` and `PACK_CONFIRMED`; confirmation reports “No files written”
 and does not imply a policy decision. The reviewed hardening follow-up uses
@@ -281,12 +282,18 @@ UTF-8 byte canonical identity, exact pack/destination formats, 24-hour proposal
 and approval limits, immutable destination bindings, atomic operation
 snapshots, native digest and chronology validation before persistence, and
 SQLite WAL with `synchronous=FULL`. Recovered operations remain non-actionable
-historical records. The
+historical records. The v0.7.4.2 Draft adds the independent
+`kerniq-coding-pack-export-v1` AgentFuse profile and a trusted digest-only
+request. It durably records exactly one `PACK_DECIDED` allow, deny, or error
+event in store schema v2. The UI reports the policy result while continuing to
+show “No files written” and “Export has not started.” Recovered decisions are
+historical and non-actionable. The
 [v0.7 plan](docs/development/kerniq_v0_7_coding_pack_product_integration_planning.md)
 and [ADR-022](qodex-config/adr/ADR-022-Coding-Pack-Product-Integration.md)
 define the remaining durable export lifecycle. Automatic repository discovery,
-`.gitignore` parsing, content secret scanning, physical export, Action Runtime,
-and AgentFuse integration are not implemented.
+`.gitignore` parsing, content secret scanning, physical export, export-start
+and export-completed events, and Action Runtime export dispatch are not
+implemented.
 The v0.6.1 Project Command freeze is unchanged.
 
 ---
@@ -299,9 +306,10 @@ v0.6 is merged and frozen as the managed Python and universal action
 foundation. The bounded native Desktop Project Command path is implemented and
 its v0.6.1.6 implementation, real proof, and final freeze seal are merged. The
 v0.6.1 Project Command scope is frozen. Coding Pack v0.7.3 is merged through
-`5d5152ca25c0fc2772cec730dd6229dd44aa88cb`; the v0.7.4.1 durable
-store/proposal slice is implemented for Draft PR review. Patch remains outside
-this scope.
+`5d5152ca25c0fc2772cec730dd6229dd44aa88cb`; v0.7.4.1 merged through
+`c3f7c9cef73cb9660f9b4d39c325dc8c4e3f5170`; and the v0.7.4.2 AgentFuse
+export-decision slice is implemented for Draft PR review. Patch remains
+outside this scope.
 Installer work is planned for v0.8, and the Stage 2 namespace-wide rename
 remains explicitly deferred.
 

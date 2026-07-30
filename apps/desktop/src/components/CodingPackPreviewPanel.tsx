@@ -4,8 +4,10 @@ import {
   FolderOpen,
   PackageCheck,
   RefreshCw,
+  ShieldCheck,
 } from "lucide-react";
 import type { CodingPackPurpose } from "@qodex/coding-pack-runtime";
+import { hasCodingPackDestinationCapability } from "../platform/codingPackDestination";
 import { useRuntimeContext } from "./AppShell";
 
 const PURPOSE_OPTIONS: readonly {
@@ -57,10 +59,17 @@ export function CodingPackPreviewPanel() {
     chooseCurrentCodingPackDestination,
     createCurrentCodingPackExportProposal,
     confirmCurrentCodingPackExportProposal,
+    evaluateCurrentCodingPackExportPolicy,
   } = useRuntimeContext();
 
   const canPreview = Boolean(projectName) && selectedFileCount > 0;
   const isConfirmed = codingPackConfirmation !== null && !codingPackPreviewStale;
+  const canEvaluatePolicy = codingPackOperation?.operation.state === "confirmed"
+    && codingPackOperation.approval !== null
+    && codingPackDestination !== null
+    && hasCodingPackDestinationCapability(codingPackDestination)
+    && Date.parse(codingPackOperation.proposal.expiresAt) > Date.now()
+    && Date.parse(codingPackOperation.approval.expiresAt) > Date.now();
 
   return (
     <section
@@ -279,7 +288,7 @@ export function CodingPackPreviewPanel() {
               <span className="coding-pack-no-write" role="status">No files written</span>
             </header>
             <p>
-              Policy decision not yet evaluated. This records intent only and cannot export files.
+              This lifecycle records intent and policy evidence only. Export has not started.
             </p>
 
             <div className="coding-pack-export-actions">
@@ -327,9 +336,7 @@ export function CodingPackPreviewPanel() {
                 <div className="coding-pack-proposal-status">
                   <strong>
                     <Check size={13} aria-hidden="true" />
-                    {codingPackOperation.operation.state === "confirmed"
-                      ? "Export proposal confirmed"
-                      : "Export proposal created"}
+                    {operationStatus(codingPackOperation.operation.state)}
                   </strong>
                   <span>{codingPackOperation.operation.state}</span>
                 </div>
@@ -347,21 +354,52 @@ export function CodingPackPreviewPanel() {
                     </dd>
                   </div>
                 </dl>
-                <button
-                  type="button"
-                  className="qodex-button"
-                  disabled={
-                    codingPackOperation.operation.state !== "proposed"
-                    || isCodingPackExportLoading
-                  }
-                  onClick={() => void confirmCurrentCodingPackExportProposal()}
-                  aria-label="Confirm exact Coding Pack export proposal"
-                  data-testid="coding-pack-confirm-proposal"
-                >
-                  {codingPackOperation.operation.state === "confirmed"
-                    ? "Proposal confirmed"
-                    : "Confirm export proposal"}
-                </button>
+                {codingPackOperation.operation.state === "proposed"
+                  || codingPackOperation.operation.state === "confirmed" ? (
+                    <button
+                      type="button"
+                      className="qodex-button"
+                      disabled={
+                        codingPackOperation.operation.state !== "proposed"
+                        || isCodingPackExportLoading
+                      }
+                      onClick={() => void confirmCurrentCodingPackExportProposal()}
+                      aria-label="Confirm exact Coding Pack export proposal"
+                      data-testid="coding-pack-confirm-proposal"
+                    >
+                      {codingPackOperation.operation.state === "confirmed"
+                        ? "Proposal confirmed"
+                        : "Confirm export proposal"}
+                    </button>
+                  ) : null}
+                {canEvaluatePolicy && !codingPackOperation.decision ? (
+                  <button
+                    type="button"
+                    className="qodex-button"
+                    disabled={isCodingPackExportLoading}
+                    onClick={() => void evaluateCurrentCodingPackExportPolicy()}
+                    aria-label="Evaluate Coding Pack export policy"
+                    data-testid="coding-pack-evaluate-policy"
+                  >
+                    <ShieldCheck size={13} aria-hidden="true" />
+                    Evaluate export policy
+                  </button>
+                ) : null}
+                {codingPackOperation.decision ? (
+                  <div
+                    className={`coding-pack-policy-result is-${
+                      codingPackOperation.decision.decision
+                    }`}
+                    role="status"
+                    data-testid="coding-pack-policy-result"
+                  >
+                    <strong>{policyDecisionLabel(
+                      codingPackOperation.decision.decision,
+                    )}</strong>
+                    <span>{codingPackOperation.decision.reasonCode}</span>
+                    <small>Export has not started</small>
+                  </div>
+                ) : null}
               </div>
             ) : null}
           </section>
@@ -385,8 +423,16 @@ export function CodingPackPreviewPanel() {
           </header>
           <p>
             This is a historical record and may belong to a different project binding.
-            No decision or export was resumed. The previous preview confirmation was not restored.
+            No decision or export was resumed. Export has not started.
+            The previous preview confirmation was not restored.
           </p>
+          {codingPackRecoveredOperation.decision ? (
+            <p>
+              Historical decision: {policyDecisionLabel(
+                codingPackRecoveredOperation.decision.decision,
+              )}. It is non-actionable after restart.
+            </p>
+          ) : null}
           {!codingPackRecoveredOperation.destination.restartAvailable ? (
             <p>
               The browser destination capability is unavailable after restart.
@@ -421,4 +467,18 @@ function IdentityRow({ label, value }: { label: string; value: string }) {
 function formatBytes(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
   return `${(bytes / 1024).toFixed(1)} KB`;
+}
+
+function operationStatus(state: string): string {
+  if (state === "confirmed") return "Export proposal confirmed";
+  if (state === "decided_allow") return "Policy allowed";
+  if (state === "decided_deny") return "Policy denied";
+  if (state === "decided_error") return "Policy evaluation error";
+  return "Export proposal created";
+}
+
+function policyDecisionLabel(decision: "allow" | "deny" | "error"): string {
+  if (decision === "allow") return "Policy allowed";
+  if (decision === "deny") return "Policy denied";
+  return "Policy evaluation error";
 }

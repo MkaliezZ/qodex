@@ -4,6 +4,8 @@ import {
   CodingPackStoreError,
   InMemoryCodingPackStoreAdapter,
   canonicalJson,
+  createCodingPackAgentFuseExportRequestIdentity,
+  createCodingPackAgentFuseRequestDigest,
   createCodingPackDestinationBinding,
   createEventPayloadDigest,
   sha256Canonical,
@@ -12,6 +14,7 @@ import {
   type CodingPackDestinationBinding,
   type CodingPackEvent,
   type CodingPackOperationRecord,
+  type CodingPackOperationSnapshot,
   type CodingPackStoreAdapter,
   type CreateCodingPackExportProposalInput,
 } from "../src/index.js";
@@ -79,6 +82,123 @@ describe("CodingPackStore lifecycle", () => {
       "PACK_CONFIRMED",
     ]);
     expect(confirmed.approval).toEqual(approval);
+    expect(confirmed.decision).toBeNull();
+  });
+
+  it.each([
+    ["allow", "decided_allow"],
+    ["deny", "decided_deny"],
+    ["error", "decided_error"],
+  ] as const)(
+    "persists one PACK_DECIDED %s event and reconstructs %s after restart",
+    async (decision, state) => {
+      const adapter = new InspectableAdapter();
+      const store = createStore(adapter);
+      const destination = await destinationBinding(`decision-${decision}`);
+      await store.registerDestinationBinding(destination);
+      const proposed = await store.createCodingPackExportProposal(proposalInput(destination));
+      const approval = store.createCodingPackExportApproval({
+        operationId: proposed.operation.operationId,
+        proposalDigest: proposed.proposal.proposalDigest,
+        approvedAt: CREATED_AT,
+        expiresAt: APPROVAL_EXPIRES_AT,
+      });
+      const confirmed = await store.confirmCodingPackExportProposal(approval);
+      const decided = await store.recordCodingPackExportDecision({
+        operationId: confirmed.operation.operationId,
+        decision: await decisionPayload(confirmed, decision),
+      });
+
+      expect(decided.operation.state).toBe(state);
+      expect(decided.operation.lastEventSequence).toBe(3);
+      expect(decided.events.map((event) => event.eventType)).toEqual([
+        "PACK_PROPOSED",
+        "PACK_CONFIRMED",
+        "PACK_DECIDED",
+      ]);
+      expect(decided.decision?.decision).toBe(decision);
+      const restarted = createStore(adapter);
+      expect((await restarted.getCodingPackOperation(
+        confirmed.operation.operationId,
+      ))?.operation.state).toBe(state);
+      await expect(store.recordCodingPackExportDecision({
+        operationId: confirmed.operation.operationId,
+        decision: await decisionPayload(confirmed, decision),
+      })).rejects.toMatchObject({ code: "coding_pack_approval_mismatch" });
+    },
+  );
+
+  it("leaves a confirmed operation unchanged when PACK_DECIDED persistence fails", async () => {
+    const adapter = new InspectableAdapter();
+    const store = createStore(adapter);
+    const destination = await destinationBinding("decision-failure");
+    await store.registerDestinationBinding(destination);
+    const proposed = await store.createCodingPackExportProposal(proposalInput(destination));
+    const approval = store.createCodingPackExportApproval({
+      operationId: proposed.operation.operationId,
+      proposalDigest: proposed.proposal.proposalDigest,
+      approvedAt: CREATED_AT,
+      expiresAt: APPROVAL_EXPIRES_AT,
+    });
+    const confirmed = await store.confirmCodingPackExportProposal(approval);
+    adapter.failDecision = true;
+
+    await expect(store.recordCodingPackExportDecision({
+      operationId: confirmed.operation.operationId,
+      decision: await decisionPayload(confirmed, "allow"),
+    })).rejects.toMatchObject({ code: "coding_pack_persistence_failed" });
+    expect((await store.getCodingPackOperation(
+      confirmed.operation.operationId,
+    ))?.operation.state).toBe("confirmed");
+  });
+
+  it("rejects a PACK_DECIDED request digest not bound to the confirmed snapshot", async () => {
+    const adapter = new InspectableAdapter();
+    const store = createStore(adapter);
+    const destination = await destinationBinding("wrong-request");
+    await store.registerDestinationBinding(destination);
+    const proposed = await store.createCodingPackExportProposal(proposalInput(destination));
+    const approval = store.createCodingPackExportApproval({
+      operationId: proposed.operation.operationId,
+      proposalDigest: proposed.proposal.proposalDigest,
+      approvedAt: CREATED_AT,
+      expiresAt: APPROVAL_EXPIRES_AT,
+    });
+    const confirmed = await store.confirmCodingPackExportProposal(approval);
+    const decision = await decisionPayload(confirmed, "allow");
+
+    await expect(store.recordCodingPackExportDecision({
+      operationId: confirmed.operation.operationId,
+      decision: {
+        ...decision,
+        requestDigest: digest("f"),
+      },
+    })).rejects.toMatchObject({ code: "coding_pack_approval_mismatch" });
+    expect((await store.getCodingPackOperation(
+      confirmed.operation.operationId,
+    ))?.operation.state).toBe("confirmed");
+  });
+
+  it("rejects a PACK_DECIDED timestamp at the approval expiry boundary", async () => {
+    const store = createStore(new InMemoryCodingPackStoreAdapter());
+    const destination = await destinationBinding("decision-expiry");
+    await store.registerDestinationBinding(destination);
+    const proposed = await store.createCodingPackExportProposal(proposalInput(destination));
+    const approval = store.createCodingPackExportApproval({
+      operationId: proposed.operation.operationId,
+      proposalDigest: proposed.proposal.proposalDigest,
+      approvedAt: CREATED_AT,
+      expiresAt: APPROVAL_EXPIRES_AT,
+    });
+    const confirmed = await store.confirmCodingPackExportProposal(approval);
+
+    await expect(store.recordCodingPackExportDecision({
+      operationId: confirmed.operation.operationId,
+      decision: {
+        ...await decisionPayload(confirmed, "allow"),
+        decidedAt: APPROVAL_EXPIRES_AT,
+      },
+    })).rejects.toMatchObject({ code: "coding_pack_approval_mismatch" });
   });
 
   it("derives the same proposal digest from the same exact inputs", async () => {
@@ -525,6 +645,36 @@ function packId(character: string): string {
   return `pack-${character.repeat(64)}`;
 }
 
+async function decisionPayload(
+  snapshot: CodingPackOperationSnapshot,
+  decision: "allow" | "deny" | "error",
+) {
+  if (!snapshot || !snapshot.approval || !snapshot.events[1]) {
+    throw new Error("Expected a confirmed Coding Pack operation.");
+  }
+  return {
+    decisionId: `decision-${decision}`,
+    requestDigest: await createCodingPackAgentFuseRequestDigest(
+      createCodingPackAgentFuseExportRequestIdentity(
+        snapshot.proposal,
+        snapshot.events[1].payloadDigest,
+      ),
+    ),
+    proposalDigest: snapshot.proposal.proposalDigest,
+    approvalEvidenceDigest: snapshot.events[1].payloadDigest,
+    agentFuseSourceCommit:
+      "ec4b5842339dccfba0db62df7541920759203bc9" as const,
+    agentFusePackageVersion: "3.6.0" as const,
+    bridgeProtocol: "kerniq.agentfuse.bridge.v1" as const,
+    policyId: "kerniq-coding-pack-export-v1" as const,
+    policyDigest:
+      "sha256:752a8bf1f251e5c05f07ddd8d820af3c5554fb37e3a47fbcf41933f614167d07",
+    decision,
+    reasonCode: decision === "allow" ? "policy_allowed" : `policy_${decision}`,
+    decidedAt: CREATED_AT,
+  };
+}
+
 async function confirmedEventFixture(proposed: CodingPackEvent): Promise<CodingPackEvent> {
   if (!("proposal" in proposed.payload)) throw new Error("Expected proposed fixture.");
   const payload = {
@@ -554,6 +704,7 @@ class InspectableAdapter implements CodingPackStoreAdapter {
   readonly destinations = new Map<string, CodingPackDestinationBinding>();
   failCreate = false;
   failConfirmation = false;
+  failDecision = false;
 
   async registerDestinationBinding(binding: CodingPackDestinationBinding): Promise<void> {
     this.destinations.set(binding.destinationBindingId, structuredClone(binding));
@@ -575,6 +726,15 @@ class InspectableAdapter implements CodingPackStoreAdapter {
     if (this.failConfirmation) throw new Error("private SQLite detail");
     this.operations.set(operation.operationId, structuredClone(operation));
     this.events.get(operation.operationId)?.push(structuredClone(confirmedEvent));
+  }
+
+  async appendDecision(
+    operation: CodingPackOperationRecord,
+    decidedEvent: CodingPackEvent,
+  ): Promise<void> {
+    if (this.failDecision) throw new Error("private SQLite detail");
+    this.operations.set(operation.operationId, structuredClone(operation));
+    this.events.get(operation.operationId)?.push(structuredClone(decidedEvent));
   }
 
   async getOperationSnapshotData(operationId: string) {

@@ -1,7 +1,7 @@
 # KerniQ v0.7 Coding Pack Product Integration Planning
 
 **Date:** 2026-07-29
-**Status:** Living plan; v0.7.3 merged and v0.7.4.1 implemented for Draft PR
+**Status:** Living plan; v0.7.4.1 merged and v0.7.4.2 implemented for Draft PR
 **Planning base:** `0486704d613ea203672d75bee455346cceafb225`
 **v0.6.1 freeze activation merge:** `0486704d613ea203672d75bee455346cceafb225`
 **v0.6.1 freeze activation post-merge CI:** `30432376199`
@@ -803,18 +803,27 @@ keyboard flow, and zero destination writes.
 **Boundary:** End at durable `PACK_CONFIRMED`. No AgentFuse decision, Action
 Runtime dispatch, staging, destination write, or physical export.
 
-### v0.7.4.2 - Durable Authorization and Atomic Export
+### v0.7.4.2 - AgentFuse Export Decision
 
-**Objective:** Add dedicated operation persistence, Action Runtime export
-proposal/approval, opaque destination binding, native source revalidation, and
-atomic no-overwrite export.
+**Objective:** Derive a trusted digest-only request from a live durable
+`PACK_CONFIRMED` snapshot, evaluate the independent
+`kerniq-coding-pack-export-v1` AgentFuse profile, and persist exactly one
+`PACK_DECIDED` allow, deny, or error event.
 
-**Tests:** Approval mismatch/expiry, decision failure, source/destination drift,
-duplicate export, partial write, atomic promotion, receipt verification, and
-zero-write failures.
+**Tests:** Request identity, approval mismatch/expiry, destination capability,
+allow/block/failure mapping, persistence failure, duplicate decision, restart,
+policy fixtures, and zero filesystem writes.
 
-**Boundary:** Export only; no shell, command, Patch, Session schema, or broad
+**Boundary:** Decision only. No source revalidation, physical export, staging,
+destination write, Action Runtime, shell, Patch, Session schema, or broad
 filesystem API. End in one reviewable Draft PR.
+
+### v0.7.4.3 - Native Revalidation and Atomic Export
+
+**Objective:** Add a separately reviewed explicit physical-export action with
+fresh native source/destination revalidation and atomic no-overwrite promotion.
+
+**Boundary:** Not implemented by v0.7.4.2.
 
 ### v0.7.5 - Staleness, Refresh, Provenance, and Recovery
 
@@ -993,7 +1002,7 @@ CI_NODE20_DEPRECATION_REVIEW_REQUIRED=true
 V0_7_PLANNING_APPROVED_AND_MERGED
 ```
 
-## v0.7.1 through v0.7.4.1 Implementation Status
+## v0.7.1 through v0.7.4.2 Implementation Status
 
 The corrected product plan was approved and merged through PR #17:
 
@@ -1182,4 +1191,27 @@ AGENTFUSE_CONNECTED=false
 SESSION_SCHEMA_CHANGED=false
 PROJECT_COMMAND_FREEZE_CHANGED=false
 WORKFLOW_CHANGED=false
+```
+
+v0.7.4.1 merged through exact-head merge commit
+`c3f7c9cef73cb9660f9b4d39c325dc8c4e3f5170`.
+
+v0.7.4.2 adds only the AgentFuse Coding Pack export decision. The trusted
+request is derived from one live, fully reconstructed confirmed operation and
+binds the durable confirmation payload digest. The independent policy profile
+is `kerniq-coding-pack-export-v1` with digest
+`sha256:752a8bf1f251e5c05f07ddd8d820af3c5554fb37e3a47fbcf41933f614167d07`.
+Store schema v2 adds exactly one `PACK_DECIDED` allow/deny/error event and
+migrates v1 history without automatic advancement.
+
+```text
+PACK_DECIDED_IMPLEMENTED=true
+AGENTFUSE_EXPORT_POLICY_CONNECTED=true
+PACK_EXPORT_STARTED_IMPLEMENTED=false
+PACK_EXPORT_COMPLETED_IMPLEMENTED=false
+CODING_PACK_EXPORT_IMPLEMENTED=false
+DESTINATION_FILES_WRITTEN=false
+ACTION_RUNTIME_CONNECTED=false
+SESSION_SCHEMA_CHANGED=false
+PROJECT_COMMAND_FREEZE_CHANGED=false
 ```

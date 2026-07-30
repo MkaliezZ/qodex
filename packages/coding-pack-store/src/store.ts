@@ -7,6 +7,7 @@ import {
 import { CodingPackStoreError } from "./errors.js";
 import type {
   CodingPackDestinationBinding,
+  CodingPackDecidedEventPayload,
   CodingPackEvent,
   CodingPackExportApproval,
   CodingPackOperationRecord,
@@ -16,6 +17,7 @@ import type {
   CodingPackStoreOptions,
   CreateCodingPackExportApprovalInput,
   CreateCodingPackExportProposalInput,
+  RecordCodingPackExportDecisionInput,
 } from "./types.js";
 import {
   CODING_PACK_EVENT_VERSION,
@@ -24,6 +26,8 @@ import {
   CODING_PACK_EXPORT_PROPOSAL_SCHEMA_VERSION,
 } from "./types.js";
 import {
+  createCodingPackAgentFuseExportRequestIdentity,
+  createCodingPackAgentFuseRequestDigest,
   createEventPayloadDigest,
   createProposalDigest,
   CODING_PACK_MAX_APPROVAL_LIFETIME_MS,
@@ -31,6 +35,7 @@ import {
   validateCodingPackExportApproval,
   validateCodingPackExportProposal,
   validateDestinationBinding,
+  validateDecidedPayload,
   validateEvent,
   validateOperationRecord,
   validatePreviewBinding,
@@ -202,6 +207,71 @@ export class CodingPackStore {
     return this.getRequiredOperation(operation.operationId);
   }
 
+  async recordCodingPackExportDecision(
+    input: RecordCodingPackExportDecisionInput,
+  ): Promise<CodingPackOperationSnapshot> {
+    const operationId = boundedId(input.operationId);
+    const decision = validateDecidedPayload(input.decision);
+    const snapshot = await this.getCodingPackOperation(operationId);
+    if (
+      !snapshot
+      || snapshot.operation.state !== "confirmed"
+      || !snapshot.approval
+      || snapshot.decision
+      || snapshot.events.length !== 2
+      || snapshot.events[1]?.eventType !== "PACK_CONFIRMED"
+    ) {
+      throw new CodingPackStoreError("coding_pack_approval_mismatch");
+    }
+    const now = this.now();
+    if (
+      Date.parse(snapshot.proposal.expiresAt) <= now.getTime()
+      || Date.parse(snapshot.approval.expiresAt) <= now.getTime()
+    ) {
+      throw new CodingPackStoreError("coding_pack_proposal_expired");
+    }
+    if (
+      decision.proposalDigest !== snapshot.proposal.proposalDigest
+      || decision.approvalEvidenceDigest !== snapshot.events[1].payloadDigest
+      || Date.parse(decision.decidedAt) < Date.parse(snapshot.approval.approvedAt)
+      || Date.parse(decision.decidedAt) >= Date.parse(snapshot.approval.expiresAt)
+      || Date.parse(decision.decidedAt) >= Date.parse(snapshot.proposal.expiresAt)
+    ) {
+      throw new CodingPackStoreError("coding_pack_approval_mismatch");
+    }
+    const expectedRequestDigest = await createCodingPackAgentFuseRequestDigest(
+      createCodingPackAgentFuseExportRequestIdentity(
+        snapshot.proposal,
+        snapshot.events[1].payloadDigest,
+      ),
+    );
+    if (decision.requestDigest !== expectedRequestDigest) {
+      throw new CodingPackStoreError("coding_pack_approval_mismatch");
+    }
+    rejectFutureTimestamp(decision.decidedAt, now, true);
+    const decidedEvent = await validateEvent({
+      eventId: boundedId(this.createId()),
+      operationId,
+      eventSequence: 3,
+      eventType: "PACK_DECIDED",
+      eventVersion: CODING_PACK_EVENT_VERSION,
+      recordedAt: decision.decidedAt,
+      payloadDigest: await createEventPayloadDigest(decision),
+      payload: decision,
+    });
+    const operation = validateOperationRecord({
+      ...snapshot.operation,
+      state: decisionState(decision.decision),
+      lastEventSequence: 3,
+    });
+    try {
+      await this.adapter.appendDecision(operation, decidedEvent);
+    } catch (error) {
+      throw persistenceError(error);
+    }
+    return this.getRequiredOperation(operationId);
+  }
+
   async getCodingPackOperation(
     operationId: string,
   ): Promise<CodingPackOperationSnapshot | null> {
@@ -271,14 +341,14 @@ export async function createCodingPackDestinationBinding(input: {
   });
 }
 
-function reconstructSnapshot(
+async function reconstructSnapshot(
   operation: CodingPackOperationRecord,
   events: readonly CodingPackEvent[],
   destination: CodingPackDestinationBinding,
-): CodingPackOperationSnapshot {
+): Promise<CodingPackOperationSnapshot> {
   if (
     events.length < 1
-    || events.length > 2
+    || events.length > 3
     || operation.lastEventSequence !== events.length
   ) {
     invalid();
@@ -316,7 +386,24 @@ function reconstructSnapshot(
   const approval = secondEvent && "approval" in secondEvent.payload
     ? secondEvent.payload.approval
     : null;
-  const expectedState = approval ? "confirmed" : "proposed";
+  const thirdEvent = events[2];
+  if (
+    thirdEvent
+    && (
+      thirdEvent.eventType !== "PACK_DECIDED"
+      || !("decision" in thirdEvent.payload)
+    )
+  ) {
+    invalid();
+  }
+  const decision = thirdEvent && "decision" in thirdEvent.payload
+    ? thirdEvent.payload
+    : null;
+  const expectedState = decision
+    ? decisionState(decision.decision)
+    : approval
+      ? "confirmed"
+      : "proposed";
   if (
     operation.state !== expectedState
     || operation.projectBindingId !== proposal.projectBindingId
@@ -350,13 +437,43 @@ function reconstructSnapshot(
   } else if (firstEvent.recordedAt !== proposal.createdAt) {
     invalid();
   }
+  if (decision) {
+    const expectedRequestDigest = await createCodingPackAgentFuseRequestDigest(
+      createCodingPackAgentFuseExportRequestIdentity(
+        proposal,
+        secondEvent?.payloadDigest ?? "",
+      ),
+    );
+    if (
+      !approval
+      || decision.proposalDigest !== proposal.proposalDigest
+      || decision.approvalEvidenceDigest !== secondEvent?.payloadDigest
+      || decision.requestDigest !== expectedRequestDigest
+      || thirdEvent?.recordedAt !== decision.decidedAt
+      || Date.parse(decision.decidedAt) < Date.parse(approval.approvedAt)
+      || Date.parse(decision.decidedAt) >= Date.parse(approval.expiresAt)
+      || Date.parse(decision.decidedAt) >= Date.parse(proposal.expiresAt)
+    ) {
+      invalid();
+    }
+    validateDecidedPayload(decision);
+  }
   return Object.freeze({
     operation,
     proposal,
     approval,
+    decision,
     destination,
     events: Object.freeze([...events]),
   });
+}
+
+function decisionState(
+  decision: CodingPackDecidedEventPayload["decision"],
+): CodingPackOperationRecord["state"] {
+  if (decision === "allow") return "decided_allow";
+  if (decision === "deny") return "decided_deny";
+  return "decided_error";
 }
 
 function positiveLifetime(value: number | undefined): number {

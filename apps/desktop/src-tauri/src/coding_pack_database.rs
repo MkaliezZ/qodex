@@ -8,8 +8,8 @@ use std::sync::Mutex;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use tauri::{AppHandle, Manager};
 
-pub const CODING_PACK_DATABASE_SCHEMA_VERSION: i64 = 1;
-pub const CODING_PACK_STORE_SCHEMA_VERSION: &str = "kerniq.coding-pack.store.v1";
+pub const CODING_PACK_DATABASE_SCHEMA_VERSION: i64 = 2;
+pub const CODING_PACK_STORE_SCHEMA_VERSION: &str = "kerniq.coding-pack.store.v2";
 const DATABASE_FILE_NAME: &str = "kerniq-coding-pack.sqlite3";
 const MAX_EVENT_PAYLOAD_BYTES: usize = 64 * 1024;
 const MAX_ID_BYTES: usize = 256;
@@ -19,6 +19,14 @@ const MAX_APPROVAL_LIFETIME_MS: i64 = 86_400_000;
 const EXPORT_PROPOSAL_SCHEMA: &str = "kerniq.coding-pack.export-proposal.v1";
 const EXPORT_APPROVAL_SCHEMA: &str = "kerniq.coding-pack.export-approval.v1";
 const EXPORT_FORMAT: &str = "kerniq-coding-pack-bundle-v1";
+const AGENTFUSE_SOURCE_COMMIT: &str = "ec4b5842339dccfba0db62df7541920759203bc9";
+const AGENTFUSE_PACKAGE_VERSION: &str = "3.6.0";
+const AGENTFUSE_BRIDGE_PROTOCOL: &str = "kerniq.agentfuse.bridge.v1";
+const CODING_PACK_AGENTFUSE_EXPORT_PROTOCOL: &str = "kerniq.coding-pack.agentfuse-export.v1";
+const CODING_PACK_AGENTFUSE_EXPORT_TOOL: &str = "kerniq.coding_pack.export";
+const CODING_PACK_EXPORT_POLICY_ID: &str = "kerniq-coding-pack-export-v1";
+const CODING_PACK_EXPORT_POLICY_DIGEST: &str =
+    "sha256:752a8bf1f251e5c05f07ddd8d820af3c5554fb37e3a47fbcf41933f614167d07";
 
 pub struct CodingPackDatabase {
     connection: Mutex<Connection>,
@@ -67,6 +75,13 @@ pub struct CreateCodingPackOperationRequest {
 pub struct ConfirmCodingPackOperationRequest {
     pub operation: CodingPackOperation,
     pub confirmed_event: CodingPackEvent,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct DecideCodingPackOperationRequest {
+    pub operation: CodingPackOperation,
+    pub decided_event: CodingPackEvent,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -132,6 +147,23 @@ struct ProposedPayload {
 #[serde(deny_unknown_fields)]
 struct ConfirmedPayload {
     approval: CodingPackExportApproval,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct DecidedPayload {
+    decision_id: String,
+    request_digest: String,
+    proposal_digest: String,
+    approval_evidence_digest: String,
+    agent_fuse_source_commit: String,
+    agent_fuse_package_version: String,
+    bridge_protocol: String,
+    policy_id: String,
+    policy_digest: String,
+    decision: String,
+    reason_code: String,
+    decided_at: String,
 }
 
 impl CodingPackDatabase {
@@ -299,6 +331,82 @@ impl CodingPackDatabase {
         transaction.commit().map_err(|_| persistence_failed())
     }
 
+    pub fn append_decision(&self, request: DecideCodingPackOperationRequest) -> Result<(), String> {
+        let operation = request.operation;
+        let event = request.decided_event;
+        let mut connection = self.lock()?;
+        let transaction = connection
+            .transaction_with_behavior(TransactionBehavior::Immediate)
+            .map_err(|_| persistence_failed())?;
+        let current = select_operation(&transaction, &operation.operation_id)?
+            .ok_or_else(persistence_failed)?;
+        let events = select_events(&transaction, &operation.operation_id)?;
+        if events.len() != 2 {
+            return Err(persistence_failed());
+        }
+        let proposal = validate_proposed_pair(
+            &CodingPackOperation {
+                state: "proposed".into(),
+                last_event_sequence: 1,
+                ..current.clone()
+            },
+            &events[0],
+        )?;
+        let approval = validate_confirmed_pair(
+            &CodingPackOperation {
+                state: "confirmed".into(),
+                last_event_sequence: 2,
+                ..current.clone()
+            },
+            &events[1],
+            &proposal,
+        )?;
+        let decision = validate_decided_pair(&operation, &event, &proposal, &approval, &events[1])?;
+        let now = current_time_millis()?;
+        if parse_timestamp(&proposal.expires_at)? <= now
+            || parse_timestamp(&approval.expires_at)? <= now
+        {
+            return Err(persistence_failed());
+        }
+        if !immutable_operation_fields_match(&current, &operation)
+            || current.state != "confirmed"
+            || current.last_event_sequence != 2
+        {
+            return Err(persistence_failed());
+        }
+        let destination: Option<(String, i64)> = transaction
+            .query_row(
+                "SELECT destination_fingerprint, restart_available
+                 FROM coding_pack_destination_bindings
+                 WHERE destination_binding_id = ?1",
+                [&operation.destination_binding_id],
+                |row| Ok((row.get(0)?, row.get(1)?)),
+            )
+            .optional()
+            .map_err(|_| persistence_failed())?;
+        if !matches!(
+            destination,
+            Some((ref fingerprint, 1))
+                if fingerprint == &proposal.destination_fingerprint
+        ) {
+            return Err(destination_unavailable());
+        }
+        let payload_json = bounded_payload_json(&event.payload)?;
+        insert_event(&transaction, &event, &payload_json)?;
+        let changed = transaction
+            .execute(
+                "UPDATE coding_pack_operations
+                 SET state = ?2, last_event_sequence = 3
+                 WHERE operation_id = ?1 AND state = 'confirmed' AND last_event_sequence = 2",
+                params![operation.operation_id, decision_state(&decision.decision)?],
+            )
+            .map_err(|_| persistence_failed())?;
+        if changed != 1 {
+            return Err(persistence_failed());
+        }
+        transaction.commit().map_err(|_| persistence_failed())
+    }
+
     pub fn get_operation_snapshot_data(
         &self,
         operation_id: &str,
@@ -419,9 +527,33 @@ pub fn migrate_database(connection: &Connection) -> Result<(), String> {
                  CREATE INDEX IF NOT EXISTS idx_coding_pack_events_operation_sequence
                     ON coding_pack_events(operation_id, event_sequence);
                  INSERT INTO coding_pack_store_metadata(schema_version)
-                    VALUES ('kerniq.coding-pack.store.v1');
-                 PRAGMA user_version = 1;",
+                    VALUES ('kerniq.coding-pack.store.v2');
+                 PRAGMA user_version = 2;",
             )
+            .map_err(|_| persistence_failed())?;
+        transaction.commit().map_err(|_| persistence_failed())?;
+    }
+    if version == 1 {
+        let transaction = connection
+            .unchecked_transaction()
+            .map_err(|_| persistence_failed())?;
+        transaction
+            .execute(
+                "UPDATE coding_pack_store_metadata
+                 SET schema_version = 'kerniq.coding-pack.store.v2'
+                 WHERE schema_version = 'kerniq.coding-pack.store.v1'",
+                [],
+            )
+            .map_err(|_| persistence_failed())
+            .and_then(|changed| {
+                if changed == 1 {
+                    Ok(())
+                } else {
+                    Err(persistence_failed())
+                }
+            })?;
+        transaction
+            .execute_batch("PRAGMA user_version = 2;")
             .map_err(|_| persistence_failed())?;
         transaction.commit().map_err(|_| persistence_failed())?;
     }
@@ -685,10 +817,66 @@ fn validate_confirmed_pair(
     Ok(payload.approval)
 }
 
+fn validate_decided_pair(
+    operation: &CodingPackOperation,
+    event: &CodingPackEvent,
+    proposal: &CodingPackExportProposal,
+    approval: &CodingPackExportApproval,
+    confirmed_event: &CodingPackEvent,
+) -> Result<DecidedPayload, String> {
+    validate_operation(operation)?;
+    validate_event_envelope(event)?;
+    let payload: DecidedPayload =
+        serde_json::from_value(event.payload.clone()).map_err(|_| persistence_failed())?;
+    validate_decided_payload(&payload)?;
+    if operation.state != decision_state(&payload.decision)?
+        || operation.last_event_sequence != 3
+        || event.operation_id != operation.operation_id
+        || event.event_sequence != 3
+        || event.event_type != "PACK_DECIDED"
+        || event.event_version != 1
+        || payload.request_digest
+            != coding_pack_agentfuse_request_digest(proposal, &confirmed_event.payload_digest)?
+        || payload.proposal_digest != proposal.proposal_digest
+        || payload.approval_evidence_digest != confirmed_event.payload_digest
+        || event.recorded_at != payload.decided_at
+        || parse_timestamp(&payload.decided_at)? < parse_timestamp(&approval.approved_at)?
+        || parse_timestamp(&payload.decided_at)? >= parse_timestamp(&approval.expires_at)?
+        || parse_timestamp(&payload.decided_at)? >= parse_timestamp(&proposal.expires_at)?
+        || event.payload_digest != sha256_canonical(&event.payload)?
+        || !operation_matches_proposal(operation, proposal)
+    {
+        return Err(persistence_failed());
+    }
+    Ok(payload)
+}
+
+fn validate_decided_payload(payload: &DecidedPayload) -> Result<(), String> {
+    validate_opaque_id(&payload.decision_id)?;
+    if !is_digest(&payload.request_digest)
+        || !is_digest(&payload.proposal_digest)
+        || !is_digest(&payload.approval_evidence_digest)
+        || payload.agent_fuse_source_commit != AGENTFUSE_SOURCE_COMMIT
+        || payload.agent_fuse_package_version != AGENTFUSE_PACKAGE_VERSION
+        || payload.bridge_protocol != AGENTFUSE_BRIDGE_PROTOCOL
+        || payload.policy_id != CODING_PACK_EXPORT_POLICY_ID
+        || payload.policy_digest != CODING_PACK_EXPORT_POLICY_DIGEST
+        || !matches!(payload.decision.as_str(), "allow" | "deny" | "error")
+        || !valid_reason_code(&payload.reason_code)
+    {
+        return Err(persistence_failed());
+    }
+    parse_timestamp(&payload.decided_at)?;
+    Ok(())
+}
+
 fn validate_operation(operation: &CodingPackOperation) -> Result<(), String> {
     validate_opaque_id(&operation.operation_id)?;
     validate_opaque_id(&operation.project_binding_id)?;
-    if operation.state != "proposed" && operation.state != "confirmed" {
+    if !matches!(
+        operation.state.as_str(),
+        "proposed" | "confirmed" | "decided_allow" | "decided_deny" | "decided_error"
+    ) {
         return Err(persistence_failed());
     }
     if operation.project_generation < 1
@@ -707,6 +895,24 @@ fn validate_operation(operation: &CodingPackOperation) -> Result<(), String> {
         &operation.expires_at,
         MAX_PROPOSAL_LIFETIME_MS,
     )
+}
+
+fn decision_state(decision: &str) -> Result<&'static str, String> {
+    match decision {
+        "allow" => Ok("decided_allow"),
+        "deny" => Ok("decided_deny"),
+        "error" => Ok("decided_error"),
+        _ => Err(persistence_failed()),
+    }
+}
+
+fn valid_reason_code(value: &str) -> bool {
+    !value.is_empty()
+        && value.len() <= 64
+        && value.as_bytes()[0].is_ascii_lowercase()
+        && value
+            .bytes()
+            .all(|byte| byte.is_ascii_lowercase() || byte.is_ascii_digit() || byte == b'_')
 }
 
 fn validate_event_envelope(event: &CodingPackEvent) -> Result<(), String> {
@@ -819,6 +1025,31 @@ fn proposal_digest(proposal: &CodingPackExportProposal) -> Result<String, String
     let object = value.as_object_mut().ok_or_else(persistence_failed)?;
     object.remove("proposalDigest");
     sha256_canonical(&value)
+}
+
+fn coding_pack_agentfuse_request_digest(
+    proposal: &CodingPackExportProposal,
+    approval_evidence_digest: &str,
+) -> Result<String, String> {
+    if absolute_path_like(&proposal.operation_id) {
+        return Err(persistence_failed());
+    }
+    sha256_canonical(&serde_json::json!({
+        "toolIdentity": CODING_PACK_AGENTFUSE_EXPORT_TOOL,
+        "request": {
+            "protocolVersion": CODING_PACK_AGENTFUSE_EXPORT_PROTOCOL,
+            "operationId": proposal.operation_id,
+            "proposalDigest": proposal.proposal_digest,
+            "approvalEvidenceDigest": approval_evidence_digest,
+            "candidatePathsDigest": proposal.candidate_paths_digest,
+            "sourceFingerprint": proposal.source_fingerprint,
+            "packId": proposal.pack_id,
+            "manifestDigest": proposal.manifest_digest,
+            "destinationBindingId": proposal.destination_binding_id,
+            "destinationFingerprint": proposal.destination_fingerprint,
+            "exportFormat": EXPORT_FORMAT,
+        },
+    }))
 }
 
 fn sha256_canonical(value: &Value) -> Result<String, String> {
@@ -956,6 +1187,19 @@ fn validate_opaque_id(value: &str) -> Result<(), String> {
     validate_external_string(value, MAX_ID_BYTES, true)
 }
 
+fn absolute_path_like(value: &str) -> bool {
+    let bytes = value.as_bytes();
+    value.starts_with('/')
+        || value.starts_with('\\')
+        || (bytes.len() >= 3
+            && bytes[0].is_ascii_alphabetic()
+            && bytes[1] == b':'
+            && matches!(bytes[2], b'/' | b'\\'))
+        || value
+            .get(..7)
+            .is_some_and(|prefix| prefix.eq_ignore_ascii_case("file://"))
+}
+
 fn validate_external_string(
     value: &str,
     maximum_bytes: usize,
@@ -1031,7 +1275,7 @@ mod tests {
         configure_connection(&connection).unwrap();
         migrate_database(&connection).unwrap();
         migrate_database(&connection).unwrap();
-        assert_eq!(schema_version(&connection), 1);
+        assert_eq!(schema_version(&connection), 2);
         assert!(table_exists(&connection, "coding_pack_operations"));
         assert!(table_exists(&connection, "coding_pack_events"));
         assert!(table_exists(
@@ -1050,6 +1294,63 @@ mod tests {
             .query_row("PRAGMA synchronous", [], |row| row.get(0))
             .unwrap();
         assert_eq!(synchronous, 2);
+    }
+
+    #[test]
+    fn v1_proposed_and_confirmed_records_migrate_without_automatic_decision() {
+        let root = test_root();
+        for confirmed in [false, true] {
+            let suffix = if confirmed { "confirmed" } else { "proposed" };
+            let destination = root.join(format!("exports-{suffix}"));
+            fs::create_dir_all(&destination).unwrap();
+            let database_path = root.join(format!("{suffix}.sqlite3"));
+            let database = CodingPackDatabase::open_path(&database_path).unwrap();
+            let binding = database
+                .bind_destination(&destination, "2026-07-30T00:00:00.000Z".into())
+                .unwrap();
+            let proposed = proposed_request(&binding);
+            database.create_operation(proposed.clone()).unwrap();
+            if confirmed {
+                database
+                    .append_confirmation(confirmation_request(&proposed))
+                    .unwrap();
+            }
+            drop(database);
+
+            let legacy = Connection::open(&database_path).unwrap();
+            configure_connection(&legacy).unwrap();
+            legacy
+                .execute(
+                    "UPDATE coding_pack_store_metadata
+                     SET schema_version = 'kerniq.coding-pack.store.v1'",
+                    [],
+                )
+                .unwrap();
+            legacy.execute_batch("PRAGMA user_version = 1;").unwrap();
+            drop(legacy);
+
+            let migrated = CodingPackDatabase::open_path(&database_path).unwrap();
+            let snapshot = migrated
+                .get_operation_snapshot_data("operation-1")
+                .unwrap()
+                .unwrap();
+            assert_eq!(
+                snapshot.operation.state,
+                if confirmed { "confirmed" } else { "proposed" }
+            );
+            assert_eq!(snapshot.events.len(), if confirmed { 2 } else { 1 });
+            let connection = migrated.lock().unwrap();
+            assert_eq!(schema_version(&connection), 2);
+            let schema: String = connection
+                .query_row(
+                    "SELECT schema_version FROM coding_pack_store_metadata",
+                    [],
+                    |row| row.get(0),
+                )
+                .unwrap();
+            assert_eq!(schema, CODING_PACK_STORE_SCHEMA_VERSION);
+        }
+        fs::remove_dir_all(root).unwrap();
     }
 
     #[test]
@@ -1080,7 +1381,7 @@ mod tests {
             .unwrap()
             .insert("proposalDigest".into(), proposal_digest.into());
         assert_eq!(
-            sha256_canonical(&serde_json::json!({ "proposal": proposal })).unwrap(),
+            sha256_canonical(&serde_json::json!({ "proposal": proposal.clone() })).unwrap(),
             "sha256:24dcd9be102988d7e00e373b07afe8c02d768f260c393430dcb4896bea76f66a"
         );
         let mut hasher = Sha256::new();
@@ -1089,6 +1390,30 @@ mod tests {
             format!("sha256:{:x}", hasher.finalize()),
             "sha256:1d742926433865d0d7a3e5f69c6f989a1a86b89aa045f0b78b1be4862b8a4214"
         );
+        assert_eq!(
+            sha256_canonical(&serde_json::json!({
+                "toolIdentity": CODING_PACK_AGENTFUSE_EXPORT_TOOL,
+                "request": {
+                    "protocolVersion": CODING_PACK_AGENTFUSE_EXPORT_PROTOCOL,
+                    "operationId": "operation-1",
+                    "proposalDigest": digest('a'),
+                    "approvalEvidenceDigest": digest('b'),
+                    "candidatePathsDigest": digest('c'),
+                    "sourceFingerprint": digest('a'),
+                    "packId": pack_id('b'),
+                    "manifestDigest": digest('c'),
+                    "destinationBindingId": format!("destination-{}", "c".repeat(24)),
+                    "destinationFingerprint": digest('b'),
+                    "exportFormat": EXPORT_FORMAT,
+                },
+            }))
+            .unwrap(),
+            "sha256:28c7e50774a4b51e62a476a73567886b94b52367d7cc1b534ce6426d4762f917"
+        );
+        let mut absolute_operation: CodingPackExportProposal =
+            serde_json::from_value(proposal).unwrap();
+        absolute_operation.operation_id = "/private/export".into();
+        assert!(coding_pack_agentfuse_request_digest(&absolute_operation, &digest('b')).is_err());
     }
 
     #[test]
@@ -1122,7 +1447,20 @@ mod tests {
         assert_eq!(stored.operation.state, "confirmed");
         assert_eq!(stored.operation.last_event_sequence, 2);
         assert_eq!(stored.events.len(), 2);
+        let decided = decision_request(&stored);
+        restarted.append_decision(decided.clone()).unwrap();
+        assert!(restarted.append_decision(decided).is_err());
         drop(restarted);
+
+        let decided_restart = CodingPackDatabase::open_path(&database_path).unwrap();
+        let durable_decision = decided_restart
+            .get_operation_snapshot_data("operation-1")
+            .unwrap()
+            .unwrap();
+        assert_eq!(durable_decision.operation.state, "decided_allow");
+        assert_eq!(durable_decision.operation.last_event_sequence, 3);
+        assert_eq!(durable_decision.events.len(), 3);
+        drop(decided_restart);
         fs::remove_dir_all(root).unwrap();
     }
 
@@ -1284,6 +1622,60 @@ mod tests {
     }
 
     #[test]
+    fn native_boundary_rejects_invalid_decision_identity_without_state_change() {
+        let root = test_root();
+        let destination = root.join("exports");
+        fs::create_dir_all(&destination).unwrap();
+        let database = CodingPackDatabase::open_path(&root.join("store.sqlite3")).unwrap();
+        let binding = database
+            .bind_destination(&destination, "2026-07-30T00:00:00.000Z".into())
+            .unwrap();
+        let proposed = proposed_request(&binding);
+        database.create_operation(proposed.clone()).unwrap();
+        database
+            .append_confirmation(confirmation_request(&proposed))
+            .unwrap();
+        let confirmed = database
+            .get_operation_snapshot_data("operation-1")
+            .unwrap()
+            .unwrap();
+        let mut invalid = decision_request(&confirmed);
+        invalid.decided_event.payload["policyDigest"] = Value::String(digest('9'));
+        invalid.decided_event.payload_digest =
+            sha256_canonical(&invalid.decided_event.payload).unwrap();
+        assert!(database.append_decision(invalid).is_err());
+
+        let mut wrong_approval = decision_request(&confirmed);
+        wrong_approval.decided_event.payload["approvalEvidenceDigest"] = Value::String(digest('8'));
+        wrong_approval.decided_event.payload_digest =
+            sha256_canonical(&wrong_approval.decided_event.payload).unwrap();
+        assert!(database.append_decision(wrong_approval).is_err());
+
+        let mut wrong_request = decision_request(&confirmed);
+        wrong_request.decided_event.payload["requestDigest"] = Value::String(digest('7'));
+        wrong_request.decided_event.payload_digest =
+            sha256_canonical(&wrong_request.decided_event.payload).unwrap();
+        assert!(database.append_decision(wrong_request).is_err());
+
+        let mut expired_decision = decision_request(&confirmed);
+        expired_decision.decided_event.payload["decidedAt"] =
+            Value::String("2099-07-30T00:05:00.000Z".into());
+        expired_decision.decided_event.recorded_at = "2099-07-30T00:05:00.000Z".into();
+        expired_decision.decided_event.payload_digest =
+            sha256_canonical(&expired_decision.decided_event.payload).unwrap();
+        assert!(database.append_decision(expired_decision).is_err());
+
+        let snapshot = database
+            .get_operation_snapshot_data("operation-1")
+            .unwrap()
+            .unwrap();
+        assert_eq!(snapshot.operation.state, "confirmed");
+        assert_eq!(snapshot.events.len(), 2);
+        drop(database);
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
     fn exact_lifetime_boundaries_are_enforced_natively() {
         assert!(validate_lifetime(
             "2026-07-30T00:00:00.000Z",
@@ -1382,6 +1774,49 @@ mod tests {
                 event_type: "PACK_CONFIRMED".into(),
                 event_version: 1,
                 recorded_at: approval.approved_at,
+                payload_digest: sha256_canonical(&payload).unwrap(),
+                payload,
+            },
+        }
+    }
+
+    fn decision_request(
+        confirmed: &CodingPackStoredSnapshotData,
+    ) -> DecideCodingPackOperationRequest {
+        let confirmed_event = &confirmed.events[1];
+        let proposed_payload: ProposedPayload =
+            serde_json::from_value(confirmed.events[0].payload.clone()).unwrap();
+        let payload = DecidedPayload {
+            decision_id: "decision-1".into(),
+            request_digest: coding_pack_agentfuse_request_digest(
+                &proposed_payload.proposal,
+                &confirmed_event.payload_digest,
+            )
+            .unwrap(),
+            proposal_digest: confirmed.operation.proposal_digest.clone(),
+            approval_evidence_digest: confirmed_event.payload_digest.clone(),
+            agent_fuse_source_commit: AGENTFUSE_SOURCE_COMMIT.into(),
+            agent_fuse_package_version: AGENTFUSE_PACKAGE_VERSION.into(),
+            bridge_protocol: AGENTFUSE_BRIDGE_PROTOCOL.into(),
+            policy_id: CODING_PACK_EXPORT_POLICY_ID.into(),
+            policy_digest: CODING_PACK_EXPORT_POLICY_DIGEST.into(),
+            decision: "allow".into(),
+            reason_code: "policy_allowed".into(),
+            decided_at: "2099-07-30T00:00:02.000Z".into(),
+        };
+        let payload = serde_json::to_value(payload).unwrap();
+        let mut operation = confirmed.operation.clone();
+        operation.state = "decided_allow".into();
+        operation.last_event_sequence = 3;
+        DecideCodingPackOperationRequest {
+            operation,
+            decided_event: CodingPackEvent {
+                event_id: "event-3".into(),
+                operation_id: confirmed.operation.operation_id.clone(),
+                event_sequence: 3,
+                event_type: "PACK_DECIDED".into(),
+                event_version: 1,
+                recorded_at: "2099-07-30T00:00:02.000Z".into(),
                 payload_digest: sha256_canonical(&payload).unwrap(),
                 payload,
             },

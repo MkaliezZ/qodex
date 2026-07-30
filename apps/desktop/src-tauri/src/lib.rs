@@ -4,7 +4,8 @@ mod session_database;
 
 use coding_pack_database::{
     CodingPackDatabase, CodingPackDestinationBinding, CodingPackStoredSnapshotData,
-    ConfirmCodingPackOperationRequest, CreateCodingPackOperationRequest, DestinationPickerRequest,
+    ConfirmCodingPackOperationRequest, CreateCodingPackOperationRequest,
+    DecideCodingPackOperationRequest, DestinationPickerRequest,
 };
 use managed_python::ManagedPythonState;
 use serde::{Deserialize, Serialize};
@@ -294,6 +295,14 @@ fn coding_pack_store_confirm(
 }
 
 #[tauri::command]
+fn coding_pack_store_decide(
+    request: DecideCodingPackOperationRequest,
+    state: tauri::State<'_, CodingPackDatabase>,
+) -> Result<(), String> {
+    state.append_decision(request)
+}
+
+#[tauri::command]
 fn coding_pack_store_snapshot(
     operation_id: String,
     state: tauri::State<'_, CodingPackDatabase>,
@@ -349,6 +358,7 @@ pub fn run() {
             session_persistence_info,
             coding_pack_store_create,
             coding_pack_store_confirm,
+            coding_pack_store_decide,
             coding_pack_store_snapshot,
             coding_pack_store_operation_ids,
             coding_pack_destination_get,

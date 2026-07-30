@@ -11,7 +11,7 @@ const projectFiles = {
   "logo.png": "fixture binary-like bytes",
 };
 
-test.describe("KerniQ v0.7.3 selected-file Coding Pack preview", () => {
+test.describe("KerniQ v0.7.4.2 Coding Pack preview and AgentFuse decision", () => {
   test("covers no-project, no-selection, confirmation, stale, and keyboard states", async ({ page }) => {
     await installProjectFixture(page, projectFiles, { readDelayMs: 300 });
     await setupApp(page);
@@ -100,7 +100,7 @@ test.describe("KerniQ v0.7.3 selected-file Coding Pack preview", () => {
     await preview.getByTestId("coding-pack-confirm").click();
     const exportIntent = preview.getByTestId("coding-pack-export-intent");
     await expect(exportIntent.getByText("No files written")).toBeVisible();
-    await expect(exportIntent.getByText("Policy decision not yet evaluated")).toBeVisible();
+    await expect(exportIntent.getByText("Export has not started")).toBeVisible();
 
     const destinationButton = preview.getByTestId("coding-pack-destination");
     await destinationButton.focus();
@@ -123,9 +123,18 @@ test.describe("KerniQ v0.7.3 selected-file Coding Pack preview", () => {
     await expect(confirmProposal).toBeDisabled();
     await expect(confirmProposal).toHaveText("Proposal confirmed");
 
+    const evaluatePolicy = preview.getByTestId("coding-pack-evaluate-policy");
+    await expect(evaluatePolicy).toBeEnabled();
+    await evaluatePolicy.click();
+    await expect(preview.getByTestId("coding-pack-policy-result")).toContainText(
+      "Policy allowed",
+    );
+    await expect(preview.getByTestId("coding-pack-policy-result")).toContainText(
+      "Export has not started",
+    );
+
     await expect(page.locator("body")).not.toContainText("browser://");
     await expect(page.locator("body")).not.toContainText(projectFiles["src/math.ts"]);
-    await expect(exportIntent).not.toContainText("Allowed");
     await expect(exportIntent).not.toContainText("Exported");
     await expect(exportIntent).not.toContainText("Completed");
     expect((await readProjectFixture(page)).writes).toBe(0);
@@ -133,9 +142,11 @@ test.describe("KerniQ v0.7.3 selected-file Coding Pack preview", () => {
     await page.reload();
     await page.getByRole("button", { name: "Files" }).click();
     const recovered = page.getByTestId("coding-pack-recovered-operation");
-    await expect(recovered.getByText("Export proposal confirmed")).toBeVisible();
+    await expect(recovered.getByText("Export proposal decided_allow")).toBeVisible();
     await expect(recovered.getByText("No files written")).toBeVisible();
     await expect(recovered.getByText("No decision or export was resumed")).toBeVisible();
+    await expect(recovered.getByText("Historical decision: Policy allowed")).toBeVisible();
+    await expect(page.getByTestId("coding-pack-evaluate-policy")).toHaveCount(0);
     await expect(recovered.getByText("browser destination capability is unavailable")).toBeVisible();
     await expect(page.getByText("Exact preview confirmed")).toHaveCount(0);
   });

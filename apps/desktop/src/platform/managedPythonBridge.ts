@@ -3,6 +3,10 @@ import type {
   AgentFuseBridgeClient,
   AgentFuseDecisionRequest,
 } from "@qodex/agentfuse-adapter";
+import type {
+  CodingPackAgentFuseBridgeClient,
+  CodingPackAgentFuseBridgeRequest,
+} from "@qodex/coding-pack-agentfuse";
 
 export type ManagedPythonRuntimeState = "NotInstalled" | "Ready" | "Broken";
 
@@ -32,7 +36,9 @@ export interface ManagedPythonInvoker {
   (command: string, args?: Record<string, unknown>): Promise<unknown>;
 }
 
-export class TauriManagedPythonBridge implements AgentFuseBridgeClient {
+export class TauriManagedPythonBridge implements
+  AgentFuseBridgeClient,
+  CodingPackAgentFuseBridgeClient {
   constructor(private readonly invokeCommand: ManagedPythonInvoker = invoke) {}
 
   inspect(): Promise<ManagedPythonRuntimeInfo> {
@@ -56,6 +62,20 @@ export class TauriManagedPythonBridge implements AgentFuseBridgeClient {
   }
 
   requestDecision(request: AgentFuseDecisionRequest, signal: AbortSignal): Promise<unknown> {
+    return this.requestBridgeDecision(request, signal);
+  }
+
+  requestCodingPackExportDecision(
+    request: CodingPackAgentFuseBridgeRequest,
+    signal: AbortSignal,
+  ): Promise<unknown> {
+    return this.requestBridgeDecision(request, signal);
+  }
+
+  private requestBridgeDecision(
+    request: AgentFuseDecisionRequest | CodingPackAgentFuseBridgeRequest,
+    signal: AbortSignal,
+  ): Promise<unknown> {
     if (signal.aborted) return Promise.reject(abortError());
     return raceAbort(
       this.invokeCommand("agentfuse_decide", { request }).catch((cause) => {

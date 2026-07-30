@@ -593,6 +593,42 @@
   justify-self: end;
 }
 
+.coding-pack-policy-result {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 3px 10px;
+  padding: 9px 10px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  background: rgba(9, 11, 14, 0.42);
+}
+
+.coding-pack-policy-result strong {
+  color: var(--text-primary);
+  font-size: 10px;
+}
+
+.coding-pack-policy-result span {
+  color: var(--text-faint);
+  font-family: var(--font-mono);
+  font-size: 8px;
+}
+
+.coding-pack-policy-result small {
+  grid-column: 1 / -1;
+  color: var(--text-muted);
+  font-size: 8px;
+}
+
+.coding-pack-policy-result.is-allow {
+  border-color: rgba(89, 183, 144, 0.28);
+}
+
+.coding-pack-policy-result.is-deny,
+.coding-pack-policy-result.is-error {
+  border-color: rgba(235, 160, 88, 0.28);
+}
+
 .coding-pack-recovered-operation {
   display: grid;
   gap: 9px;

@@ -41,11 +41,16 @@ describe("Desktop Coding Pack store adapters", () => {
       { ...operation(binding), state: "confirmed", lastEventSequence: 2 },
       confirmedEvent(),
     );
+    await adapter.appendDecision(
+      { ...operation(binding), state: "decided_allow", lastEventSequence: 3 },
+      decidedEvent(),
+    );
 
     expect(invokeCommand.mock.calls.map(([command]) => command)).toEqual([
       "coding_pack_destination_get",
       "coding_pack_store_create",
       "coding_pack_store_confirm",
+      "coding_pack_store_decide",
     ]);
     expect(JSON.stringify(invokeCommand.mock.calls)).not.toContain("/Users/private");
   });
@@ -66,6 +71,27 @@ describe("Desktop Coding Pack store adapters", () => {
     expect(await restarted.listOperationIds()).toEqual(["operation-1"]);
     expect(storage.readCount).toBe(4);
     expect(storage.value()).not.toContain("FileSystemDirectoryHandle");
+  });
+
+  it("migrates browser v1 records to v2 without deciding or exporting", async () => {
+    const storage = new MemoryStorage();
+    const adapter = new BrowserCodingPackStoreAdapter(storage);
+    const binding = await destination("browser-migration", false);
+    await adapter.registerDestinationBinding(binding);
+    await adapter.createOperation(operation(binding), proposedEvent(binding));
+    storage.replaceValue(
+      storage.value().replace(
+        "kerniq.coding-pack.store.v2",
+        "kerniq.coding-pack.store.v1",
+      ),
+    );
+
+    const migrated = new BrowserCodingPackStoreAdapter(storage);
+    const snapshot = await migrated.getOperationSnapshotData("operation-1");
+    expect(snapshot?.operation.state).toBe("proposed");
+    expect(snapshot?.events).toHaveLength(1);
+    expect(storage.value()).toContain("kerniq.coding-pack.store.v2");
+    expect(storage.value()).not.toContain("PACK_DECIDED");
   });
 
   it("rejects browser rebinding and never mixes a concurrent confirmation into a snapshot", async () => {
@@ -260,6 +286,34 @@ function confirmedEvent() {
         approvedAt: CREATED_AT,
         expiresAt: "2026-07-30T00:05:00.000Z",
       },
+    },
+  };
+}
+
+function decidedEvent() {
+  return {
+    eventId: "event-3",
+    operationId: "operation-1",
+    eventSequence: 3,
+    eventType: "PACK_DECIDED" as const,
+    eventVersion: 1 as const,
+    recordedAt: CREATED_AT,
+    payloadDigest: digest("9"),
+    payload: {
+      decisionId: "decision-1",
+      requestDigest: digest("a"),
+      proposalDigest: digest("5"),
+      approvalEvidenceDigest: digest("8"),
+      agentFuseSourceCommit:
+        "ec4b5842339dccfba0db62df7541920759203bc9" as const,
+      agentFusePackageVersion: "3.6.0" as const,
+      bridgeProtocol: "kerniq.agentfuse.bridge.v1" as const,
+      policyId: "kerniq-coding-pack-export-v1" as const,
+      policyDigest:
+        "sha256:752a8bf1f251e5c05f07ddd8d820af3c5554fb37e3a47fbcf41933f614167d07",
+      decision: "allow" as const,
+      reasonCode: "policy_allowed",
+      decidedAt: CREATED_AT,
     },
   };
 }
