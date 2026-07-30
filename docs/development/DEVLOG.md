@@ -1228,3 +1228,55 @@ ARBITRARY_FILE_WRITE_ADDED=false
 ARBITRARY_SHELL_ADDED=false
 WORKFLOW_CHANGED=false
 ```
+
+### KerniQ v0.7.3 Selected-File Coding Pack Preview and Exact Confirmation
+
+**Date:** 2026-07-30  |  **Status:** Implemented for Draft PR review
+
+v0.7.2 merged through exact-head merge commit
+`1a20c3920ccb83a0c0306ae175be933b24aac161`. The v0.7.3 slice adds a
+dedicated read-only exact-byte capability to Project Runtime without expanding
+the approved Diff write interface. Browser reads use the already-authorized
+`FileSystemFileHandle` snapshot. Tauri reads retain root containment,
+regular-file, and no-symlink/junction checks, reject oversized metadata before
+allocation, and use the installed filesystem plugin's bounded native file
+handle API. No Rust command or arbitrary absolute-path API was added.
+
+Desktop converts only current explicitly selected relative paths, sorted by
+canonical UTF-8 bytes, into `explicit_selection` candidates. It creates the
+portable manifest through `createCodingPackManifestFromSelection` and renders
+included files, machine exclusions, totals, source fingerprint, pack ID,
+manifest digest, and creation time without source contents or local authority.
+Purpose changes identity but does not discover files.
+
+The local preview binds project, open generation, exact selected-path digest,
+selection identity, and manifest digest. Confirmation is exact, in-memory
+only, grants no export authority, and is cleared or rejected after project,
+generation, selection, purpose, rules, refresh, source identity, or manifest
+identity changes. Manual refresh re-reads every selected source. There is no
+polling or filesystem watcher.
+
+```text
+V0_7_2_MERGED=true
+CODING_PACK_SELECTED_FILE_PREVIEW_IMPLEMENTED=true
+CODING_PACK_EXACT_CONFIRMATION_IMPLEMENTED=true
+EXACT_AUTHORIZED_BYTE_READ_IMPLEMENTED=true
+TEXT_REENCODING_USED=false
+AUTOMATIC_REPOSITORY_DISCOVERY_IMPLEMENTED=false
+GITIGNORE_PARSER_IMPLEMENTED=false
+CONTENT_SECRET_SCANNING_IMPLEMENTED=false
+MANUAL_REFRESH_REVALIDATES_SOURCE=true
+CONTINUOUS_SOURCE_STALENESS_MONITORING=false
+CONFIRMATION_EPHEMERAL=true
+CONFIRMATION_AUTHORIZES_EXPORT=false
+CODING_PACK_STORE_IMPLEMENTED=false
+CODING_PACK_EXPORT_IMPLEMENTED=false
+ACTION_RUNTIME_CONNECTED=false
+AGENTFUSE_CONNECTED=false
+SESSION_SCHEMA_CHANGED=false
+PROJECT_COMMAND_FREEZE_CHANGED=false
+PATCH_MIGRATED=false
+ARBITRARY_FILE_WRITE_ADDED=false
+ARBITRARY_SHELL_ADDED=false
+WORKFLOW_CHANGED=false
+```

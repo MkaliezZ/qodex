@@ -56,6 +56,19 @@
   .registry-card-grid {
     grid-template-columns: 1fr;
   }
+
+  .files-workspace {
+    grid-template-columns: 1fr;
+    overflow: auto;
+  }
+
+  .files-browser {
+    min-height: 300px;
+  }
+
+  .coding-pack-file-columns {
+    grid-template-columns: 1fr;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {

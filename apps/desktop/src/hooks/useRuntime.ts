@@ -26,8 +26,20 @@ import { ProjectRuntime } from "@qodex/project-runtime";
 import type { FileContent, ProjectTree } from "@qodex/project-runtime";
 import type { ModelProvider } from "@qodex/provider-sdk";
 import type { AgentFuseBridgeClient } from "@qodex/agentfuse-adapter";
+import type { CodingPackPurpose } from "@qodex/coding-pack-runtime";
 import { useProviderContext } from "../components/ProviderContext";
 import { useSessionContext } from "../components/SessionContext";
+import {
+  CodingPackPreviewError,
+  codingPackSelectionRulesVersion,
+  confirmCodingPackPreview,
+  createSelectedFileCodingPackPreview,
+  digestSelectedPaths,
+  isCodingPackPreviewStale,
+  type CodingPackPreview,
+  type CodingPackPreviewConfirmation,
+  type CodingPackPreviewErrorCode,
+} from "../codingPack/preview";
 import { openProjectDirectory } from "../platform/openProjectDirectory";
 import { createManagedPythonBridge } from "../platform/managedPythonBridge";
 import { projectBindingIdentity, type OpenProjectBindingIdentity } from "../platform/projectBinding";
@@ -67,6 +79,9 @@ export function useRuntime() {
   const agentUnsubscribeRef = useRef<(() => void) | null>(null);
   const agentSessionRecorderRef = useRef<AgentSessionLedgerRecorder | null>(null);
   const projectBindingRef = useRef<OpenProjectBindingIdentity | null>(null);
+  const projectGenerationRef = useRef(0);
+  const selectedPathsRevisionRef = useRef(0);
+  const codingPackPurposeRef = useRef<CodingPackPurpose>("repository_orientation");
   const ctxRef = useRef(new ContextEngine());
   const diffRef = useRef(new DiffEngine());
   const rawResponseRef = useRef("");
@@ -86,6 +101,17 @@ export function useRuntime() {
   const [selectedFileCount, setSelectedFileCount] = useState(0);
   const [selectedFileSize, setSelectedFileSize] = useState(0);
   const [contextFiles, setContextFiles] = useState<FileContent[]>([]);
+  const [projectBindingId, setProjectBindingId] = useState<string | null>(null);
+  const [projectGeneration, setProjectGeneration] = useState(0);
+  const [selectedPathsDigest, setSelectedPathsDigest] = useState<string | null>(null);
+  const [codingPackPurpose, setCodingPackPurposeState] =
+    useState<CodingPackPurpose>("repository_orientation");
+  const [codingPackPreview, setCodingPackPreview] = useState<CodingPackPreview | null>(null);
+  const [codingPackConfirmation, setCodingPackConfirmation] =
+    useState<CodingPackPreviewConfirmation | null>(null);
+  const [codingPackPreviewError, setCodingPackPreviewError] =
+    useState<CodingPackPreviewErrorCode | null>(null);
+  const [isCodingPackPreviewLoading, setIsCodingPackPreviewLoading] = useState(false);
 
   const [lastBundle, setLastBundle] = useState<ContextBundle | null>(null);
   const [estimatedTokens, setEstimatedTokens] = useState(0);
@@ -223,6 +249,8 @@ export function useRuntime() {
         lastOpenedAt: new Date().toISOString(),
       });
       projectBindingRef.current = binding;
+      projectGenerationRef.current += 1;
+      selectedPathsRevisionRef.current += 1;
       projectRef.current = project;
       commandRunnerRef.current = opened.commandRunner
         ?? (import.meta.env.DEV ? window.__kerniqTestCommandRunner ?? null : null);
@@ -233,6 +261,13 @@ export function useRuntime() {
       setSelectedFileCount(0);
       setSelectedFileSize(0);
       setContextFiles([]);
+      setProjectBindingId(binding.bindingId);
+      setProjectGeneration(projectGenerationRef.current);
+      setSelectedPathsDigest(await digestSelectedPaths([]));
+      setCodingPackPreview(null);
+      setCodingPackConfirmation(null);
+      setCodingPackPreviewError(null);
+      setIsCodingPackPreviewLoading(false);
       setProposalState(null, null);
       setProposalNotice(null);
       setCurrentProposal(null);
@@ -261,16 +296,117 @@ export function useRuntime() {
     const project = projectRef.current;
     if (!project) return;
     project.toggleSelect(path);
+    const revision = selectedPathsRevisionRef.current + 1;
+    selectedPathsRevisionRef.current = revision;
     setFileTree(project.tree ? { ...project.tree } : null);
-    setSelectedFileCount(project.selectedPaths.length);
+    const selectedPaths = project.selectedPaths;
+    setSelectedFileCount(selectedPaths.length);
+    setSelectedPathsDigest(null);
+    setCodingPackConfirmation(null);
+    setCodingPackPreviewError(null);
     let totalSize = 0;
-    for (const selectedPath of project.selectedPaths) {
+    for (const selectedPath of selectedPaths) {
       const entry = project.index?.files.find((file) => file.path === selectedPath);
       if (entry) totalSize += entry.size;
     }
     setSelectedFileSize(totalSize);
+    const digest = await digestSelectedPaths(selectedPaths);
+    if (
+      projectRef.current === project
+      && selectedPathsRevisionRef.current === revision
+    ) {
+      setSelectedPathsDigest(digest);
+    }
     await refreshSelectedFiles();
   }, [refreshSelectedFiles]);
+
+  const setCodingPackPurpose = useCallback((purpose: CodingPackPurpose) => {
+    codingPackPurposeRef.current = purpose;
+    setCodingPackPurposeState(purpose);
+    setCodingPackConfirmation(null);
+    setCodingPackPreviewError(null);
+  }, []);
+
+  const refreshCodingPackPreview = useCallback(async () => {
+    const project = projectRef.current;
+    const binding = projectBindingRef.current;
+    const generation = projectGenerationRef.current;
+    const selectedPaths = project?.selectedPaths ?? [];
+    const purpose = codingPackPurposeRef.current;
+    if (!project || !binding) {
+      setCodingPackPreviewError("coding_pack_project_changed");
+      return;
+    }
+    if (selectedPaths.length === 0) {
+      setCodingPackPreviewError("coding_pack_no_selection");
+      return;
+    }
+
+    setIsCodingPackPreviewLoading(true);
+    setCodingPackPreviewError(null);
+    setCodingPackPreview(null);
+    setCodingPackConfirmation(null);
+    try {
+      const preview = await createSelectedFileCodingPackPreview({
+        projectBindingId: binding.bindingId,
+        projectGeneration: generation,
+        selectedPaths,
+        purpose,
+        source: project.codingPackSourceAccess,
+      });
+      const currentSelectedPathsDigest = await digestSelectedPaths(project.selectedPaths);
+      if (
+        projectRef.current !== project
+        || projectBindingRef.current?.bindingId !== binding.bindingId
+        || projectGenerationRef.current !== generation
+      ) {
+        throw new CodingPackPreviewError("coding_pack_project_changed");
+      }
+      if (
+        currentSelectedPathsDigest !== preview.selectedPathsDigest
+        || codingPackPurposeRef.current !== purpose
+      ) {
+        throw new CodingPackPreviewError("coding_pack_preview_stale");
+      }
+      setSelectedPathsDigest(currentSelectedPathsDigest);
+      setCodingPackPreview(preview);
+    } catch (error) {
+      setCodingPackPreviewError(
+        error instanceof CodingPackPreviewError
+          ? error.code
+          : "coding_pack_selection_failed",
+      );
+    } finally {
+      setIsCodingPackPreviewLoading(false);
+    }
+  }, []);
+
+  const confirmCurrentCodingPackPreview = useCallback(async () => {
+    const preview = codingPackPreview;
+    const binding = projectBindingRef.current;
+    if (!preview || !binding || selectedPathsDigest === null) {
+      setCodingPackPreviewError("coding_pack_preview_stale");
+      return;
+    }
+    try {
+      const confirmation = await confirmCodingPackPreview(preview, {
+        projectBindingId: binding.bindingId,
+        projectGeneration: projectGenerationRef.current,
+        selectedPathsDigest,
+        purpose: codingPackPurposeRef.current,
+        selectionRulesVersion: codingPackSelectionRulesVersion,
+      });
+      setCodingPackConfirmation(confirmation);
+      setCodingPackPreviewError(null);
+    } catch (error) {
+      setCodingPackConfirmation(null);
+      setCodingPackPreviewError(
+        error instanceof CodingPackPreviewError
+          ? error.code
+          : "coding_pack_confirmation_mismatch",
+      );
+    }
+  }, [codingPackPreview, selectedPathsDigest]);
 
   const createPatchAdapter = useCallback((project: ProjectRuntime): AgentPatchAdapter => ({
     prepare: async (response, taskId) => {
@@ -621,6 +757,17 @@ export function useRuntime() {
   }, [agentTask, currentTask, runtime, syncAgentTask]);
 
   const proposalActionsAvailable = resolveProposalActionRoute(pendingProposal, proposalOrigin, agentTask) !== null;
+  const codingPackPreviewStale = codingPackPreview === null
+    ? false
+    : projectBindingId === null
+      || selectedPathsDigest === null
+      || isCodingPackPreviewStale(codingPackPreview, {
+        projectBindingId,
+        projectGeneration,
+        selectedPathsDigest,
+        purpose: codingPackPurpose,
+        selectionRulesVersion: codingPackSelectionRulesVersion,
+      });
 
   return {
     isRunning,
@@ -638,6 +785,15 @@ export function useRuntime() {
     selectedFileCount,
     selectedFileSize,
     contextFiles,
+    codingPackPurpose,
+    setCodingPackPurpose,
+    codingPackPreview,
+    codingPackConfirmation,
+    codingPackPreviewError,
+    codingPackPreviewStale,
+    isCodingPackPreviewLoading,
+    refreshCodingPackPreview,
+    confirmCurrentCodingPackPreview,
     lastBundle,
     estimatedTokens,
     pendingProposal,

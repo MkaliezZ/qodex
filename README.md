@@ -260,16 +260,19 @@ The [final freeze seal](docs/development/kerniq_v0_6_1_project_command_final_fre
 records the exact merged evidence chain and bounded non-claims. It is active on
 `main`; the next implementation milestone has not started.
 
-## Coding Pack v0.7 Planning
+## Coding Pack v0.7
 
-The current source audit classifies Coding Pack as `PLANNED_ONLY`: KerniQ has
-authorized project reads and ephemeral selected-file context, but no Coding
-Pack manifest, preview, persistence, staleness, or export implementation. The
+KerniQ now includes the browser-safe v0.7.1 manifest contracts and the merged
+v0.7.2 deterministic selection/privacy core. The v0.7.3 Draft implementation
+adds a read-only Desktop preview for explicitly selected files, exact authorized
+byte reads, manual refresh, and an in-memory confirmation bound to that exact
+preview. The
 [v0.7 plan](docs/development/kerniq_v0_7_coding_pack_product_integration_planning.md)
 and [ADR-022](qodex-config/adr/ADR-022-Coding-Pack-Product-Integration.md)
-define a deterministic manifest, explicit export authorization, privacy
-controls, and one durable export lifecycle. Implementation has not started, and
-the v0.6.1 Project Command freeze is unchanged.
+define the remaining durable export lifecycle. Automatic repository discovery,
+`.gitignore` parsing, content secret scanning, persistent Coding Pack storage,
+physical export, Action Runtime, and AgentFuse integration are not implemented.
+The v0.6.1 Project Command freeze is unchanged.
 
 ---
 
@@ -280,8 +283,9 @@ The authoritative roadmap is maintained in
 v0.6 is merged and frozen as the managed Python and universal action
 foundation. The bounded native Desktop Project Command path is implemented and
 its v0.6.1.6 implementation, real proof, and final freeze seal are merged. The
-v0.6.1 Project Command scope is frozen. v0.7 Coding Pack is in planning review
-only; implementation has not started. Patch remains outside this scope.
+v0.6.1 Project Command scope is frozen. Coding Pack v0.7.2 is merged and the
+selected-file preview/confirmation v0.7.3 slice is in Draft PR review. Patch
+remains outside this scope.
 Installer work is planned for v0.8, and the Stage 2 namespace-wide rename
 remains explicitly deferred.
 

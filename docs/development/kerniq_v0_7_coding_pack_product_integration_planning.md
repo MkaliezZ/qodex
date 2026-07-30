@@ -1,23 +1,22 @@
 # KerniQ v0.7 Coding Pack Product Integration Planning
 
 **Date:** 2026-07-29
-**Status:** Planning-only Draft PR; implementation not started
+**Status:** Living plan; v0.7.2 merged and v0.7.3 implemented in Draft PR
 **Planning base:** `0486704d613ea203672d75bee455346cceafb225`
 **v0.6.1 freeze activation merge:** `0486704d613ea203672d75bee455346cceafb225`
 **v0.6.1 freeze activation post-merge CI:** `30432376199`
 
 ## Executive Summary
 
-KerniQ does not currently implement a Coding Pack. The only direct product
-reference is the v0.7 roadmap heading. The repository does contain useful
-foundations: authorized project opening, bounded relative-path reads, file-tree
-selection, a lightweight index, deterministic context assembly, project
-binding, a universal action contract, and a durable Session ledger. None of
-those foundations currently creates, previews, identifies, persists, refreshes,
-or exports a Coding Pack.
+At the planning base, KerniQ did not implement a Coding Pack. The repository
+did contain useful foundations: authorized project opening, bounded
+relative-path reads, file-tree selection, a lightweight index, deterministic
+context assembly, project binding, a universal action contract, and a durable
+Session ledger. At that base, none of those foundations created, previewed,
+identified, persisted, refreshed, or exported a Coding Pack.
 
 ```text
-CURRENT_CODING_PACK_STATE=PLANNED_ONLY
+CURRENT_CODING_PACK_STATE=SELECTED_FILE_PREVIEW_IMPLEMENTED_IN_DRAFT_PR
 V0_7_PLANNING_BASE_MAIN=0486704d613ea203672d75bee455346cceafb225
 ```
 
@@ -28,9 +27,9 @@ authoritative record of what was inspected and exported. Preview generation is
 read-only. Writing or exporting requires explicit authorization and a durable,
 recoverable operation boundary.
 
-This plan does not implement that product, change Session schema, alter the
-frozen Project Command path, or route content quality decisions through
-AgentFuse.
+The planning revision did not implement that product, change Session schema,
+alter the frozen Project Command path, or route content quality decisions
+through AgentFuse.
 
 ## Current-State Source Audit
 
@@ -979,7 +978,7 @@ CI_NODE20_DEPRECATION_REVIEW_REQUIRED=true
 V0_7_PLANNING_APPROVED_AND_MERGED
 ```
 
-## v0.7.1 and v0.7.2 Implementation Status
+## v0.7.1 through v0.7.3 Implementation Status
 
 The corrected product plan was approved and merged through PR #17:
 
@@ -1032,7 +1031,8 @@ rejected.
 
 ```text
 V0_7_1_MERGED=true
-V0_7_2_DETERMINISTIC_SELECTION_CORE_IMPLEMENTED_IN_DRAFT_PR=true
+V0_7_2_MERGE_COMMIT=1a20c3920ccb83a0c0306ae175be933b24aac161
+V0_7_2_MERGED=true
 CODING_PACK_SELECTION_CORE_IMPLEMENTED=true
 CASE_FOLD_COLLISION_POLICY=FAIL_CLOSED
 UNICODE_NORMALIZATION_COLLISION_POLICY=FAIL_CLOSED
@@ -1068,5 +1068,42 @@ PATCH_MIGRATED=false
 ARBITRARY_FILE_READ_ADDED=false
 ARBITRARY_FILE_WRITE_ADDED=false
 ARBITRARY_SHELL_ADDED=false
+WORKFLOW_CHANGED=false
+```
+
+v0.7.3 adds a dedicated exact-byte source capability to the already-authorized
+Project Runtime adapter. Browser mode reads the selected
+`FileSystemFileHandle` snapshot as bytes. Tauri mode reuses root containment,
+regular-file, and no-symlink/junction checks, then performs a size preflight
+and a bounded `FileHandle.read` of at most the reviewed limit plus one byte.
+No arbitrary root or absolute path is accepted by React.
+
+Desktop converts only the current explicitly selected relative paths, in
+canonical UTF-8 byte order, to `explicit_selection` candidates. It uses
+`createCodingPackManifestFromSelection`, shows portable evidence without local
+authority or source contents, and binds the local preview to the project
+binding, open generation, selected-path digest, purpose, source identity, and
+manifest digest. Manual refresh re-reads all selected files. Confirmation is
+ephemeral, grants no export authority, and is cleared or rejected when its
+binding becomes stale.
+
+```text
+V0_7_3_SELECTED_FILE_PREVIEW_IMPLEMENTED_IN_DRAFT_PR=true
+EXACT_AUTHORIZED_BYTE_READ_IMPLEMENTED=true
+TEXT_REENCODING_USED=false
+AUTOMATIC_REPOSITORY_DISCOVERY_IMPLEMENTED=false
+GITIGNORE_PARSER_IMPLEMENTED=false
+CONTENT_SECRET_SCANNING_IMPLEMENTED=false
+MANUAL_REFRESH_REVALIDATES_SOURCE=true
+CONTINUOUS_SOURCE_STALENESS_MONITORING=false
+CONFIRMATION_EPHEMERAL=true
+CONFIRMATION_AUTHORIZES_EXPORT=false
+CODING_PACK_STORE_IMPLEMENTED=false
+CODING_PACK_EXPORT_IMPLEMENTED=false
+ACTION_RUNTIME_CONNECTED=false
+AGENTFUSE_CONNECTED=false
+SESSION_SCHEMA_CHANGED=false
+PROJECT_COMMAND_FREEZE_CHANGED=false
+ARBITRARY_FILE_WRITE_ADDED=false
 WORKFLOW_CHANGED=false
 ```

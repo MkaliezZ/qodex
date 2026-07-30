@@ -22,6 +22,14 @@ export type { FileSystemAdapter } from "./fs/adapter.js";
 export { WebFileSystemAdapter } from "./fs/adapter.js";
 export { MockFileSystemAdapter } from "./fs/mock.js";
 export {
+  CODING_PACK_PROJECT_SOURCE_MAX_BYTES,
+  CodingPackProjectSourceError,
+} from "./fs/codingPackSource.js";
+export type {
+  CodingPackProjectSourceAdapter,
+  CodingPackProjectSourceErrorCode,
+} from "./fs/codingPackSource.js";
+export {
   assertSafeProjectRelativePath,
   isSafeProjectRelativePath,
   UnsafeProjectPathError,

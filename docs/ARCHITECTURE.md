@@ -267,17 +267,24 @@ Details:
 - [`kerniq_v0_6_1_project_command_final_freeze.md`](development/kerniq_v0_6_1_project_command_final_freeze.md)
 - [`ADR-021`](../qodex-config/adr/ADR-021-Project-Command-Action-Runtime-Adapter.md)
 
-### Coding Pack v0.7 Planning
+### Coding Pack v0.7
 
-Coding Pack is currently `PLANNED_ONLY`. Existing Project Runtime and Desktop
-adapters authorize bounded relative-path reads; Context Engine assembles
-ephemeral selected-file prompt context; Session Runtime persists project and
-action evidence. No current package creates a pack manifest, preview, durable
-pack state, staleness check, or export artifact.
+`@qodex/coding-pack-runtime` owns deterministic selection, exclusions,
+source fingerprints, pack identity, and canonical portable manifests. Project
+Runtime exposes a separate read-only exact-byte capability bound to an already
+authorized project root. Browser access reads immutable `File` snapshots;
+Tauri access reuses the existing containment and no-symlink checks, checks
+metadata size, and reads through a bounded native file handle.
 
-The proposed design assigns deterministic selection, exclusions, source
-fingerprints, and canonical manifests to a new browser-safe Coding Pack
-runtime. Desktop owns preview and confirmation. A dedicated versioned store
+The Desktop v0.7.3 Draft slice converts only explicitly selected paths into
+`explicit_selection` candidates, creates a manifest from the bound selection,
+and shows included files, exclusions, totals, and portable identity. Its local
+preview binds project, open generation, selected-path digest, purpose, source
+fingerprint, and manifest digest. Confirmation is ephemeral, is invalidated by
+binding/selection/purpose/refresh changes, and does not authorize export.
+Source-byte changes are re-read on manual refresh; there is no watcher.
+
+A future dedicated versioned store
 owns one export lifecycle, while a narrow native adapter owns staged,
 no-overwrite physical export. Session Runtime may reference a verified
 completed artifact but is not a competing lifecycle owner.
@@ -286,9 +293,9 @@ Read-only deterministic selection uses project capability and privacy controls
 without an AgentFuse decision. Writing/export requires explicit product
 authorization plus a separately versioned AgentFuse export-policy decision,
 durably recorded before export start. AgentFuse does not select files or judge
-content quality. Atomic promotion requires same-filesystem staging and has no
-silent cross-filesystem copy fallback. The v0.6.1 Project Command freeze is
-unchanged.
+content quality. Automatic discovery, `.gitignore` parsing, content secret
+scanning, persistent storage, physical export, Action Runtime, and AgentFuse
+are not connected in v0.7.3. The v0.6.1 Project Command freeze is unchanged.
 
 Details:
 

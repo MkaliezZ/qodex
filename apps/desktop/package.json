@@ -15,6 +15,7 @@
     "@qodex/action-runtime": "workspace:*",
     "@qodex/agent-runtime": "workspace:*",
     "@qodex/agentfuse-adapter": "workspace:*",
+    "@qodex/coding-pack-runtime": "workspace:*",
     "@qodex/context-engine": "workspace:*",
     "@qodex/diff-engine": "workspace:*",
     "@qodex/marketplace-runtime": "workspace:^",

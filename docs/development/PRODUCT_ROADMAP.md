@@ -82,8 +82,9 @@ scope is frozen and the next implementation milestone has not started.
 **Status:** Product planning merged in
 `46ae1d405a5519477de7da3d1eba51c7e0ae5640`; v0.7.1 contracts and deterministic
 portable manifest merged in `d01ad3b71a83efe906c262fa466417d325969946`;
-v0.7.2 deterministic selection and path-based privacy core implemented for
-Draft PR review
+v0.7.2 deterministic selection and path-based privacy core merged in
+`1a20c3920ccb83a0c0306ae175be933b24aac161`; v0.7.3 selected-file preview and
+exact ephemeral confirmation implemented for Draft PR review
 
 The source audit found authorized project reads, selected-file context
 assembly, project binding, action contracts, and Session persistence, but no
@@ -111,9 +112,15 @@ v0.7.2 adds pure caller-supplied candidate selection, fixed hard exclusions,
 strict UTF-8 classification, conservative fail-closed case/normalization
 collisions, Windows-portable filename rules, bounded candidate work, fixed
 project-ignore provenance, runtime-verified purpose/rules/source identity, and
-deterministic budgets. Authorized filesystem discovery, `.gitignore` parsing,
-content secret scanning, UI, persistence, export, native commands, Action
-Runtime, and AgentFuse integration remain unimplemented.
+deterministic budgets.
+
+v0.7.3 adds bounded exact-byte reads through the already-authorized Project
+Runtime adapter and a Desktop preview for explicitly selected files only.
+Manual refresh re-reads all selected sources. Exact confirmation is local,
+in-memory, invalidated by project/selection/purpose/refresh changes, and grants
+no export authority. Automatic discovery, `.gitignore` parsing, content secret
+scanning, persistent Coding Pack storage, physical export, Action Runtime, and
+AgentFuse integration remain unimplemented.
 
 ### v0.8 - Product Packaging and Closed Beta
 

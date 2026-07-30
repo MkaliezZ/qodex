@@ -1,11 +1,17 @@
 import {
+  CODING_PACK_PROJECT_SOURCE_MAX_BYTES,
+  CodingPackProjectSourceError,
   assertSafeProjectRelativePath,
   detectLanguage,
   isBinaryFile,
   shouldIgnore,
 } from "@qodex/project-runtime";
 import type { FileSystemAdapter, ProjectFile } from "@qodex/project-runtime";
-import type { NativeFileInfo, TauriProjectBridge } from "./tauriBridge";
+import {
+  NativeFileSizeLimitError,
+  type NativeFileInfo,
+  type TauriProjectBridge,
+} from "./tauriBridge";
 import { ProjectAccessError } from "./types";
 
 function pathComponents(path: string, windows: boolean): string[] {
@@ -83,6 +89,53 @@ export class TauriFileSystemAdapter implements FileSystemAdapter {
       return await this.bridge.readTextFile(resolved.absolutePath);
     } catch {
       throw safeError("file_not_found", "KerniQ could not read the selected project file.");
+    }
+  }
+
+  async readFileBytes(filePath: string): Promise<Uint8Array> {
+    let resolved: { absolutePath: string; segments: string[] };
+    let info: NativeFileInfo;
+    try {
+      resolved = await this.resolvePath(filePath);
+      info = await this.assertRegularFile(resolved.absolutePath, resolved.segments);
+    } catch {
+      throw new CodingPackProjectSourceError(
+        "coding_pack_read_failed",
+        "KerniQ could not read the selected project file.",
+      );
+    }
+
+    if (
+      !Number.isSafeInteger(info.size)
+      || info.size < 0
+      || info.size > CODING_PACK_PROJECT_SOURCE_MAX_BYTES
+    ) {
+      throw new CodingPackProjectSourceError(
+        "coding_pack_source_too_large",
+        "The selected project file exceeds the Coding Pack preview limit.",
+      );
+    }
+
+    try {
+      const bytes = await this.bridge.readFileBytes(
+        resolved.absolutePath,
+        CODING_PACK_PROJECT_SOURCE_MAX_BYTES,
+      );
+      if (bytes.byteLength > CODING_PACK_PROJECT_SOURCE_MAX_BYTES) {
+        throw new NativeFileSizeLimitError();
+      }
+      return bytes;
+    } catch (error) {
+      if (error instanceof NativeFileSizeLimitError) {
+        throw new CodingPackProjectSourceError(
+          "coding_pack_source_too_large",
+          "The selected project file exceeds the Coding Pack preview limit.",
+        );
+      }
+      throw new CodingPackProjectSourceError(
+        "coding_pack_read_failed",
+        "KerniQ could not read the selected project file.",
+      );
     }
   }
 
@@ -176,12 +229,16 @@ export class TauriFileSystemAdapter implements FileSystemAdapter {
     }
   }
 
-  private async assertRegularFile(absolutePath: string, segments: string[]): Promise<void> {
+  private async assertRegularFile(
+    absolutePath: string,
+    segments: string[],
+  ): Promise<NativeFileInfo> {
     await this.assertNoSymlinks(segments);
     const info = await this.readMetadata(absolutePath);
     if (!info.isFile || info.isDirectory || info.isSymlink) {
       throw safeError("file_not_found", "The requested project path is not a regular file.");
     }
+    return info;
   }
 
   private async assertDirectory(absolutePath: string, segments: string[]): Promise<void> {

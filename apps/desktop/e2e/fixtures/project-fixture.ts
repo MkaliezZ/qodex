@@ -267,9 +267,9 @@ export async function readSessionEntryTypes(page: Page): Promise<string[]> {
 export async function installProjectFixture(
   page: Page,
   files: Record<string, string>,
-  options: { persistent?: boolean; writeDelayMs?: number } = {},
+  options: { persistent?: boolean; readDelayMs?: number; writeDelayMs?: number } = {},
 ): Promise<void> {
-  await page.addInitScript(({ initialFiles, persistent, writeDelayMs }) => {
+  await page.addInitScript(({ initialFiles, persistent, readDelayMs, writeDelayMs }) => {
     const storageKey = "kerniq-e2e-project-state";
     if (persistent && !sessionStorage.getItem("kerniq-project-fixture-initialized")) {
       localStorage.setItem(storageKey, JSON.stringify({ files: initialFiles, writes: 0 }));
@@ -289,6 +289,9 @@ export async function installProjectFixture(
       constructor(readonly name: string, private path: string) {}
 
       async getFile() {
+        if (readDelayMs > 0) {
+          await new Promise((resolve) => setTimeout(resolve, readDelayMs));
+        }
         return new File([state.files[this.path] ?? ""], this.name, { type: "text/plain" });
       }
 
@@ -342,6 +345,7 @@ export async function installProjectFixture(
   }, {
     initialFiles: files,
     persistent: options.persistent === true,
+    readDelayMs: options.readDelayMs ?? 0,
     writeDelayMs: options.writeDelayMs ?? 0,
   });
 }

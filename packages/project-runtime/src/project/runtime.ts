@@ -6,6 +6,7 @@
 
 import type { Project, FileContent, ProjectTree, ProjectIndex } from "../types/project.js";
 import type { FileSystemAdapter } from "../fs/adapter.js";
+import type { CodingPackProjectSourceAdapter } from "../fs/codingPackSource.js";
 import { TreeBuilder } from "../tree/builder.js";
 import { FileReader } from "../files/reader.js";
 import { ProjectIndexer } from "../indexing/index.js";
@@ -136,6 +137,13 @@ export class ProjectRuntime {
     return {
       readFile: (path) => this.adapter.readTextFile(path),
       writeFile: (path, content) => this.adapter.writeTextFile(path, content),
+    };
+  }
+
+  /** Exact-byte, read-only access for the selected-file Coding Pack preview. */
+  get codingPackSourceAccess(): CodingPackProjectSourceAdapter {
+    return {
+      readFileBytes: (path) => this.adapter.readFileBytes(path),
     };
   }
 

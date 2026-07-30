@@ -7,6 +7,10 @@
 import type { ProjectFile } from "../types/project.js";
 import { shouldIgnore, isBinaryFile, detectLanguage } from "../ignore/rules.js";
 import type { FileSystemAdapter } from "./adapter.js";
+import {
+  CODING_PACK_PROJECT_SOURCE_MAX_BYTES,
+  CodingPackProjectSourceError,
+} from "./codingPackSource.js";
 import { assertSafeProjectRelativePath } from "./path.js";
 
 interface MockFileEntry {
@@ -67,6 +71,35 @@ export class MockFileSystemAdapter implements FileSystemAdapter {
       throw new Error(`Unsupported Binary File: ${filePath}`);
     }
     return entry.content;
+  }
+
+  async readFileBytes(filePath: string): Promise<Uint8Array> {
+    try {
+      assertSafeProjectRelativePath(filePath);
+      const entry = this.files.find(
+        (file) => file.path === filePath && !file.isDir,
+      );
+      if (!entry) {
+        throw new CodingPackProjectSourceError(
+          "coding_pack_read_failed",
+          "KerniQ could not read the selected project file.",
+        );
+      }
+      const bytes = new TextEncoder().encode(entry.content);
+      if (bytes.byteLength > CODING_PACK_PROJECT_SOURCE_MAX_BYTES) {
+        throw new CodingPackProjectSourceError(
+          "coding_pack_source_too_large",
+          "The selected project file exceeds the Coding Pack preview limit.",
+        );
+      }
+      return bytes;
+    } catch (error) {
+      if (error instanceof CodingPackProjectSourceError) throw error;
+      throw new CodingPackProjectSourceError(
+        "coding_pack_read_failed",
+        "KerniQ could not read the selected project file.",
+      );
+    }
   }
 
   async writeTextFile(filePath: string, content: string): Promise<void> {
