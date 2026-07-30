@@ -46,6 +46,37 @@ export interface CodingPackCandidateInput {
   readonly explicitlyExcluded?: boolean;
 }
 
+export interface CodingPackCandidateMetadata {
+  readonly relativePath: string;
+  readonly originCode: CodingPackCandidateOriginCode;
+  readonly ignoredByProjectRules?: boolean;
+  readonly explicitlyExcluded?: boolean;
+}
+
+export interface CodingPackReadPlanEntry {
+  readonly relativePath: string;
+  readonly originCode: CodingPackCandidateOriginCode;
+  readonly ignoredByProjectRules?: true;
+  readonly explicitlyExcluded?: true;
+  readonly disposition: "read_required" | "excluded";
+  readonly exclusionReasonCode?: string;
+}
+
+export interface CodingPackReadPlan {
+  readonly purpose: CodingPackPurpose;
+  readonly selectionRulesVersion: string;
+  readonly candidatePathsDigest: string;
+  readonly entries: readonly CodingPackReadPlanEntry[];
+  readonly readRequiredCount: number;
+  readonly excludedBeforeReadCount: number;
+  readonly planDigest: string;
+}
+
+export interface CodingPackCandidateRead {
+  readonly relativePath: string;
+  readonly bytes: Uint8Array;
+}
+
 export interface CodingPackSelectionInput {
   readonly purpose: CodingPackPurpose;
   readonly selectionRules: CodingPackSelectionRules;
@@ -87,6 +118,7 @@ export interface CodingPackSelectionTotals {
 export interface CodingPackSelectionResult {
   readonly purpose: CodingPackPurpose;
   readonly selectionRulesVersion: string;
+  readonly candidatePathsDigest: string;
   readonly sourceFingerprint: string;
   readonly packId: string;
   readonly included: readonly CodingPackFileEntry[];

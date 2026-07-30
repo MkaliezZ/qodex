@@ -88,6 +88,15 @@ describe("ProjectRuntime", () => {
     expect(content.language).toBe("typescript");
   });
 
+  it("exposes exact-byte access separately from approved text writes", async () => {
+    const runtime = createTestRuntime();
+    await runtime.openProject("/test/project");
+    await expect(runtime.codingPackSourceAccess.readFileBytes("src/index.ts")).resolves.toEqual(
+      new TextEncoder().encode("const x = 1;"),
+    );
+    expect("writeFile" in runtime.codingPackSourceAccess).toBe(false);
+  });
+
   it("blocks binary file reads", async () => {
     const runtime = createTestRuntime();
     await runtime.openProject("/test/project");

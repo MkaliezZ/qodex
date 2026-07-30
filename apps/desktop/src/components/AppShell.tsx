@@ -19,8 +19,14 @@ import type { ContextBundle } from "@qodex/context-engine";
 import type { ApplyResult, PatchError, PatchProposal } from "@qodex/diff-engine";
 import type { ProjectAccessSource } from "../platform/types";
 import type { AgentLoopTask } from "@qodex/agent-runtime";
+import type { CodingPackPurpose } from "@qodex/coding-pack-runtime";
 import type { ProposalOrigin } from "../hooks/proposalOwnership";
 import { ProjectCommandRealTauriProof } from "./ProjectCommandRealTauriProof";
+import type {
+  CodingPackPreview,
+  CodingPackPreviewConfirmation,
+  CodingPackPreviewErrorCode,
+} from "../codingPack/preview";
 
 const PROJECT_COMMAND_REAL_PROOF_ENABLED =
   import.meta.env.VITE_KERNIQ_ENABLE_AGENTFUSE_PROOF === "1"
@@ -43,6 +49,15 @@ interface RuntimeContextValue {
   selectedFileCount: number;
   selectedFileSize: number;
   contextFiles: FileContent[];
+  codingPackPurpose: CodingPackPurpose;
+  setCodingPackPurpose: (purpose: CodingPackPurpose) => void;
+  codingPackPreview: CodingPackPreview | null;
+  codingPackConfirmation: CodingPackPreviewConfirmation | null;
+  codingPackPreviewError: CodingPackPreviewErrorCode | null;
+  codingPackPreviewStale: boolean;
+  isCodingPackPreviewLoading: boolean;
+  refreshCodingPackPreview: () => Promise<void>;
+  confirmCurrentCodingPackPreview: () => Promise<void>;
   lastBundle: ContextBundle | null;
   estimatedTokens: number;
   pendingProposal: PatchProposal | null;

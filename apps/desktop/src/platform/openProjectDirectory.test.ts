@@ -14,10 +14,21 @@ function nativeBridge(selected: string | null = "/fixture"): TauriProjectBridge 
     normalize: vi.fn(async (path) => path),
     readDirectory: vi.fn(async () => []),
     readTextFile: vi.fn(async () => ""),
+    readFileBytes: vi.fn(async () => new Uint8Array()),
     writeExistingTextFile: vi.fn(async () => undefined),
     exists: vi.fn(async () => true),
-    stat: vi.fn(async () => ({ isFile: false, isDirectory: true, isSymlink: false })),
-    lstat: vi.fn(async () => ({ isFile: false, isDirectory: true, isSymlink: false })),
+    stat: vi.fn(async () => ({
+      isFile: false,
+      isDirectory: true,
+      isSymlink: false,
+      size: 0,
+    })),
+    lstat: vi.fn(async () => ({
+      isFile: false,
+      isDirectory: true,
+      isSymlink: false,
+      size: 0,
+    })),
   };
 }
 

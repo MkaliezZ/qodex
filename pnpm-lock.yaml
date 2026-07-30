@@ -23,6 +23,9 @@ importers:
       '@qodex/agentfuse-adapter':
         specifier: workspace:*
         version: link:../../packages/agentfuse-adapter
+      '@qodex/coding-pack-runtime':
+        specifier: workspace:*
+        version: link:../../packages/coding-pack-runtime
       '@qodex/context-engine':
         specifier: workspace:*
         version: link:../../packages/context-engine
