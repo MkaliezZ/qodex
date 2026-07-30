@@ -276,7 +276,12 @@ against concurrent filesystem replacement. The v0.7.4.1 Draft implementation
 adds a dedicated durable Coding Pack store, opaque local destination bindings,
 exact export proposals, and separate export approvals. It records only
 `PACK_PROPOSED` and `PACK_CONFIRMED`; confirmation reports “No files written”
-and does not imply a policy decision. The
+and does not imply a policy decision. The reviewed hardening follow-up uses
+UTF-8 byte canonical identity, exact pack/destination formats, 24-hour proposal
+and approval limits, immutable destination bindings, atomic operation
+snapshots, native digest and chronology validation before persistence, and
+SQLite WAL with `synchronous=FULL`. Recovered operations remain non-actionable
+historical records. The
 [v0.7 plan](docs/development/kerniq_v0_7_coding_pack_product_integration_planning.md)
 and [ADR-022](qodex-config/adr/ADR-022-Coding-Pack-Product-Integration.md)
 define the remaining durable export lifecycle. Automatic repository discovery,

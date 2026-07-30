@@ -302,11 +302,21 @@ Browser development persists only serializable lifecycle records while keeping
 the authorized directory handle in an in-memory capability map. Tauri keeps
 the absolute destination path only in the private destination-binding table;
 portable manifests and export proposals contain only opaque binding identity.
+Destination bindings are immutable: repeat registration is accepted only when
+the complete public identity and private native path are unchanged, and the
+first creation timestamp remains authoritative. Operation, event, and
+destination evidence is read as one adapter snapshot; Tauri performs that read
+inside one SQLite transaction.
 
 This slice derives state from bounded, digest-verified `PACK_PROPOSED` and
 `PACK_CONFIRMED` events. Preview confirmation remains separate from export
 approval. Durable confirmation does not evaluate policy, start export, or
-write files. A later narrow native adapter may own staged, no-overwrite
+write files. Canonical identity uses deterministic UTF-8 byte ordering and
+well-formed Unicode, proposals and approvals cannot exceed 24 hours, native
+writes independently recompute proposal and event digests and verify chronology,
+and SQLite uses WAL with `synchronous=FULL`. These are SQLite and underlying
+filesystem durability guarantees, not hardware-level persistence claims. A
+later narrow native adapter may own staged, no-overwrite
 physical export only after a durable AgentFuse decision. Session Runtime may
 eventually reference a verified completed artifact but is not a competing
 lifecycle owner.

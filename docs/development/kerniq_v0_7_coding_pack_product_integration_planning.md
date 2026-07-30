@@ -1156,6 +1156,12 @@ not reconstructed from display labels after restart.
 
 Proposal and confirmation persistence complete before UI state advances.
 Restart performs no automatic decision, export, or old-confirmation replay.
+The final v0.7.4.1 correction uses UTF-8 byte canonical ordering and shared
+well-formed-Unicode bounds, exact pack/destination formats, immutable
+destination bindings, one atomic operation snapshot, native proposal/event/
+approval validation before persistence, strict event chronology, 24-hour
+lifetime ceilings, and SQLite WAL with `synchronous=FULL`. Recovered records
+are historical only and do not restore current preview authorization.
 This slice does not implement `PACK_DECIDED`, AgentFuse, Action Runtime,
 staging, filesystem destination writes, or physical export.
 

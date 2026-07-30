@@ -132,6 +132,9 @@ separate export approval. Only `PACK_PROPOSED` and `PACK_CONFIRMED` are
 implemented. Persistence failures fail closed and restart never advances an
 operation automatically. Browser directory authority remains session-only;
 Tauri absolute destination paths remain private to the native binding store.
+The reviewed correction adds UTF-8 canonical identity, immutable destination
+bindings, atomic snapshots, native pre-persistence digest/chronology validation,
+24-hour proposal/approval bounds, and SQLite `synchronous=FULL`.
 
 Automatic discovery, `.gitignore` parsing, content secret scanning, physical
 export, `PACK_DECIDED`, Action Runtime, and AgentFuse integration remain

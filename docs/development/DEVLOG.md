@@ -1322,6 +1322,17 @@ evidence remains restart-readable. The UI reports `proposed` or `confirmed`,
 “Policy decision not yet evaluated,” and “No files written.” Persistence
 failure does not advance UI state.
 
+The final PR correction replaces locale-sensitive canonical ordering with
+UTF-8 byte ordering, rejects malformed Unicode and non-canonical identity,
+enforces exact digest/pack/destination formats and 24-hour lifetime bounds,
+makes destination bindings immutable, and reads operation/event/destination
+evidence through one atomic adapter snapshot. The Tauri boundary validates
+complete proposal and approval evidence and recomputes payload digests before
+transactional persistence. Event timestamps must match their payload evidence;
+historical confirmed records remain readable after expiry. SQLite continues to
+use WAL and now uses `synchronous=FULL`; claims remain bounded to SQLite and the
+underlying filesystem.
+
 ```text
 V0_7_3_MERGED=true
 CODING_PACK_STORE_IMPLEMENTED=true

@@ -52,7 +52,10 @@ import {
   chooseCodingPackDestination,
   hasCodingPackDestinationCapability,
 } from "../platform/codingPackDestination";
-import { getCodingPackStore } from "../platform/codingPackStore";
+import {
+  createVerifiedCodingPackExportProposal,
+  getCodingPackStore,
+} from "../platform/codingPackStore";
 import { createManagedPythonBridge } from "../platform/managedPythonBridge";
 import { projectBindingIdentity, type OpenProjectBindingIdentity } from "../platform/projectBinding";
 import { ProjectAccessError, type ProjectAccessSource } from "../platform/types";
@@ -511,26 +514,30 @@ export function useRuntime() {
     setIsCodingPackExportLoading(true);
     setCodingPackStoreError(null);
     try {
-      await verifyCodingPackPreviewConfirmation(confirmation, preview);
-      const snapshot = await codingPackStoreRef.current.createCodingPackExportProposal({
-        preview: {
-          projectBindingId: preview.projectBindingId,
-          projectGeneration: preview.projectGeneration,
-          candidatePathsDigest: preview.selection.candidatePathsDigest,
-          sourceFingerprint: preview.selection.sourceFingerprint,
-          packId: preview.selection.packId,
-          manifestDigest: preview.manifest.manifestDigest,
+      const snapshot = await createVerifiedCodingPackExportProposal({
+        store: codingPackStoreRef.current,
+        preview,
+        confirmation,
+        proposalInput: {
+          preview: {
+            projectBindingId: preview.projectBindingId,
+            projectGeneration: preview.projectGeneration,
+            candidatePathsDigest: preview.selection.candidatePathsDigest,
+            sourceFingerprint: preview.selection.sourceFingerprint,
+            packId: preview.selection.packId,
+            manifestDigest: preview.manifest.manifestDigest,
+          },
+          previewConfirmation: {
+            projectBindingId: confirmation.projectBindingId,
+            projectGeneration: confirmation.projectGeneration,
+            selectedPathsDigest: confirmation.selectedPathsDigest,
+            sourceFingerprint: confirmation.sourceFingerprint,
+            packId: confirmation.packId,
+            manifestDigest: confirmation.manifestDigest,
+            confirmedAt: confirmation.confirmedAt,
+          },
+          destination,
         },
-        previewConfirmation: {
-          projectBindingId: confirmation.projectBindingId,
-          projectGeneration: confirmation.projectGeneration,
-          selectedPathsDigest: confirmation.selectedPathsDigest,
-          sourceFingerprint: confirmation.sourceFingerprint,
-          packId: confirmation.packId,
-          manifestDigest: confirmation.manifestDigest,
-          confirmedAt: confirmation.confirmedAt,
-        },
-        destination,
       });
       setCodingPackOperation(snapshot);
       setCodingPackRecoveredOperation(snapshot);

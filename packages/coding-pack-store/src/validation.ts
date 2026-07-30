@@ -1,4 +1,9 @@
-import { sha256Canonical, type CanonicalValue } from "./canonical.js";
+import {
+  requireWellFormedUnicode,
+  sha256Canonical,
+  utf8ByteLength,
+  type CanonicalValue,
+} from "./canonical.js";
 import { CodingPackStoreError } from "./errors.js";
 import {
   CODING_PACK_EVENT_VERSION,
@@ -16,10 +21,15 @@ import {
   type CodingPackProposedEventPayload,
 } from "./types.js";
 
-const SHA256_PATTERN = /^sha256:[0-9a-f]{64}$/;
-const MAX_ID_LENGTH = 256;
-const MAX_LABEL_LENGTH = 256;
+const SHA256_PATTERN = /^sha256:[0-9a-f]{64}$/u;
+const PACK_ID_PATTERN = /^pack-[0-9a-f]{64}$/u;
+const DESTINATION_BINDING_ID_PATTERN = /^destination-[0-9a-f]{24}$/u;
+const CONTROL_PATTERN = /\p{Cc}/u;
+const MAX_ID_BYTES = 256;
+const MAX_LABEL_BYTES = 256;
 const MAX_EVENT_PAYLOAD_BYTES = 64 * 1024;
+export const CODING_PACK_MAX_PROPOSAL_LIFETIME_MS = 86_400_000;
+export const CODING_PACK_MAX_APPROVAL_LIFETIME_MS = 86_400_000;
 
 const PROPOSAL_KEYS = [
   "schemaVersion",
@@ -105,18 +115,23 @@ export async function validateCodingPackExportProposal(
   ) {
     invalid();
   }
-  requireId(proposal.operationId);
-  requireId(proposal.projectBindingId);
+  requireOpaqueId(proposal.operationId);
+  requireOpaqueId(proposal.projectBindingId);
   requireGeneration(proposal.projectGeneration);
   requireDigest(proposal.candidatePathsDigest);
   requireDigest(proposal.sourceFingerprint);
-  requireId(proposal.packId);
+  requirePackId(proposal.packId);
   requireDigest(proposal.manifestDigest);
-  requireId(proposal.destinationBindingId);
+  requireDestinationBindingId(proposal.destinationBindingId);
   requireDigest(proposal.destinationFingerprint);
   const createdAt = timestamp(proposal.createdAt);
   const expiresAt = timestamp(proposal.expiresAt);
-  if (expiresAt <= createdAt) invalid();
+  if (
+    expiresAt <= createdAt
+    || expiresAt - createdAt > CODING_PACK_MAX_PROPOSAL_LIFETIME_MS
+  ) {
+    invalid();
+  }
   requireDigest(proposal.proposalDigest);
   const typed = proposal as unknown as CodingPackExportProposal;
   if (typed.proposalDigest !== await createProposalDigest(typed)) invalid();
@@ -126,17 +141,23 @@ export async function validateCodingPackExportProposal(
 export function validateCodingPackExportApproval(
   value: unknown,
   proposal?: CodingPackExportProposal,
-  now: Date = new Date(),
+  now: Date | null = new Date(),
 ): CodingPackExportApproval {
   const approval = exactRecord(value, APPROVAL_KEYS);
   if (approval.schemaVersion !== CODING_PACK_EXPORT_APPROVAL_SCHEMA_VERSION) {
     mismatch();
   }
-  requireId(approval.operationId, mismatch);
+  requireOpaqueId(approval.operationId, mismatch);
   requireDigest(approval.proposalDigest, mismatch);
   const approvedAt = timestamp(approval.approvedAt, mismatch);
   const expiresAt = timestamp(approval.expiresAt, mismatch);
-  if (expiresAt <= approvedAt || expiresAt <= now.getTime()) mismatch();
+  if (
+    expiresAt <= approvedAt
+    || expiresAt - approvedAt > CODING_PACK_MAX_APPROVAL_LIFETIME_MS
+    || (now && expiresAt <= now.getTime())
+  ) {
+    mismatch();
+  }
   if (proposal && (
     approval.operationId !== proposal.operationId
     || approval.proposalDigest !== proposal.proposalDigest
@@ -172,17 +193,17 @@ export function validatePreviewBinding(
     "manifestDigest",
     "confirmedAt",
   ]);
-  requireId(previewRecord.projectBindingId);
+  requireOpaqueId(previewRecord.projectBindingId);
   requireGeneration(previewRecord.projectGeneration);
   requireDigest(previewRecord.candidatePathsDigest);
   requireDigest(previewRecord.sourceFingerprint);
-  requireId(previewRecord.packId);
+  requirePackId(previewRecord.packId);
   requireDigest(previewRecord.manifestDigest);
-  requireId(confirmationRecord.projectBindingId);
+  requireOpaqueId(confirmationRecord.projectBindingId);
   requireGeneration(confirmationRecord.projectGeneration);
   requireDigest(confirmationRecord.selectedPathsDigest);
   requireDigest(confirmationRecord.sourceFingerprint);
-  requireId(confirmationRecord.packId);
+  requirePackId(confirmationRecord.packId);
   requireDigest(confirmationRecord.manifestDigest);
   timestamp(confirmationRecord.confirmedAt);
   if (
@@ -205,13 +226,17 @@ export function validatePreviewBinding(
 
 export function validateDestinationBinding(value: unknown): CodingPackDestinationBinding {
   const binding = exactRecord(value, DESTINATION_KEYS);
-  requireId(binding.destinationBindingId);
-  requireDigest(binding.destinationFingerprint);
+  requireDestinationBindingId(binding.destinationBindingId, destinationUnavailable);
+  requireDigest(binding.destinationFingerprint, destinationUnavailable);
   if (
     typeof binding.displayLabel !== "string"
     || !binding.displayLabel.trim()
-    || binding.displayLabel.length > MAX_LABEL_LENGTH
-    || /[\u0000-\u001f\u007f]/u.test(binding.displayLabel)
+    || !wellFormedWithinBytes(
+      binding.displayLabel,
+      MAX_LABEL_BYTES,
+      "destination display label",
+    )
+    || CONTROL_PATTERN.test(binding.displayLabel)
   ) {
     destinationUnavailable();
   }
@@ -222,19 +247,24 @@ export function validateDestinationBinding(value: unknown): CodingPackDestinatio
 
 export function validateOperationRecord(value: unknown): CodingPackOperationRecord {
   const operation = exactRecord(value, OPERATION_KEYS);
-  requireId(operation.operationId);
+  requireOpaqueId(operation.operationId);
   if (operation.state !== "proposed" && operation.state !== "confirmed") invalid();
-  requireId(operation.projectBindingId);
+  requireOpaqueId(operation.projectBindingId);
   requireGeneration(operation.projectGeneration);
   requireDigest(operation.candidatePathsDigest);
   requireDigest(operation.sourceFingerprint);
-  requireId(operation.packId);
+  requirePackId(operation.packId);
   requireDigest(operation.manifestDigest);
-  requireId(operation.destinationBindingId);
+  requireDestinationBindingId(operation.destinationBindingId);
   requireDigest(operation.proposalDigest);
   const createdAt = timestamp(operation.createdAt);
   const expiresAt = timestamp(operation.expiresAt);
-  if (expiresAt <= createdAt) invalid();
+  if (
+    expiresAt <= createdAt
+    || expiresAt - createdAt > CODING_PACK_MAX_PROPOSAL_LIFETIME_MS
+  ) {
+    invalid();
+  }
   const lastEventSequence = operation.lastEventSequence;
   if (
     typeof lastEventSequence !== "number"
@@ -248,8 +278,8 @@ export function validateOperationRecord(value: unknown): CodingPackOperationReco
 
 export async function validateEvent(value: unknown): Promise<CodingPackEvent> {
   const event = exactRecord(value, EVENT_KEYS);
-  requireId(event.eventId);
-  requireId(event.operationId);
+  requireOpaqueId(event.eventId);
+  requireOpaqueId(event.operationId);
   const eventSequence = event.eventSequence;
   if (
     typeof eventSequence !== "number"
@@ -282,16 +312,8 @@ async function validateProposedPayload(value: unknown): Promise<CodingPackPropos
 
 function validateConfirmedPayload(value: unknown): CodingPackConfirmedEventPayload {
   const payload = exactRecord(value, ["approval"]);
-  const approvalValue = payload.approval as { approvedAt?: unknown } | null;
-  const approvedAt = approvalValue && typeof approvalValue.approvedAt === "string"
-    ? Date.parse(approvalValue.approvedAt)
-    : Number.NaN;
   return Object.freeze({
-    approval: validateCodingPackExportApproval(
-      payload.approval,
-      undefined,
-      new Date(Number.isFinite(approvedAt) ? approvedAt - 1 : 0),
-    ),
+    approval: validateCodingPackExportApproval(payload.approval, undefined, null),
   });
 }
 
@@ -301,26 +323,43 @@ function exactRecord<const Keys extends readonly string[]>(
 ): { [Key in Keys[number]]: unknown } {
   if (!value || typeof value !== "object" || Array.isArray(value)) invalid();
   const record = value as Record<string, unknown>;
-  const actual = Object.keys(record).sort();
-  const expected = [...keys].sort();
+  const actual = Object.keys(record);
+  const expected = new Set<string>(keys);
   if (
-    actual.length !== expected.length
-    || actual.some((key, index) => key !== expected[index])
+    actual.length !== expected.size
+    || actual.some((key) => !expected.has(key))
   ) {
     invalid();
   }
   return record as { [Key in Keys[number]]: unknown };
 }
 
-function requireId(value: unknown, fail: () => never = invalid): asserts value is string {
+function requireOpaqueId(
+  value: unknown,
+  fail: () => never = invalid,
+): asserts value is string {
   if (
     typeof value !== "string"
     || !value
-    || value.length > MAX_ID_LENGTH
-    || /[\u0000-\u001f\u007f]/u.test(value)
+    || !wellFormedWithinBytes(value, MAX_ID_BYTES, "opaque identifier")
+    || CONTROL_PATTERN.test(value)
   ) {
     fail();
   }
+}
+
+function requirePackId(
+  value: unknown,
+  fail: () => never = invalid,
+): asserts value is string {
+  if (typeof value !== "string" || !PACK_ID_PATTERN.test(value)) fail();
+}
+
+function requireDestinationBindingId(
+  value: unknown,
+  fail: () => never = invalid,
+): asserts value is string {
+  if (typeof value !== "string" || !DESTINATION_BINDING_ID_PATTERN.test(value)) fail();
 }
 
 function requireDigest(
@@ -335,14 +374,30 @@ function requireGeneration(value: unknown): asserts value is number {
 }
 
 function timestamp(value: unknown, fail: () => never = invalid): number {
-  if (typeof value !== "string") fail();
+  if (
+    typeof value !== "string"
+    || !wellFormedWithinBytes(value, 64, "timestamp")
+  ) {
+    fail();
+  }
   const parsed = Date.parse(value);
   if (!Number.isFinite(parsed) || new Date(parsed).toISOString() !== value) fail();
   return parsed;
 }
 
 function byteLength(value: unknown): number {
-  return new TextEncoder().encode(JSON.stringify(value)).byteLength;
+  const serialized = JSON.stringify(value);
+  if (typeof serialized !== "string") invalid();
+  return utf8ByteLength(serialized, "event payload");
+}
+
+function wellFormedWithinBytes(value: string, maxBytes: number, label: string): boolean {
+  try {
+    requireWellFormedUnicode(value, label);
+    return utf8ByteLength(value, label) <= maxBytes;
+  } catch {
+    return false;
+  }
 }
 
 function invalid(): never {

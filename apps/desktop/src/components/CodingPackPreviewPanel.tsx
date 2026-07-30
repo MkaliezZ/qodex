@@ -384,6 +384,7 @@ export function CodingPackPreviewPanel() {
             <span className="coding-pack-no-write">No files written</span>
           </header>
           <p>
+            This is a historical record and may belong to a different project binding.
             No decision or export was resumed. The previous preview confirmation was not restored.
           </p>
           {!codingPackRecoveredOperation.destination.restartAvailable ? (

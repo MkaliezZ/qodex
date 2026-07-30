@@ -3,7 +3,7 @@ mod managed_python;
 mod session_database;
 
 use coding_pack_database::{
-    CodingPackDatabase, CodingPackDestinationBinding, CodingPackEvent, CodingPackOperation,
+    CodingPackDatabase, CodingPackDestinationBinding, CodingPackStoredSnapshotData,
     ConfirmCodingPackOperationRequest, CreateCodingPackOperationRequest, DestinationPickerRequest,
 };
 use managed_python::ManagedPythonState;
@@ -294,26 +294,18 @@ fn coding_pack_store_confirm(
 }
 
 #[tauri::command]
-fn coding_pack_store_get(
+fn coding_pack_store_snapshot(
     operation_id: String,
     state: tauri::State<'_, CodingPackDatabase>,
-) -> Result<Option<CodingPackOperation>, String> {
-    state.get_operation(&operation_id)
+) -> Result<Option<CodingPackStoredSnapshotData>, String> {
+    state.get_operation_snapshot_data(&operation_id)
 }
 
 #[tauri::command]
-fn coding_pack_store_list(
+fn coding_pack_store_operation_ids(
     state: tauri::State<'_, CodingPackDatabase>,
-) -> Result<Vec<CodingPackOperation>, String> {
-    state.list_operations()
-}
-
-#[tauri::command]
-fn coding_pack_store_events(
-    operation_id: String,
-    state: tauri::State<'_, CodingPackDatabase>,
-) -> Result<Vec<CodingPackEvent>, String> {
-    state.list_events(&operation_id)
+) -> Result<Vec<String>, String> {
+    state.list_operation_ids()
 }
 
 #[tauri::command]
@@ -357,9 +349,8 @@ pub fn run() {
             session_persistence_info,
             coding_pack_store_create,
             coding_pack_store_confirm,
-            coding_pack_store_get,
-            coding_pack_store_list,
-            coding_pack_store_events,
+            coding_pack_store_snapshot,
+            coding_pack_store_operation_ids,
             coding_pack_destination_get,
             managed_python::managed_python_inspect,
             managed_python::managed_python_provision,

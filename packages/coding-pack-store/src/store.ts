@@ -1,4 +1,9 @@
-import { sha256Text } from "./canonical.js";
+import {
+  compareUtf8,
+  requireWellFormedUnicode,
+  sha256Text,
+  utf8ByteLength,
+} from "./canonical.js";
 import { CodingPackStoreError } from "./errors.js";
 import type {
   CodingPackDestinationBinding,
@@ -6,6 +11,7 @@ import type {
   CodingPackExportApproval,
   CodingPackOperationRecord,
   CodingPackOperationSnapshot,
+  CodingPackStoredSnapshotData,
   CodingPackStoreAdapter,
   CodingPackStoreOptions,
   CreateCodingPackExportApprovalInput,
@@ -20,6 +26,8 @@ import {
 import {
   createEventPayloadDigest,
   createProposalDigest,
+  CODING_PACK_MAX_APPROVAL_LIFETIME_MS,
+  CODING_PACK_MAX_PROPOSAL_LIFETIME_MS,
   validateCodingPackExportApproval,
   validateCodingPackExportProposal,
   validateDestinationBinding,
@@ -29,6 +37,8 @@ import {
 } from "./validation.js";
 
 const DEFAULT_LIFETIME_MS = 10 * 60 * 1000;
+const MAX_CLOCK_SKEW_MS = 5 * 60 * 1000;
+const CONTROL_PATTERN = /\p{Cc}/u;
 
 export class CodingPackStore {
   private readonly now: () => Date;
@@ -67,6 +77,7 @@ export class CodingPackStore {
     );
     const destination = validateDestinationBinding(input.destination);
     const createdAt = canonicalTimestamp(input.createdAt ?? this.now().toISOString());
+    rejectFutureTimestamp(createdAt, this.now());
     const expiresAt = canonicalTimestamp(
       input.expiresAt
         ?? new Date(Date.parse(createdAt) + this.proposalLifetimeMs).toISOString(),
@@ -129,6 +140,7 @@ export class CodingPackStore {
     input: CreateCodingPackExportApprovalInput,
   ): CodingPackExportApproval {
     const approvedAt = canonicalTimestamp(input.approvedAt ?? this.now().toISOString());
+    rejectFutureTimestamp(approvedAt, this.now(), true);
     const expiresAt = canonicalTimestamp(
       input.expiresAt
         ?? new Date(Date.parse(approvedAt) + this.approvalLifetimeMs).toISOString(),
@@ -194,18 +206,16 @@ export class CodingPackStore {
     operationId: string,
   ): Promise<CodingPackOperationSnapshot | null> {
     boundedId(operationId);
-    let operationValue: CodingPackOperationRecord | null;
-    let eventsValue: CodingPackEvent[];
+    let snapshotValue: CodingPackStoredSnapshotData | null;
     try {
-      operationValue = await this.adapter.getOperation(operationId);
-      if (!operationValue) return null;
-      eventsValue = await this.adapter.listEvents(operationId);
+      snapshotValue = await this.adapter.getOperationSnapshotData(operationId);
     } catch {
       throw new CodingPackStoreError("coding_pack_store_unavailable");
     }
-    const operation = validateOperationRecord(operationValue);
-    const events = await Promise.all(eventsValue.map(validateEvent));
-    const destination = await this.getDestination(operation.destinationBindingId);
+    if (!snapshotValue) return null;
+    const operation = validateOperationRecord(snapshotValue.operation);
+    const events = await Promise.all(snapshotValue.events.map(validateEvent));
+    const destination = validateDestinationBinding(snapshotValue.destination);
     return reconstructSnapshot(operation, events, destination);
   }
 
@@ -215,18 +225,18 @@ export class CodingPackStore {
   }
 
   async listCodingPackOperations(): Promise<readonly CodingPackOperationSnapshot[]> {
-    let operations: CodingPackOperationRecord[];
+    let operationIds: readonly string[];
     try {
-      operations = await this.adapter.listOperations();
+      operationIds = await this.adapter.listOperationIds();
     } catch {
       throw new CodingPackStoreError("coding_pack_store_unavailable");
     }
-    const snapshots = await Promise.all(operations.map((operation) => (
-      this.getRequiredOperation(operation.operationId)
+    const snapshots = await Promise.all(operationIds.map((operationId) => (
+      this.getRequiredOperation(boundedId(operationId))
     )));
     return Object.freeze(snapshots.sort((left, right) => (
-      right.operation.createdAt.localeCompare(left.operation.createdAt)
-      || left.operation.operationId.localeCompare(right.operation.operationId)
+      compareUtf8(right.operation.createdAt, left.operation.createdAt)
+      || compareUtf8(left.operation.operationId, right.operation.operationId)
     )));
   }
 
@@ -236,18 +246,6 @@ export class CodingPackStore {
     return snapshot;
   }
 
-  private async getDestination(
-    destinationBindingId: string,
-  ): Promise<CodingPackDestinationBinding> {
-    let value: CodingPackDestinationBinding | null;
-    try {
-      value = await this.adapter.getDestinationBinding(destinationBindingId);
-    } catch {
-      throw new CodingPackStoreError("coding_pack_store_unavailable");
-    }
-    if (!value) throw new CodingPackStoreError("coding_pack_destination_unavailable");
-    return validateDestinationBinding(value);
-  }
 }
 
 export async function createCodingPackDestinationBinding(input: {
@@ -259,7 +257,7 @@ export async function createCodingPackDestinationBinding(input: {
   if (
     typeof input.privateIdentityMaterial !== "string"
     || !input.privateIdentityMaterial
-    || input.privateIdentityMaterial.length > 16 * 1024
+    || !wellFormedWithinBytes(input.privateIdentityMaterial, 16 * 1024)
   ) {
     throw new CodingPackStoreError("coding_pack_destination_unavailable");
   }
@@ -337,11 +335,20 @@ function reconstructSnapshot(
     invalid();
   }
   if (approval) {
+    if (
+      firstEvent.recordedAt !== proposal.createdAt
+      || secondEvent?.recordedAt !== approval.approvedAt
+      || Date.parse(approval.approvedAt) < Date.parse(proposal.createdAt)
+    ) {
+      invalid();
+    }
     validateCodingPackExportApproval(
       approval,
       proposal,
-      new Date(Date.parse(approval.approvedAt) - 1),
+      null,
     );
+  } else if (firstEvent.recordedAt !== proposal.createdAt) {
+    invalid();
   }
   return Object.freeze({
     operation,
@@ -354,7 +361,14 @@ function reconstructSnapshot(
 
 function positiveLifetime(value: number | undefined): number {
   const selected = value ?? DEFAULT_LIFETIME_MS;
-  if (!Number.isSafeInteger(selected) || selected < 1 || selected > 24 * 60 * 60 * 1000) {
+  if (
+    !Number.isSafeInteger(selected)
+    || selected < 1
+    || selected > Math.min(
+      CODING_PACK_MAX_PROPOSAL_LIFETIME_MS,
+      CODING_PACK_MAX_APPROVAL_LIFETIME_MS,
+    )
+  ) {
     throw new CodingPackStoreError("coding_pack_proposal_invalid");
   }
   return selected;
@@ -364,8 +378,8 @@ function boundedId(value: string): string {
   if (
     typeof value !== "string"
     || !value
-    || value.length > 256
-    || /[\u0000-\u001f\u007f]/u.test(value)
+    || !wellFormedWithinBytes(value, 256)
+    || CONTROL_PATTERN.test(value)
   ) {
     invalid();
   }
@@ -373,11 +387,38 @@ function boundedId(value: string): string {
 }
 
 function canonicalTimestamp(value: string): string {
+  try {
+    requireWellFormedUnicode(value, "timestamp");
+  } catch {
+    invalid();
+  }
   const parsed = Date.parse(value);
   if (!Number.isFinite(parsed)) invalid();
   const canonical = new Date(parsed).toISOString();
   if (canonical !== value) invalid();
   return canonical;
+}
+
+function rejectFutureTimestamp(
+  value: string,
+  now: Date,
+  approval = false,
+): void {
+  if (Date.parse(value) > now.getTime() + MAX_CLOCK_SKEW_MS) {
+    if (approval) {
+      throw new CodingPackStoreError("coding_pack_approval_mismatch");
+    }
+    invalid();
+  }
+}
+
+function wellFormedWithinBytes(value: string, maxBytes: number): boolean {
+  try {
+    requireWellFormedUnicode(value, "identity");
+    return utf8ByteLength(value, "identity") <= maxBytes;
+  } catch {
+    return false;
+  }
 }
 
 function persistenceError(error: unknown): CodingPackStoreError {

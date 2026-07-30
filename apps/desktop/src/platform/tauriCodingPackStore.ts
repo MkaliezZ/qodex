@@ -4,6 +4,7 @@ import type {
   CodingPackEvent,
   CodingPackOperationRecord,
   CodingPackStoreAdapter,
+  CodingPackStoredSnapshotData,
 } from "@qodex/coding-pack-store";
 
 export interface TauriCodingPackInvoker {
@@ -14,11 +15,15 @@ export class TauriCodingPackStoreAdapter implements CodingPackStoreAdapter {
   constructor(private readonly invokeCommand: TauriCodingPackInvoker = invoke) {}
 
   async registerDestinationBinding(binding: CodingPackDestinationBinding): Promise<void> {
-    const stored = await this.getDestinationBinding(binding.destinationBindingId);
+    const stored = await this.invokeCommand<CodingPackDestinationBinding | null>(
+      "coding_pack_destination_get",
+      { destinationBindingId: binding.destinationBindingId },
+    );
     if (
       !stored
       || stored.destinationFingerprint !== binding.destinationFingerprint
       || stored.displayLabel !== binding.displayLabel
+      || stored.createdAt !== binding.createdAt
       || stored.restartAvailable !== true
     ) {
       throw new Error("coding_pack_destination_unavailable");
@@ -43,21 +48,13 @@ export class TauriCodingPackStoreAdapter implements CodingPackStoreAdapter {
     });
   }
 
-  getOperation(operationId: string): Promise<CodingPackOperationRecord | null> {
-    return this.invokeCommand("coding_pack_store_get", { operationId });
+  getOperationSnapshotData(
+    operationId: string,
+  ): Promise<CodingPackStoredSnapshotData | null> {
+    return this.invokeCommand("coding_pack_store_snapshot", { operationId });
   }
 
-  listOperations(): Promise<CodingPackOperationRecord[]> {
-    return this.invokeCommand("coding_pack_store_list");
-  }
-
-  listEvents(operationId: string): Promise<CodingPackEvent[]> {
-    return this.invokeCommand("coding_pack_store_events", { operationId });
-  }
-
-  getDestinationBinding(
-    destinationBindingId: string,
-  ): Promise<CodingPackDestinationBinding | null> {
-    return this.invokeCommand("coding_pack_destination_get", { destinationBindingId });
+  listOperationIds(): Promise<readonly string[]> {
+    return this.invokeCommand("coding_pack_store_operation_ids");
   }
 }

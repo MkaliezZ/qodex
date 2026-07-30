@@ -3,6 +3,7 @@ import type {
   CodingPackEvent,
   CodingPackOperationRecord,
   CodingPackStoreAdapter,
+  CodingPackStoredSnapshotData,
 } from "@qodex/coding-pack-store";
 
 const STORAGE_KEY = "kerniq.coding-pack.store.v1";
@@ -19,6 +20,13 @@ export class BrowserCodingPackStoreAdapter implements CodingPackStoreAdapter {
 
   async registerDestinationBinding(binding: CodingPackDestinationBinding): Promise<void> {
     const state = this.read();
+    const existing = state.destinations[binding.destinationBindingId];
+    if (existing) {
+      if (!sameDestination(existing, binding)) {
+        throw new Error("coding_pack_destination_unavailable");
+      }
+      return;
+    }
     state.destinations[binding.destinationBindingId] = clone(binding);
     this.write(state);
   }
@@ -64,22 +72,22 @@ export class BrowserCodingPackStoreAdapter implements CodingPackStoreAdapter {
     this.write(state);
   }
 
-  async getOperation(operationId: string): Promise<CodingPackOperationRecord | null> {
-    return clone(this.read().operations[operationId] ?? null);
+  async getOperationSnapshotData(
+    operationId: string,
+  ): Promise<CodingPackStoredSnapshotData | null> {
+    const state = this.read();
+    const operation = state.operations[operationId];
+    if (!operation) return null;
+    const events = state.events[operationId];
+    const destination = state.destinations[operation.destinationBindingId];
+    if (!events || !destination) {
+      throw new Error("coding_pack_store_unavailable");
+    }
+    return clone({ operation, events, destination });
   }
 
-  async listOperations(): Promise<CodingPackOperationRecord[]> {
-    return clone(Object.values(this.read().operations));
-  }
-
-  async listEvents(operationId: string): Promise<CodingPackEvent[]> {
-    return clone(this.read().events[operationId] ?? []);
-  }
-
-  async getDestinationBinding(
-    destinationBindingId: string,
-  ): Promise<CodingPackDestinationBinding | null> {
-    return clone(this.read().destinations[destinationBindingId] ?? null);
+  async listOperationIds(): Promise<readonly string[]> {
+    return clone(Object.keys(this.read().operations));
   }
 
   private read(): BrowserCodingPackState {
@@ -116,6 +124,17 @@ function plainRecord(value: unknown): value is Record<string, unknown> {
     && typeof value === "object"
     && !Array.isArray(value)
     && Object.getPrototypeOf(value) === Object.prototype;
+}
+
+function sameDestination(
+  left: CodingPackDestinationBinding,
+  right: CodingPackDestinationBinding,
+): boolean {
+  return left.destinationBindingId === right.destinationBindingId
+    && left.destinationFingerprint === right.destinationFingerprint
+    && left.displayLabel === right.displayLabel
+    && left.createdAt === right.createdAt
+    && left.restartAvailable === right.restartAvailable;
 }
 
 function clone<T>(value: T): T {

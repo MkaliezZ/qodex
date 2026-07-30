@@ -108,6 +108,12 @@ export interface CodingPackOperationSnapshot {
   readonly events: readonly CodingPackEvent[];
 }
 
+export interface CodingPackStoredSnapshotData {
+  readonly operation: CodingPackOperationRecord;
+  readonly events: readonly CodingPackEvent[];
+  readonly destination: CodingPackDestinationBinding;
+}
+
 export interface CreateCodingPackExportProposalInput {
   readonly preview: CodingPackPreviewIdentity;
   readonly previewConfirmation: CodingPackPreviewConfirmationEvidence;
@@ -134,12 +140,10 @@ export interface CodingPackStoreAdapter {
     operation: CodingPackOperationRecord,
     confirmedEvent: CodingPackEvent,
   ): Promise<void>;
-  getOperation(operationId: string): Promise<CodingPackOperationRecord | null>;
-  listOperations(): Promise<CodingPackOperationRecord[]>;
-  listEvents(operationId: string): Promise<CodingPackEvent[]>;
-  getDestinationBinding(
-    destinationBindingId: string,
-  ): Promise<CodingPackDestinationBinding | null>;
+  getOperationSnapshotData(
+    operationId: string,
+  ): Promise<CodingPackStoredSnapshotData | null>;
+  listOperationIds(): Promise<readonly string[]>;
 }
 
 export interface CodingPackStoreOptions {

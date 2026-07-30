@@ -5,6 +5,10 @@ import {
   createCodingPackDestinationBinding,
   type CodingPackDestinationBinding,
 } from "@qodex/coding-pack-store";
+import {
+  confirmCodingPackPreview,
+  createSelectedFileCodingPackPreview,
+} from "../codingPack/preview";
 import { BrowserCodingPackStoreAdapter } from "./browserCodingPackStore";
 import {
   type CodingPackDestinationInvoker,
@@ -15,6 +19,7 @@ import {
   TauriCodingPackStoreAdapter,
   type TauriCodingPackInvoker,
 } from "./tauriCodingPackStore";
+import { createVerifiedCodingPackExportProposal } from "./codingPackStore";
 
 const CREATED_AT = "2026-07-30T00:00:00.000Z";
 
@@ -31,7 +36,7 @@ describe("Desktop Coding Pack store adapters", () => {
       invokeCommand as unknown as TauriCodingPackInvoker,
     );
     await adapter.registerDestinationBinding(binding);
-    await adapter.createOperation(operation(binding), proposedEvent());
+    await adapter.createOperation(operation(binding), proposedEvent(binding));
     await adapter.appendConfirmation(
       { ...operation(binding), state: "confirmed", lastEventSequence: 2 },
       confirmedEvent(),
@@ -50,13 +55,45 @@ describe("Desktop Coding Pack store adapters", () => {
     const firstAdapter = new BrowserCodingPackStoreAdapter(storage);
     const binding = await destination("browser", false);
     await firstAdapter.registerDestinationBinding(binding);
-    await firstAdapter.createOperation(operation(binding), proposedEvent());
+    await firstAdapter.createOperation(operation(binding), proposedEvent(binding));
 
     const restarted = new BrowserCodingPackStoreAdapter(storage);
-    expect(await restarted.getOperation("operation-1")).toEqual(operation(binding));
-    expect(await restarted.listOperations()).toEqual([operation(binding)]);
-    expect(await restarted.listEvents("operation-1")).toHaveLength(1);
+    expect(await restarted.getOperationSnapshotData("operation-1")).toEqual({
+      operation: operation(binding),
+      events: [proposedEvent(binding)],
+      destination: binding,
+    });
+    expect(await restarted.listOperationIds()).toEqual(["operation-1"]);
+    expect(storage.readCount).toBe(4);
     expect(storage.value()).not.toContain("FileSystemDirectoryHandle");
+  });
+
+  it("rejects browser rebinding and never mixes a concurrent confirmation into a snapshot", async () => {
+    const storage = new MemoryStorage();
+    const adapter = new BrowserCodingPackStoreAdapter(storage);
+    const binding = await destination("immutable-browser", false);
+    await adapter.registerDestinationBinding(binding);
+    await adapter.registerDestinationBinding(binding);
+    await expect(adapter.registerDestinationBinding({
+      ...binding,
+      destinationFingerprint: digest("9"),
+    })).rejects.toThrow("coding_pack_destination_unavailable");
+    await adapter.createOperation(operation(binding), proposedEvent(binding));
+    const proposedState = storage.value();
+    await adapter.appendConfirmation(
+      { ...operation(binding), state: "confirmed", lastEventSequence: 2 },
+      confirmedEvent(),
+    );
+    const confirmedState = storage.value();
+    storage.replaceValue(proposedState);
+    storage.afterNextRead = () => storage.replaceValue(confirmedState);
+    const readsBefore = storage.readCount;
+    const snapshot = await adapter.getOperationSnapshotData("operation-1");
+    expect(storage.readCount - readsBefore).toBe(1);
+    expect(snapshot?.operation.state).toBe("proposed");
+    expect(snapshot?.events).toHaveLength(1);
+    expect(snapshot?.destination).toEqual(binding);
+    expect(storage.value()).toContain("\"state\":\"confirmed\"");
   });
 
   it("marks browser destination authority as session-only and performs no writes", async () => {
@@ -94,6 +131,56 @@ describe("Desktop Coding Pack store adapters", () => {
     );
     expect(JSON.stringify(selected)).not.toContain("/");
   });
+
+  it("does not call the store when product-level preview confirmation is tampered", async () => {
+    const preview = await createSelectedFileCodingPackPreview({
+      projectBindingId: "project-1",
+      projectGeneration: 1,
+      selectedPaths: ["src/index.ts"],
+      purpose: "review_handoff",
+      source: {
+        readFileBytes: async () => new TextEncoder().encode("export const value = 1;\n"),
+      },
+      createdAt: CREATED_AT,
+    });
+    const confirmation = await confirmCodingPackPreview(preview, {
+      projectBindingId: preview.projectBindingId,
+      projectGeneration: preview.projectGeneration,
+      selectedPathsDigest: preview.selectedPathsDigest,
+      purpose: preview.selection.purpose,
+      selectionRulesVersion: preview.selection.selectionRulesVersion,
+    }, {
+      confirmationId: "confirmation-1",
+      confirmedAt: CREATED_AT,
+    });
+    const binding = await destination("verified-product", false);
+    const createProposal = vi.fn();
+    const store = {
+      createCodingPackExportProposal: createProposal,
+    } as unknown as CodingPackStore;
+
+    await expect(createVerifiedCodingPackExportProposal({
+      store,
+      preview,
+      confirmation: {
+        ...confirmation,
+        manifestDigest: digest("9"),
+      },
+      proposalInput: {
+        preview: {
+          projectBindingId: preview.projectBindingId,
+          projectGeneration: preview.projectGeneration,
+          candidatePathsDigest: preview.selection.candidatePathsDigest,
+          sourceFingerprint: preview.selection.sourceFingerprint,
+          packId: preview.selection.packId,
+          manifestDigest: preview.manifest.manifestDigest,
+        },
+        previewConfirmation: confirmation,
+        destination: binding,
+      },
+    })).rejects.toMatchObject({ code: "coding_pack_confirmation_mismatch" });
+    expect(createProposal).not.toHaveBeenCalled();
+  });
 });
 
 async function destination(
@@ -116,7 +203,7 @@ function operation(binding: CodingPackDestinationBinding) {
     projectGeneration: 1,
     candidatePathsDigest: digest("1"),
     sourceFingerprint: digest("2"),
-    packId: digest("3"),
+    packId: packId("3"),
     manifestDigest: digest("4"),
     destinationBindingId: binding.destinationBindingId,
     proposalDigest: digest("5"),
@@ -126,7 +213,7 @@ function operation(binding: CodingPackDestinationBinding) {
   };
 }
 
-function proposedEvent() {
+function proposedEvent(binding: CodingPackDestinationBinding) {
   return {
     eventId: "event-1",
     operationId: "operation-1",
@@ -143,10 +230,10 @@ function proposedEvent() {
         projectGeneration: 1,
         candidatePathsDigest: digest("1"),
         sourceFingerprint: digest("2"),
-        packId: digest("3"),
+        packId: packId("3"),
         manifestDigest: digest("4"),
-        destinationBindingId: "destination-1",
-        destinationFingerprint: digest("7"),
+        destinationBindingId: binding.destinationBindingId,
+        destinationFingerprint: binding.destinationFingerprint,
         exportFormat: "kerniq-coding-pack-bundle-v1" as const,
         createdAt: CREATED_AT,
         expiresAt: "2026-07-30T00:10:00.000Z",
@@ -181,13 +268,28 @@ function digest(character: string): string {
   return `sha256:${character.repeat(64)}`;
 }
 
+function packId(character: string): string {
+  return `pack-${character.repeat(64)}`;
+}
 class MemoryStorage implements Storage {
   private readonly values = new Map<string, string>();
+  readCount = 0;
+  afterNextRead: (() => void) | null = null;
   get length() { return this.values.size; }
   clear() { this.values.clear(); }
-  getItem(key: string) { return this.values.get(key) ?? null; }
+  getItem(key: string) {
+    this.readCount += 1;
+    const value = this.values.get(key) ?? null;
+    const afterRead = this.afterNextRead;
+    this.afterNextRead = null;
+    afterRead?.();
+    return value;
+  }
   key(index: number) { return [...this.values.keys()][index] ?? null; }
   removeItem(key: string) { this.values.delete(key); }
   setItem(key: string, value: string) { this.values.set(key, value); }
   value() { return [...this.values.values()].join(""); }
+  replaceValue(value: string) {
+    this.values.set("kerniq.coding-pack.store.v1", value);
+  }
 }

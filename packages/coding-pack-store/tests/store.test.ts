@@ -3,8 +3,11 @@ import {
   CodingPackStore,
   CodingPackStoreError,
   InMemoryCodingPackStoreAdapter,
+  canonicalJson,
   createCodingPackDestinationBinding,
   createEventPayloadDigest,
+  sha256Canonical,
+  sha256Text,
   validateCodingPackExportProposal,
   type CodingPackDestinationBinding,
   type CodingPackEvent,
@@ -16,6 +19,31 @@ import {
 const CREATED_AT = "2026-07-30T00:00:00.000Z";
 const PROPOSAL_EXPIRES_AT = "2026-07-30T00:10:00.000Z";
 const APPROVAL_EXPIRES_AT = "2026-07-30T00:05:00.000Z";
+
+describe("CodingPackStore canonical identity", () => {
+  it("uses reviewed UTF-8 canonical vectors across TypeScript and Rust", async () => {
+    const proposal = canonicalVectorProposal();
+    const proposalDigest = await sha256Canonical(proposal);
+    expect(proposalDigest).toBe(
+      "sha256:50d56ad331620d45c343d10b4df06192ebdc94cfd7d1df1637debc857cc331a2",
+    );
+    expect(await sha256Canonical({ proposal: { ...proposal, proposalDigest } })).toBe(
+      "sha256:24dcd9be102988d7e00e373b07afe8c02d768f260c393430dcb4896bea76f66a",
+    );
+    expect(await sha256Text("tauri\0/fixture/Exports")).toBe(
+      "sha256:1d742926433865d0d7a3e5f69c6f989a1a86b89aa045f0b78b1be4862b8a4214",
+    );
+    expect(canonicalJson({ "\u00e9": 1, z: 2 })).toBe("{\"z\":2,\"é\":1}");
+  });
+
+  it("rejects malformed Unicode and non-canonical numeric identity", () => {
+    expect(() => canonicalJson("\ud800")).toThrow(CodingPackStoreError);
+    expect(() => canonicalJson({ value: undefined } as never)).toThrow(CodingPackStoreError);
+    expect(() => canonicalJson(Number.NaN)).toThrow(CodingPackStoreError);
+    expect(() => canonicalJson(Number.POSITIVE_INFINITY)).toThrow(CodingPackStoreError);
+    expect(() => canonicalJson(-0)).toThrow(CodingPackStoreError);
+  });
+});
 
 describe("CodingPackStore lifecycle", () => {
   it("persists PACK_PROPOSED then PACK_CONFIRMED with strict sequence and restart readback", async () => {
@@ -240,6 +268,100 @@ describe("CodingPackStore lifecycle", () => {
       proposed.operation.operationId,
     ))?.operation.state).toBe("proposed");
   });
+
+  it("enforces exact 24-hour proposal and approval lifetime boundaries", async () => {
+    const destination = await destinationBinding("lifetime");
+    const acceptedStore = createStore(new InMemoryCodingPackStoreAdapter());
+    await acceptedStore.registerDestinationBinding(destination);
+    const proposed = await acceptedStore.createCodingPackExportProposal({
+      ...proposalInput(destination),
+      expiresAt: "2026-07-31T00:00:00.000Z",
+    });
+    expect(proposed.proposal.expiresAt).toBe("2026-07-31T00:00:00.000Z");
+    expect(() => acceptedStore.createCodingPackExportApproval({
+      operationId: proposed.operation.operationId,
+      proposalDigest: proposed.proposal.proposalDigest,
+      approvedAt: CREATED_AT,
+      expiresAt: "2026-07-31T00:00:00.000Z",
+    })).not.toThrow();
+
+    const rejectedStore = createStore(new InMemoryCodingPackStoreAdapter());
+    await rejectedStore.registerDestinationBinding(destination);
+    await expect(rejectedStore.createCodingPackExportProposal({
+      ...proposalInput(destination),
+      expiresAt: "2026-07-31T00:00:00.001Z",
+    })).rejects.toMatchObject({ code: "coding_pack_proposal_invalid" });
+    expect(() => rejectedStore.createCodingPackExportApproval({
+      operationId: "operation-1",
+      proposalDigest: digest("1"),
+      approvedAt: CREATED_AT,
+      expiresAt: "2026-07-31T00:00:00.001Z",
+    })).toThrow(CodingPackStoreError);
+  });
+
+  it("keeps destination bindings immutable and preserves the first timestamp", async () => {
+    const adapter = new InMemoryCodingPackStoreAdapter();
+    const store = createStore(adapter);
+    const destination = await destinationBinding("immutable");
+    await store.registerDestinationBinding(destination);
+    await store.registerDestinationBinding(destination);
+    await expect(store.registerDestinationBinding({
+      ...destination,
+      destinationFingerprint: digest("9"),
+    })).rejects.toMatchObject({ code: "coding_pack_destination_unavailable" });
+    const proposed = await store.createCodingPackExportProposal(proposalInput(destination));
+    expect(proposed.destination.createdAt).toBe(destination.createdAt);
+    expect(proposed.destination.destinationFingerprint).toBe(destination.destinationFingerprint);
+  });
+
+  it("enforces well-formed UTF-8 byte bounds and exact identity formats", async () => {
+    await expect(createCodingPackDestinationBinding({
+      privateIdentityMaterial: "\ud800",
+      displayLabel: "invalid",
+      createdAt: CREATED_AT,
+      restartAvailable: false,
+    })).rejects.toMatchObject({ code: "coding_pack_destination_unavailable" });
+    const destination = await destinationBinding("identity");
+    const store = createStore(new InMemoryCodingPackStoreAdapter());
+    await store.registerDestinationBinding(destination);
+    const input = proposalInput(destination);
+    await expect(store.createCodingPackExportProposal({
+      ...input,
+      operationId: "\ud800",
+    })).rejects.toMatchObject({ code: "coding_pack_proposal_invalid" });
+    await expect(store.createCodingPackExportProposal({
+      ...input,
+      preview: { ...input.preview, projectBindingId: "🌟".repeat(65) },
+      previewConfirmation: {
+        ...input.previewConfirmation,
+        projectBindingId: "🌟".repeat(65),
+      },
+    })).rejects.toMatchObject({ code: "coding_pack_proposal_invalid" });
+    await expect(store.createCodingPackExportProposal({
+      ...input,
+      preview: { ...input.preview, packId: digest("3") },
+      previewConfirmation: { ...input.previewConfirmation, packId: digest("3") },
+    })).rejects.toMatchObject({ code: "coding_pack_proposal_invalid" });
+  });
+
+  it("reads historical confirmed evidence after its approval has expired", async () => {
+    const adapter = new InMemoryCodingPackStoreAdapter();
+    const store = createStore(adapter);
+    const destination = await destinationBinding("historical");
+    await store.registerDestinationBinding(destination);
+    const proposed = await store.createCodingPackExportProposal(proposalInput(destination));
+    const approval = store.createCodingPackExportApproval({
+      operationId: proposed.operation.operationId,
+      proposalDigest: proposed.proposal.proposalDigest,
+      approvedAt: CREATED_AT,
+      expiresAt: APPROVAL_EXPIRES_AT,
+    });
+    await store.confirmCodingPackExportProposal(approval);
+    const muchLater = createStore(adapter, 86_400_000);
+    expect((await muchLater.getCodingPackOperation(
+      proposed.operation.operationId,
+    ))?.operation.state).toBe("confirmed");
+  });
 });
 
 describe("CodingPackStore event integrity", () => {
@@ -281,7 +403,7 @@ describe("CodingPackStore event integrity", () => {
       payload: {
         proposal: {
           ...proposed.proposal,
-          packId: digest("0"),
+          packId: packId("0"),
         },
       },
     }]);
@@ -313,7 +435,40 @@ describe("CodingPackStore event integrity", () => {
       code: "coding_pack_proposal_invalid",
     });
   });
+
+  it("rejects event chronology that does not match payload timestamps", async () => {
+    const destination = await destinationBinding("chronology");
+    const adapter = new InspectableAdapter();
+    const store = createStore(adapter);
+    await store.registerDestinationBinding(destination);
+    const proposed = await store.createCodingPackExportProposal(proposalInput(destination));
+    adapter.events.set(proposed.operation.operationId, [{
+      ...proposed.events[0],
+      recordedAt: "2026-07-30T00:00:00.001Z",
+    }]);
+    await expect(store.getCodingPackOperation(proposed.operation.operationId)).rejects.toMatchObject({
+      code: "coding_pack_proposal_invalid",
+    });
+  });
 });
+
+function canonicalVectorProposal() {
+  return {
+    schemaVersion: "kerniq.coding-pack.export-proposal.v1",
+    operationId: "operation-vector-🌟",
+    projectBindingId: "project-vector",
+    projectGeneration: 7,
+    candidatePathsDigest: digest("1"),
+    sourceFingerprint: digest("2"),
+    packId: packId("3"),
+    manifestDigest: digest("4"),
+    destinationBindingId: `destination-${"a".repeat(24)}`,
+    destinationFingerprint: digest("5"),
+    exportFormat: "kerniq-coding-pack-bundle-v1",
+    createdAt: CREATED_AT,
+    expiresAt: PROPOSAL_EXPIRES_AT,
+  } as const;
+}
 
 function createStore(adapter: CodingPackStoreAdapter, elapsedMs = 0): CodingPackStore {
   let nextId = 0;
@@ -347,7 +502,7 @@ function proposalInput(
       projectGeneration: 1,
       candidatePathsDigest: digest("1"),
       sourceFingerprint: digest("2"),
-      packId: digest("3"),
+      packId: packId("3"),
       manifestDigest: digest("4"),
     },
     previewConfirmation: {
@@ -355,7 +510,7 @@ function proposalInput(
       projectGeneration: 1,
       selectedPathsDigest: digest("1"),
       sourceFingerprint: digest("2"),
-      packId: digest("3"),
+      packId: packId("3"),
       manifestDigest: digest("4"),
       confirmedAt: CREATED_AT,
     },
@@ -364,6 +519,10 @@ function proposalInput(
 
 function digest(character: string): string {
   return `sha256:${character.repeat(64)}`;
+}
+
+function packId(character: string): string {
+  return `pack-${character.repeat(64)}`;
 }
 
 async function confirmedEventFixture(proposed: CodingPackEvent): Promise<CodingPackEvent> {
@@ -418,21 +577,16 @@ class InspectableAdapter implements CodingPackStoreAdapter {
     this.events.get(operation.operationId)?.push(structuredClone(confirmedEvent));
   }
 
-  async getOperation(operationId: string): Promise<CodingPackOperationRecord | null> {
-    return structuredClone(this.operations.get(operationId) ?? null);
+  async getOperationSnapshotData(operationId: string) {
+    const operation = this.operations.get(operationId);
+    if (!operation) return null;
+    const events = this.events.get(operationId);
+    const destination = this.destinations.get(operation.destinationBindingId);
+    if (!events || !destination) throw new Error("corrupt snapshot");
+    return structuredClone({ operation, events, destination });
   }
 
-  async listOperations(): Promise<CodingPackOperationRecord[]> {
-    return structuredClone([...this.operations.values()]);
-  }
-
-  async listEvents(operationId: string): Promise<CodingPackEvent[]> {
-    return structuredClone(this.events.get(operationId) ?? []);
-  }
-
-  async getDestinationBinding(
-    destinationBindingId: string,
-  ): Promise<CodingPackDestinationBinding | null> {
-    return structuredClone(this.destinations.get(destinationBindingId) ?? null);
+  async listOperationIds(): Promise<readonly string[]> {
+    return [...this.operations.keys()];
   }
 }

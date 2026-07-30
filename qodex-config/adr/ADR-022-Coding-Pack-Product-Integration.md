@@ -408,6 +408,16 @@ path is stored only in the private native binding table. Browser directory
 handles remain in the in-memory capability layer and cannot be recreated from
 the durable display label.
 
+Canonical proposal and event identity sorts object keys by UTF-8 bytes and
+rejects malformed Unicode, unsafe numbers, and non-exact identity formats.
+Proposal and approval lifetimes are capped at 24 hours. Destination bindings
+are immutable and preserve their first creation timestamp. Store reads return
+operation, events, and destination from one snapshot; Tauri uses one SQLite
+read transaction. Native writes independently validate typed proposal and
+approval evidence, recompute canonical digests, enforce chronology, and fail
+before insertion when identity is invalid. SQLite uses WAL and
+`synchronous=FULL`; no stronger hardware-persistence claim is made.
+
 Both proposal and confirmation state appear only after their durable
 transaction succeeds. Restart reads state without advancing it. There is no
 AgentFuse call, Action Runtime dispatch, `PACK_DECIDED`,

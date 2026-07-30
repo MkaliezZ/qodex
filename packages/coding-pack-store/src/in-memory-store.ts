@@ -4,6 +4,7 @@ import type {
   CodingPackEvent,
   CodingPackOperationRecord,
   CodingPackStoreAdapter,
+  CodingPackStoredSnapshotData,
 } from "./types.js";
 
 export class InMemoryCodingPackStoreAdapter implements CodingPackStoreAdapter {
@@ -12,6 +13,13 @@ export class InMemoryCodingPackStoreAdapter implements CodingPackStoreAdapter {
   private readonly destinations = new Map<string, CodingPackDestinationBinding>();
 
   async registerDestinationBinding(binding: CodingPackDestinationBinding): Promise<void> {
+    const existing = this.destinations.get(binding.destinationBindingId);
+    if (existing) {
+      if (!sameDestination(existing, binding)) {
+        throw new CodingPackStoreError("coding_pack_destination_unavailable");
+      }
+      return;
+    }
     this.destinations.set(binding.destinationBindingId, clone(binding));
   }
 
@@ -56,25 +64,33 @@ export class InMemoryCodingPackStoreAdapter implements CodingPackStoreAdapter {
     this.operations.set(operation.operationId, clone(operation));
   }
 
-  async getOperation(operationId: string): Promise<CodingPackOperationRecord | null> {
+  async getOperationSnapshotData(
+    operationId: string,
+  ): Promise<CodingPackStoredSnapshotData | null> {
     const operation = this.operations.get(operationId);
-    return operation ? clone(operation) : null;
+    if (!operation) return null;
+    const events = this.events.get(operationId);
+    const destination = this.destinations.get(operation.destinationBindingId);
+    if (!events || !destination) {
+      throw new CodingPackStoreError("coding_pack_store_unavailable");
+    }
+    return clone({ operation, events, destination });
   }
 
-  async listOperations(): Promise<CodingPackOperationRecord[]> {
-    return [...this.operations.values()].map(clone);
+  async listOperationIds(): Promise<readonly string[]> {
+    return clone([...this.operations.keys()]);
   }
+}
 
-  async listEvents(operationId: string): Promise<CodingPackEvent[]> {
-    return (this.events.get(operationId) ?? []).map(clone);
-  }
-
-  async getDestinationBinding(
-    destinationBindingId: string,
-  ): Promise<CodingPackDestinationBinding | null> {
-    const binding = this.destinations.get(destinationBindingId);
-    return binding ? clone(binding) : null;
-  }
+function sameDestination(
+  left: CodingPackDestinationBinding,
+  right: CodingPackDestinationBinding,
+): boolean {
+  return left.destinationBindingId === right.destinationBindingId
+    && left.destinationFingerprint === right.destinationFingerprint
+    && left.displayLabel === right.displayLabel
+    && left.createdAt === right.createdAt
+    && left.restartAvailable === right.restartAvailable;
 }
 
 function clone<T>(value: T): T {
