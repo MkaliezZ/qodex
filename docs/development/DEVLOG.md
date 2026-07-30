@@ -1128,9 +1128,9 @@ recorded for a separate maintenance PR.
 ### KerniQ v0.7.1 Coding Pack Contracts and Deterministic Portable Manifest
 
 PR #17 planning merged through merge commit
-`46ae1d405a5519477de7da3d1eba51c7e0ae5640`. v0.7.1 is implemented for review
-in a Draft PR as the new browser-safe, zero-runtime-dependency
-`@qodex/coding-pack-runtime` package.
+`46ae1d405a5519477de7da3d1eba51c7e0ae5640`. PR #18 merged v0.7.1 through merge
+commit `d01ad3b71a83efe906c262fa466417d325969946` as the browser-safe,
+zero-runtime-dependency `@qodex/coding-pack-runtime` package.
 
 The slice adds portable and local identity type separation, strict
 project-relative path contracts, fatal UTF-8 validation, exact-byte SHA-256
@@ -1161,7 +1161,70 @@ ILL_FORMED_UTF16_ACCEPTED=false
 PROJECT_LABEL_AUTOMATIC_LOCAL_COPY=false
 ```
 
-v0.7.2 has not started. This slice performs no filesystem discovery,
-`.gitignore` parsing, secret scanning, UI, persistence, export, native command,
-Action Runtime, AgentFuse, Session, network, or Project Command work. The
-v0.6.1 Project Command freeze and GitHub workflows are unchanged.
+This slice performs no filesystem discovery, `.gitignore` parsing, secret
+scanning, UI, persistence, export, native command, Action Runtime, AgentFuse,
+Session, network, or Project Command work. The v0.6.1 Project Command freeze
+and GitHub workflows are unchanged.
+
+### KerniQ v0.7.2 Deterministic Selection and Privacy Classification Core
+
+v0.7.2 is implemented for review in a Draft PR as a pure extension of
+`@qodex/coding-pack-runtime`. `selectCodingPackSources` accepts only an explicit
+caller-supplied array of project-relative paths and exact `Uint8Array` bytes.
+It validates candidate identities without eagerly copying bytes, rejects
+duplicate and conservatively cross-platform-colliding paths, sorts by exact
+UTF-8 bytes, applies non-overridable private, credential, generated, vendor,
+binary, explicit, and fixed `project_ignore` rules before decoding, then
+enforces per-file, 5,000-candidate, 50 MiB eligible-input, file-count, and
+aggregate-pack budgets. Oversized files are not decoded. Invalid UTF-8 is an
+exclusion; unexpected contract errors fail the selection.
+
+The result binds purpose, selection-rules version, `sourceFingerprint`, and
+`packId` to deep-frozen manifest-compatible evidence, exclusions, empty bounded
+warnings, and aggregate totals. `createCodingPackManifestFromSelection`
+runtime-verifies that complete result and prevents independent purpose or rules
+substitution. The same internal canonical identity implementation serves
+selection, manifest creation, and both verification paths.
+
+Portable paths use structural field separation rather than rejecting English
+identity keywords in legitimate relative filenames. Every segment rejects
+Windows-forbidden characters, reserved device names, trailing dots/spaces, and
+more than 255 UTF-8 bytes. Case collision checks are a conservative ECMAScript
+Unicode casing heuristic, not a universal filesystem-equivalence proof.
+
+The package now has 205 focused tests covering selection/manifest identity
+binding, result verification and tampering, fixed ignore provenance, safe
+keyword filenames, Windows-portable segments, bounded candidate work,
+oversized no-decode behavior, order independence, collisions, UTF-8, deep
+immutability, privacy sentinels, and deterministic budget overflow.
+
+```text
+V0_7_1_MERGED=true
+CODING_PACK_SELECTION_CORE_IMPLEMENTED=true
+SELECTION_PURPOSE_BOUND=true
+SELECTION_RULES_VERSION_BOUND=true
+SELECTION_SOURCE_IDENTITY_BOUND=true
+PROJECT_IGNORE_REASON_CALLER_CONTROLLED=false
+SAFE_RELATIVE_FILENAME_KEYWORDS_ALLOWED=true
+CANDIDATE_COUNT_BOUNDED=true
+ELIGIBLE_CANDIDATE_BYTES_BOUNDED=true
+ALL_CANDIDATE_BYTES_EAGERLY_COPIED=false
+OVERSIZED_FILE_DECODED=false
+AUTHORIZED_PROJECT_DISCOVERY_CONNECTED=false
+GITIGNORE_PARSER_IMPLEMENTED=false
+CONTENT_SECRET_SCANNING_IMPLEMENTED=false
+PATH_BASED_PRIVACY_CLASSIFICATION_IMPLEMENTED=true
+SECRET_ABSENCE_PROVEN=false
+CODING_PACK_UI_IMPLEMENTED=false
+CODING_PACK_STORE_IMPLEMENTED=false
+CODING_PACK_EXPORT_IMPLEMENTED=false
+ACTION_RUNTIME_CONNECTED=false
+AGENTFUSE_CONNECTED=false
+SESSION_SCHEMA_CHANGED=false
+PROJECT_COMMAND_FREEZE_CHANGED=false
+PATCH_MIGRATED=false
+ARBITRARY_FILE_READ_ADDED=false
+ARBITRARY_FILE_WRITE_ADDED=false
+ARBITRARY_SHELL_ADDED=false
+WORKFLOW_CHANGED=false
+```

@@ -33,6 +33,25 @@ export interface CodingPackSelectionRules {
   readonly maxTotalBytes: number;
 }
 
+export type CodingPackCandidateOriginCode =
+  | "explicit_selection"
+  | "purpose_rule"
+  | "project_default";
+
+export interface CodingPackCandidateInput {
+  readonly relativePath: string;
+  readonly bytes: Uint8Array;
+  readonly originCode: CodingPackCandidateOriginCode;
+  readonly ignoredByProjectRules?: boolean;
+  readonly explicitlyExcluded?: boolean;
+}
+
+export interface CodingPackSelectionInput {
+  readonly purpose: CodingPackPurpose;
+  readonly selectionRules: CodingPackSelectionRules;
+  readonly candidates: readonly CodingPackCandidateInput[];
+}
+
 export interface CodingPackSourceInput {
   readonly relativePath: string;
   readonly bytes: Uint8Array;
@@ -51,6 +70,29 @@ export interface CodingPackExclusion {
   readonly relativePath: string;
   readonly reasonCode: string;
   readonly detail?: string;
+}
+
+export interface CodingPackSelectionWarning {
+  readonly code: string;
+  readonly relativePath?: string;
+}
+
+export interface CodingPackSelectionTotals {
+  readonly candidateCount: number;
+  readonly includedCount: number;
+  readonly excludedCount: number;
+  readonly includedBytes: number;
+}
+
+export interface CodingPackSelectionResult {
+  readonly purpose: CodingPackPurpose;
+  readonly selectionRulesVersion: string;
+  readonly sourceFingerprint: string;
+  readonly packId: string;
+  readonly included: readonly CodingPackFileEntry[];
+  readonly exclusions: readonly CodingPackExclusion[];
+  readonly warnings: readonly CodingPackSelectionWarning[];
+  readonly totals: CodingPackSelectionTotals;
 }
 
 export interface CodingPackManifest {
@@ -73,5 +115,11 @@ export interface CodingPackManifestInput {
   readonly selectionRules: CodingPackSelectionRules;
   readonly sources: readonly CodingPackFileEntry[];
   readonly exclusions: readonly CodingPackExclusion[];
+  readonly generatedAt: string;
+}
+
+export interface CodingPackManifestFromSelectionInput {
+  readonly selection: CodingPackSelectionResult;
+  readonly project?: CodingPackPortableProject;
   readonly generatedAt: string;
 }

@@ -7,6 +7,7 @@ export type CodingPackManifestErrorCode =
   | "invalid_path"
   | "invalid_timestamp"
   | "invalid_utf8"
+  | "path_collision"
   | "path_overlap"
   | "unsupported_rules";
 

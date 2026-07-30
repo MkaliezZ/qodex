@@ -215,12 +215,13 @@ CI_NODE20_DEPRECATION_REVIEW_REQUIRED=true
 
 ## v0.7.1 Implementation Boundary
 
-The first bounded slice is implemented for Draft PR review in
+The first bounded slice merged through PR #18 and merge commit
+`d01ad3b71a83efe906c262fa466417d325969946` in
 `@qodex/coding-pack-runtime`. It contains only browser-safe contracts, exact
 UTF-8 source hashing, fixed bounds, canonical portable manifest identity,
 deep-freeze, serialization, and verification. It has no runtime dependencies.
 
-The unmerged manifest contract was corrected in place: source entries use
+The then-unmerged manifest contract was corrected in place: source entries use
 `inclusionReasonCode`, selection rules versions are portable machine
 identifiers, metadata privacy checks target the actual portable fields,
 ill-formed UTF-16 is rejected, and RFC 3339 `-00:00` is not accepted as a known
@@ -233,17 +234,80 @@ PORTABLE_INCLUSION_REASON_FREE_TEXT=false
 INCLUSION_REASON_MACHINE_CODE=true
 SELECTION_RULES_VERSION_PORTABLE_IDENTIFIER=true
 ILL_FORMED_UTF16_ACCEPTED=false
-V0_7_2_STARTED=false
+V0_7_2_STARTED_AT_V0_7_1_MERGE=false
 FILESYSTEM_DISCOVERY_IMPLEMENTED=false
-GITIGNORE_PARSING_IMPLEMENTED=false
-SECRET_SCANNING_IMPLEMENTED=false
+GITIGNORE_PARSER_IMPLEMENTED=false
+CONTENT_SECRET_SCANNING_IMPLEMENTED=false
 CODING_PACK_UI_IMPLEMENTED=false
-CODING_PACK_PERSISTENCE_IMPLEMENTED=false
+CODING_PACK_STORE_IMPLEMENTED=false
 CODING_PACK_EXPORT_IMPLEMENTED=false
 CODING_PACK_NATIVE_MODULE_IMPLEMENTED=false
-CODING_PACK_ACTION_RUNTIME_INTEGRATION=false
-CODING_PACK_AGENTFUSE_INTEGRATION=false
+ACTION_RUNTIME_CONNECTED=false
+AGENTFUSE_CONNECTED=false
 PACK_DECIDED_PERSISTENCE_IMPLEMENTED=false
+SESSION_SCHEMA_CHANGED=false
+PROJECT_COMMAND_FREEZE_CHANGED=false
+PATCH_MIGRATED=false
+ARBITRARY_FILE_READ_ADDED=false
+ARBITRARY_FILE_WRITE_ADDED=false
+ARBITRARY_SHELL_ADDED=false
+WORKFLOW_CHANGED=false
+```
+
+## v0.7.2 Implementation Boundary
+
+The second bounded slice adds only a pure browser-safe selection and
+path-classification API to `@qodex/coding-pack-runtime`. The caller supplies
+project-relative candidate paths, exact bytes, reviewed origin codes, and an
+optional project-ignore boolean. The portable ignore reason is always
+`project_ignore`; callers cannot provide authoritative classifier reasons. The
+package does not discover, open, or write files.
+
+The selector validates identities without eagerly copying all bytes, rejects
+exact duplicates and conservative fail-closed ECMAScript case/NFC collisions,
+orders candidates by exact UTF-8 bytes, applies non-overridable private,
+credential, generated, vendor, explicit, ignore, binary, and per-file rules
+before decoding, and caps candidate count plus potentially eligible bytes.
+Accepted files are copied only inside the exact-byte hashing boundary.
+
+The result binds purpose and rules version to its canonical source fingerprint
+and pack ID. Runtime verification recomputes shape, ordering, overlap, totals,
+bounds, and identity. Manifest creation from selection accepts no independent
+purpose or rules version. Portable paths rely on structural field separation:
+identity-like English words are allowed in legitimate relative filenames,
+while Windows-forbidden characters/device names, trailing dots/spaces, and
+segments over 255 UTF-8 bytes are rejected.
+
+Path and filename classification does not prove that included text contains no
+secret. The case heuristic does not prove universal filesystem equivalence.
+v0.7.2 does not parse `.gitignore`, scan content, emit source snippets, or
+connect the authorized Project Runtime adapter.
+
+```text
+V0_7_1_MERGED=true
+CODING_PACK_SELECTION_CORE_IMPLEMENTED=true
+AUTHORIZED_PROJECT_DISCOVERY_CONNECTED=false
+GITIGNORE_PARSER_IMPLEMENTED=false
+PROJECT_IGNORE_DECISION_CALLER_SUPPLIED=true
+PROJECT_IGNORE_REASON_CALLER_CONTROLLED=false
+PROJECT_IGNORE_PORTABLE_REASON=project_ignore
+SELECTION_PURPOSE_BOUND=true
+SELECTION_RULES_VERSION_BOUND=true
+SELECTION_SOURCE_IDENTITY_BOUND=true
+SELECTION_RESULT_RUNTIME_VERIFICATION=PASS
+SAFE_RELATIVE_FILENAME_KEYWORDS_ALLOWED=true
+CANDIDATE_COUNT_BOUNDED=true
+ELIGIBLE_CANDIDATE_BYTES_BOUNDED=true
+ALL_CANDIDATE_BYTES_EAGERLY_COPIED=false
+OVERSIZED_FILE_DECODED=false
+CONTENT_SECRET_SCANNING_IMPLEMENTED=false
+PATH_BASED_PRIVACY_CLASSIFICATION_IMPLEMENTED=true
+SECRET_ABSENCE_PROVEN=false
+CODING_PACK_UI_IMPLEMENTED=false
+CODING_PACK_STORE_IMPLEMENTED=false
+CODING_PACK_EXPORT_IMPLEMENTED=false
+ACTION_RUNTIME_CONNECTED=false
+AGENTFUSE_CONNECTED=false
 SESSION_SCHEMA_CHANGED=false
 PROJECT_COMMAND_FREEZE_CHANGED=false
 PATCH_MIGRATED=false

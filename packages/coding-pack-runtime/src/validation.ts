@@ -1,5 +1,6 @@
 import {
   CODING_PACK_MAX_EXCLUSION_DETAIL_BYTES,
+  CODING_PACK_MAX_PATH_SEGMENT_BYTES,
   CODING_PACK_MAX_PROJECT_LABEL_BYTES,
   CODING_PACK_MAX_REASON_BYTES,
   CODING_PACK_MAX_RELATIVE_PATH_BYTES,
@@ -19,6 +20,9 @@ const encoder = new TextEncoder();
 const CONTROL_CHARACTER_PATTERN = /[\u0000-\u001f\u007f-\u009f]/u;
 const SHA256_PATTERN = /^sha256:[0-9a-f]{64}$/;
 const PORTABLE_IDENTIFIER_PATTERN = /^[a-z0-9][a-z0-9._-]*$/;
+const WINDOWS_FORBIDDEN_FILENAME_PATTERN = /[<>:"|?*]/u;
+const WINDOWS_RESERVED_DEVICE_PATTERN =
+  /^(?:con|prn|aux|nul|com[1-9]|lpt[1-9])(?:\.|$)/iu;
 const RFC3339_PATTERN =
   /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.(\d{1,9}))?(Z|[+-]\d{2}:\d{2})$/;
 const LOCAL_IDENTITY_FIELD_PATTERN =
@@ -89,6 +93,32 @@ export function validatePortablePath(value: unknown): string {
   const segments = path.split("/");
   if (segments.some((segment) => segment === "" || segment === "." || segment === "..")) {
     throw new CodingPackManifestError("invalid_path", "Portable path contains an unsafe segment.");
+  }
+  for (const segment of segments) {
+    if (encoder.encode(segment).byteLength > CODING_PACK_MAX_PATH_SEGMENT_BYTES) {
+      throw new CodingPackManifestError(
+        "invalid_path",
+        "Portable path segment exceeds its UTF-8 byte limit.",
+      );
+    }
+    if (WINDOWS_FORBIDDEN_FILENAME_PATTERN.test(segment)) {
+      throw new CodingPackManifestError(
+        "invalid_path",
+        "Portable path segment contains a Windows-forbidden filename character.",
+      );
+    }
+    if (segment.endsWith(".") || segment.endsWith(" ")) {
+      throw new CodingPackManifestError(
+        "invalid_path",
+        "Portable path segment must not end with a dot or space.",
+      );
+    }
+    if (WINDOWS_RESERVED_DEVICE_PATTERN.test(segment)) {
+      throw new CodingPackManifestError(
+        "invalid_path",
+        "Portable path segment uses a Windows reserved device name.",
+      );
+    }
   }
   return path;
 }
@@ -300,7 +330,18 @@ function rejectPortablePrivateIdentity(value: string, label: string): void {
   if (
     value.includes("/")
     || value.includes("\\")
-    || LOCAL_IDENTITY_FIELD_PATTERN.test(value)
+  ) {
+    throw new CodingPackManifestError(
+      "invalid_input",
+      `${label} must not contain local authority identity or path material.`,
+    );
+  }
+  rejectPortableLocalIdentity(value, label);
+}
+
+export function rejectPortableLocalIdentity(value: string, label: string): void {
+  if (
+    LOCAL_IDENTITY_FIELD_PATTERN.test(value)
     || LOCAL_PROJECT_ID_PATTERN.test(value)
     || LOCAL_FINGERPRINT_PATTERN.test(value)
     || DESTINATION_HANDLE_PATTERN.test(value)

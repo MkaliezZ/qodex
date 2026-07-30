@@ -1,6 +1,5 @@
 import {
   canonicalJson,
-  compareUtf8,
   sha256Bytes,
   sha256Canonical,
   type CanonicalObject,
@@ -12,11 +11,20 @@ import {
   CODING_PACK_VERSION,
   DEFAULT_CODING_PACK_SELECTION_RULES,
 } from "./constants.js";
+import {
+  validateAndSortCodingPackExclusions,
+  validateAndSortCodingPackSources,
+  validateCodingPackBounds,
+  validateCodingPackPathSets,
+} from "./evidence.js";
 import { CodingPackManifestError } from "./errors.js";
+import { computeCodingPackSourceIdentity } from "./identity.js";
+import { normalizeCodingPackSelectionResult } from "./selection-result.js";
 import type {
   CodingPackExclusion,
   CodingPackFileEntry,
   CodingPackManifest,
+  CodingPackManifestFromSelectionInput,
   CodingPackManifestInput,
   CodingPackPortableProject,
   CodingPackSourceInput,
@@ -26,8 +34,6 @@ import {
   requirePortableMachineIdentifier,
   requirePlainRecord,
   validateDigest,
-  validateExclusion,
-  validateFileEntry,
   validatePackId,
   validatePortablePath,
   validatePortableProject,
@@ -76,27 +82,26 @@ export async function createCodingPackManifest(
   const purpose = validatePurpose(record.purpose);
   const project = validatePortableProject(record.project);
   const rules = validateSelectionRules(record.selectionRules);
-  const sources = validateAndSortSources(record.sources, false);
-  const exclusions = validateAndSortExclusions(record.exclusions, false);
-  validatePathSets(sources, exclusions);
-  validateBounds(sources, rules.maxFiles, rules.maxFileBytes, rules.maxTotalBytes);
+  const sources = validateAndSortCodingPackSources(record.sources, false);
+  const exclusions = validateAndSortCodingPackExclusions(record.exclusions, false);
+  validateCodingPackPathSets(sources, exclusions);
+  validateCodingPackBounds(sources, rules.maxFiles, rules.maxFileBytes, rules.maxTotalBytes);
   const generatedAt = validateTimestamp(record.generatedAt);
 
-  const sourceFingerprint = await computeSourceFingerprint({
+  const identity = await computeCodingPackSourceIdentity({
     purpose,
     selectionRulesVersion: rules.version,
     sources,
     exclusions,
   });
-  const packId = `pack-${sourceFingerprint.slice("sha256:".length)}`;
   const withoutDigest = portableManifestWithoutDigest({
-    packId,
+    packId: identity.packId,
     purpose,
     project,
     selectionRulesVersion: rules.version,
     sources,
     exclusions,
-    sourceFingerprint,
+    sourceFingerprint: identity.sourceFingerprint,
     generatedAt,
   });
   const manifestDigest = await sha256Canonical(withoutDigest);
@@ -107,17 +112,51 @@ export async function createCodingPackManifest(
   } as unknown as CodingPackManifest);
 }
 
+export async function createCodingPackManifestFromSelection(
+  input: CodingPackManifestFromSelectionInput,
+): Promise<Readonly<CodingPackManifest>> {
+  const record = requirePlainRecord(input, "manifest-from-selection input");
+  requireExactKeys(
+    record,
+    ["selection", "project", "generatedAt"],
+    "manifest-from-selection input",
+  );
+  const selection = await normalizeCodingPackSelectionResult(record.selection);
+  const project = validatePortableProject(record.project);
+  const generatedAt = validateTimestamp(record.generatedAt);
+  const manifest = await createCodingPackManifest({
+    purpose: selection.purpose,
+    project,
+    selectionRules: {
+      ...DEFAULT_CODING_PACK_SELECTION_RULES,
+      version: selection.selectionRulesVersion,
+    },
+    sources: selection.included,
+    exclusions: selection.exclusions,
+    generatedAt,
+  });
+  if (
+    manifest.sourceFingerprint !== selection.sourceFingerprint
+    || manifest.packId !== selection.packId
+  ) {
+    throw new CodingPackManifestError(
+      "identity_mismatch",
+      "Manifest identity does not match the bound selection.",
+    );
+  }
+  return manifest;
+}
+
 export async function verifyCodingPackManifest(manifest: unknown): Promise<void> {
   const normalized = validateManifestShape(manifest);
-  const expectedFingerprint = await computeSourceFingerprint(normalized);
-  if (normalized.sourceFingerprint !== expectedFingerprint) {
+  const expectedIdentity = await computeCodingPackSourceIdentity(normalized);
+  if (normalized.sourceFingerprint !== expectedIdentity.sourceFingerprint) {
     throw new CodingPackManifestError(
       "identity_mismatch",
       "Coding Pack source fingerprint does not match its content.",
     );
   }
-  const expectedPackId = `pack-${expectedFingerprint.slice("sha256:".length)}`;
-  if (normalized.packId !== expectedPackId) {
+  if (normalized.packId !== expectedIdentity.packId) {
     throw new CodingPackManifestError(
       "identity_mismatch",
       "Coding Pack ID does not match its source fingerprint.",
@@ -171,10 +210,10 @@ function validateManifestShape(value: unknown): CodingPackManifest {
     "manifest.selectionRulesVersion",
     128,
   );
-  const sources = validateAndSortSources(record.sources, true);
-  const exclusions = validateAndSortExclusions(record.exclusions, true);
-  validatePathSets(sources, exclusions);
-  validateBounds(
+  const sources = validateAndSortCodingPackSources(record.sources, true);
+  const exclusions = validateAndSortCodingPackExclusions(record.exclusions, true);
+  validateCodingPackPathSets(sources, exclusions);
+  validateCodingPackBounds(
     sources,
     DEFAULT_CODING_PACK_SELECTION_RULES.maxFiles,
     DEFAULT_CODING_PACK_SELECTION_RULES.maxFileBytes,
@@ -200,117 +239,6 @@ function validateManifestShape(value: unknown): CodingPackManifest {
     generatedAt,
     manifestDigest,
   };
-}
-
-function validateAndSortSources(value: unknown, requireCanonicalOrder: boolean): CodingPackFileEntry[] {
-  if (!Array.isArray(value)) {
-    throw new CodingPackManifestError("invalid_input", "sources must be an array.");
-  }
-  const sources = value.map(validateFileEntry);
-  if (requireCanonicalOrder) assertCanonicalOrder(sources, "source");
-  const sorted = requireCanonicalOrder
-    ? sources
-    : [...sources].sort((left, right) => compareUtf8(left.relativePath, right.relativePath));
-  assertUniquePaths(sorted, "source");
-  return sorted;
-}
-
-function validateAndSortExclusions(
-  value: unknown,
-  requireCanonicalOrder: boolean,
-): CodingPackExclusion[] {
-  if (!Array.isArray(value)) {
-    throw new CodingPackManifestError("invalid_input", "exclusions must be an array.");
-  }
-  const exclusions = value.map(validateExclusion);
-  if (requireCanonicalOrder) assertCanonicalOrder(exclusions, "exclusion");
-  const sorted = requireCanonicalOrder
-    ? exclusions
-    : [...exclusions].sort((left, right) => compareUtf8(left.relativePath, right.relativePath));
-  assertUniquePaths(sorted, "exclusion");
-  return sorted;
-}
-
-function assertCanonicalOrder(
-  values: readonly { readonly relativePath: string }[],
-  label: string,
-): void {
-  for (let index = 1; index < values.length; index += 1) {
-    if (compareUtf8(values[index - 1].relativePath, values[index].relativePath) > 0) {
-      throw new CodingPackManifestError(
-        "invalid_input",
-        `${label} entries are not in canonical UTF-8 byte order.`,
-      );
-    }
-  }
-}
-
-function assertUniquePaths(
-  values: readonly { readonly relativePath: string }[],
-  label: string,
-): void {
-  for (let index = 1; index < values.length; index += 1) {
-    if (values[index - 1].relativePath === values[index].relativePath) {
-      throw new CodingPackManifestError("duplicate_path", `Duplicate ${label} path.`);
-    }
-  }
-}
-
-function validatePathSets(
-  sources: readonly CodingPackFileEntry[],
-  exclusions: readonly CodingPackExclusion[],
-): void {
-  const sourcePaths = new Set(sources.map((source) => source.relativePath));
-  const overlap = exclusions.find((exclusion) => sourcePaths.has(exclusion.relativePath));
-  if (overlap) {
-    throw new CodingPackManifestError(
-      "path_overlap",
-      "A path cannot be both included and excluded.",
-    );
-  }
-}
-
-function validateBounds(
-  sources: readonly CodingPackFileEntry[],
-  maxFiles: number,
-  maxFileBytes: number,
-  maxTotalBytes: number,
-): void {
-  if (sources.length > maxFiles) {
-    throw new CodingPackManifestError("bounds_exceeded", "Coding Pack file count exceeds its limit.");
-  }
-  let totalBytes = 0;
-  for (const source of sources) {
-    if (source.byteCount > maxFileBytes) {
-      throw new CodingPackManifestError(
-        "bounds_exceeded",
-        "Coding Pack source exceeds the per-file byte limit.",
-      );
-    }
-    totalBytes += source.byteCount;
-    if (!Number.isSafeInteger(totalBytes) || totalBytes > maxTotalBytes) {
-      throw new CodingPackManifestError(
-        "bounds_exceeded",
-        "Coding Pack aggregate source bytes exceed their limit.",
-      );
-    }
-  }
-}
-
-async function computeSourceFingerprint(input: {
-  readonly purpose: CodingPackManifest["purpose"];
-  readonly selectionRulesVersion: string;
-  readonly sources: readonly CodingPackFileEntry[];
-  readonly exclusions: readonly CodingPackExclusion[];
-}): Promise<string> {
-  return sha256Canonical({
-    schemaVersion: CODING_PACK_MANIFEST_SCHEMA_VERSION,
-    packVersion: CODING_PACK_VERSION,
-    purpose: input.purpose,
-    selectionRulesVersion: input.selectionRulesVersion,
-    sources: input.sources as unknown as CanonicalValue,
-    exclusions: input.exclusions as unknown as CanonicalValue,
-  });
 }
 
 function portableManifestWithoutDigest(input: {
