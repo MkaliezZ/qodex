@@ -1,8 +1,12 @@
 import {
+  CODING_PACK_MAX_CANDIDATE_COUNT,
+  CODING_PACK_MAX_ELIGIBLE_CANDIDATE_BYTES,
   CODING_PACK_SELECTION_RULES_VERSION,
   DEFAULT_CODING_PACK_SELECTION_RULES,
+  completeCodingPackSelectionFromReadPlan,
   createCodingPackManifestFromSelection,
-  selectCodingPackSources,
+  digestCodingPackCandidatePaths,
+  planCodingPackCandidateReads,
   verifyCodingPackManifest,
   verifyCodingPackSelectionResult,
   type CodingPackManifest,
@@ -84,41 +88,57 @@ export async function createSelectedFileCodingPackPreview(
   if (selectedPaths.length === 0) {
     throw new CodingPackPreviewError("coding_pack_no_selection");
   }
-  const selectedPathsDigest = await digestSelectedPaths(selectedPaths);
-  const candidates = [];
-
-  for (const relativePath of selectedPaths) {
-    let bytes: Uint8Array;
-    try {
-      bytes = await input.source.readFileBytes(relativePath);
-    } catch (error) {
-      if (
-        error instanceof CodingPackProjectSourceError
-        && error.code === "coding_pack_source_too_large"
-      ) {
-        throw new CodingPackPreviewError("coding_pack_source_too_large");
-      }
-      throw new CodingPackPreviewError("coding_pack_read_failed");
-    }
-    if (!(bytes instanceof Uint8Array)) {
-      throw new CodingPackPreviewError("coding_pack_read_failed");
-    }
-    if (bytes.byteLength > CODING_PACK_PROJECT_SOURCE_MAX_BYTES) {
-      throw new CodingPackPreviewError("coding_pack_source_too_large");
-    }
-    candidates.push({
-      relativePath,
-      bytes,
-      originCode: "explicit_selection" as const,
-    });
+  if (selectedPaths.length > CODING_PACK_MAX_CANDIDATE_COUNT) {
+    throw new CodingPackPreviewError("coding_pack_selection_failed");
   }
 
   try {
-    const selection = await selectCodingPackSources({
+    const plan = await planCodingPackCandidateReads({
       purpose: input.purpose,
       selectionRules: DEFAULT_CODING_PACK_SELECTION_RULES,
-      candidates,
+      candidates: selectedPaths.map((relativePath) => ({
+        relativePath,
+        originCode: "explicit_selection" as const,
+      })),
     });
+    const reads: Array<{ relativePath: string; bytes: Uint8Array }> = [];
+    let eligibleReadBytes = 0;
+
+    for (const entry of plan.entries) {
+      if (entry.disposition !== "read_required") continue;
+      const relativePath = entry.relativePath;
+      let bytes: Uint8Array;
+      try {
+        bytes = await input.source.readFileBytes(relativePath);
+      } catch (error) {
+        if (
+          error instanceof CodingPackProjectSourceError
+          && error.code === "coding_pack_source_too_large"
+        ) {
+          throw new CodingPackPreviewError("coding_pack_source_too_large");
+        }
+        throw new CodingPackPreviewError("coding_pack_read_failed");
+      }
+      if (!(bytes instanceof Uint8Array)) {
+        throw new CodingPackPreviewError("coding_pack_read_failed");
+      }
+      if (bytes.byteLength > CODING_PACK_PROJECT_SOURCE_MAX_BYTES) {
+        throw new CodingPackPreviewError("coding_pack_source_too_large");
+      }
+      eligibleReadBytes += bytes.byteLength;
+      if (
+        !Number.isSafeInteger(eligibleReadBytes)
+        || eligibleReadBytes > CODING_PACK_MAX_ELIGIBLE_CANDIDATE_BYTES
+      ) {
+        throw new CodingPackPreviewError("coding_pack_selection_failed");
+      }
+      reads.push({ relativePath, bytes });
+    }
+
+    const selection = await completeCodingPackSelectionFromReadPlan({ plan, reads });
+    if (selection.candidatePathsDigest !== plan.candidatePathsDigest) {
+      throw new CodingPackPreviewError("coding_pack_selection_failed");
+    }
     const createdAt = canonicalTimestamp(input.createdAt ?? new Date().toISOString());
     const manifest = await createCodingPackManifestFromSelection({
       selection,
@@ -127,7 +147,7 @@ export async function createSelectedFileCodingPackPreview(
     return Object.freeze({
       projectBindingId: input.projectBindingId,
       projectGeneration: input.projectGeneration,
-      selectedPathsDigest,
+      selectedPathsDigest: selection.candidatePathsDigest,
       selection,
       manifest,
       createdAt,
@@ -141,14 +161,11 @@ export async function createSelectedFileCodingPackPreview(
 export async function digestSelectedPaths(
   selectedPaths: readonly string[],
 ): Promise<string> {
-  const canonical = canonicalSelectedPaths(selectedPaths);
-  const digest = await crypto.subtle.digest(
-    "SHA-256",
-    new TextEncoder().encode(JSON.stringify(canonical)),
-  );
-  return `sha256:${[...new Uint8Array(digest)]
-    .map((byte) => byte.toString(16).padStart(2, "0"))
-    .join("")}`;
+  try {
+    return await digestCodingPackCandidatePaths(canonicalSelectedPaths(selectedPaths));
+  } catch {
+    throw new CodingPackPreviewError("coding_pack_selection_failed");
+  }
 }
 
 export function isCodingPackPreviewStale(
@@ -254,7 +271,8 @@ async function verifyPreviewIntegrity(preview: CodingPackPreview): Promise<void>
     const selection = record.selection as CodingPackSelectionResult;
     const manifest = record.manifest as CodingPackManifest;
     if (
-      manifest.sourceFingerprint !== selection.sourceFingerprint
+      record.selectedPathsDigest !== selection.candidatePathsDigest
+      || manifest.sourceFingerprint !== selection.sourceFingerprint
       || manifest.packId !== selection.packId
       || manifest.purpose !== selection.purpose
       || manifest.selectionRulesVersion !== selection.selectionRulesVersion

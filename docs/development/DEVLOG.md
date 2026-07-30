@@ -1238,29 +1238,45 @@ v0.7.2 merged through exact-head merge commit
 dedicated read-only exact-byte capability to Project Runtime without expanding
 the approved Diff write interface. Browser reads use the already-authorized
 `FileSystemFileHandle` snapshot. Tauri reads retain root containment,
-regular-file, and no-symlink/junction checks, reject oversized metadata before
-allocation, and use the installed filesystem plugin's bounded native file
-handle API. No Rust command or arbitrary absolute-path API was added.
+regular-file, and pre-read no-symlink/junction checks, reject oversized metadata
+before allocation, and use the installed filesystem plugin's bounded native
+file handle API. The checks reject links observed before the path-based open;
+they do not claim race-free protection against concurrent filesystem
+replacement. No Rust command or arbitrary absolute-path API was added.
 
 Desktop converts only current explicitly selected relative paths, sorted by
-canonical UTF-8 bytes, into `explicit_selection` candidates. It creates the
-portable manifest through `createCodingPackManifestFromSelection` and renders
+canonical UTF-8 bytes, into path-only `explicit_selection` metadata. The shared
+runtime pre-read plan excludes private, credential-like, vendor, generated,
+project-ignored, and binary-like paths before bytes are requested. Candidate
+count is checked before reading and cumulative eligible bytes are bounded during
+reads. Completion requires exactly the planned reads. It creates the portable
+manifest through `createCodingPackManifestFromSelection` and renders
 included files, machine exclusions, totals, source fingerprint, pack ID,
 manifest digest, and creation time without source contents or local authority.
 Purpose changes identity but does not discover files.
 
-The local preview binds project, open generation, exact selected-path digest,
+The local preview binds project, open generation, the selection's recomputed
+complete candidate-path digest,
 selection identity, and manifest digest. Confirmation is exact, in-memory
 only, grants no export authority, and is cleared or rejected after project,
 generation, selection, purpose, rules, refresh, source identity, or manifest
-identity changes. Manual refresh re-reads every selected source. There is no
-polling or filesystem watcher.
+identity changes. Manual refresh re-plans every selected path and re-reads every
+read-required source. There is no polling or filesystem watcher.
 
 ```text
 V0_7_2_MERGED=true
 CODING_PACK_SELECTED_FILE_PREVIEW_IMPLEMENTED=true
 CODING_PACK_EXACT_CONFIRMATION_IMPLEMENTED=true
 EXACT_AUTHORIZED_BYTE_READ_IMPLEMENTED=true
+PRE_READ_SELECTION_PLAN_IMPLEMENTED=true
+HARD_EXCLUDED_FILE_READ=false
+BINARY_EXCLUDED_FILE_READ=false
+CANDIDATE_COUNT_CHECKED_BEFORE_READ=true
+ELIGIBLE_BYTE_LIMIT_ENFORCED_DURING_READ=true
+CANDIDATE_PATHS_DIGEST_RECOMPUTED=true
+SELECTED_PATHS_IDENTITY_BOUND_TO_SELECTION=true
+TAURI_PRE_READ_SYMLINK_CHECK=true
+TAURI_RACE_FREE_SYMLINK_GUARANTEE=false
 TEXT_REENCODING_USED=false
 AUTOMATIC_REPOSITORY_DISCOVERY_IMPLEMENTED=false
 GITIGNORE_PARSER_IMPLEMENTED=false

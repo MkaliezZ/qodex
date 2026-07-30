@@ -266,7 +266,13 @@ KerniQ now includes the browser-safe v0.7.1 manifest contracts and the merged
 v0.7.2 deterministic selection/privacy core. The v0.7.3 Draft implementation
 adds a read-only Desktop preview for explicitly selected files, exact authorized
 byte reads, manual refresh, and an in-memory confirmation bound to that exact
-preview. The
+preview. A shared path-only read plan excludes private, credential-like,
+vendor, generated, project-ignored, and binary-like paths before source bytes
+are requested. Candidate count is checked before reading, cumulative eligible
+bytes are bounded during reading, and selected-path identity is recomputed from
+the complete selection evidence. The Tauri path rejects symlinks and junctions
+observed during bounded pre-read checks; it does not claim race-free protection
+against concurrent filesystem replacement. The
 [v0.7 plan](docs/development/kerniq_v0_7_coding_pack_product_integration_planning.md)
 and [ADR-022](qodex-config/adr/ADR-022-Coding-Pack-Product-Integration.md)
 define the remaining durable export lifecycle. Automatic repository discovery,

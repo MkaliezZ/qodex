@@ -273,16 +273,25 @@ Details:
 source fingerprints, pack identity, and canonical portable manifests. Project
 Runtime exposes a separate read-only exact-byte capability bound to an already
 authorized project root. Browser access reads immutable `File` snapshots;
-Tauri access reuses the existing containment and no-symlink checks, checks
-metadata size, and reads through a bounded native file handle.
+Tauri access reuses the existing containment and pre-read no-symlink checks,
+checks metadata size, and reads through a bounded native file handle. These
+checks reject symlinks and junctions observed before the path-based open; they
+do not establish a race-free open-by-handle guarantee against concurrent local
+replacement.
 
 The Desktop v0.7.3 Draft slice converts only explicitly selected paths into
-`explicit_selection` candidates, creates a manifest from the bound selection,
-and shows included files, exclusions, totals, and portable identity. Its local
-preview binds project, open generation, selected-path digest, purpose, source
-fingerprint, and manifest digest. Confirmation is ephemeral, is invalidated by
-binding/selection/purpose/refresh changes, and does not authorize export.
-Source-byte changes are re-read on manual refresh; there is no watcher.
+path-only `explicit_selection` metadata. Coding Pack Runtime applies the same
+shared pre-read classifier used by direct selection, so byte-independent
+private and binary exclusions are recorded without reading those files.
+Candidate count is rejected before the first read and cumulative eligible bytes
+are bounded during reads. The runtime then completes selection from exactly the
+planned reads, creates a manifest from the bound selection, and shows included
+files, exclusions, totals, and portable identity. Its local preview binds
+project, open generation, the selection's recomputed complete candidate-path
+digest, purpose, source fingerprint, and manifest digest. Confirmation is
+ephemeral, is invalidated by binding/selection/purpose/refresh changes, and does
+not authorize export. Read-required source-byte changes are re-read on manual
+refresh; there is no watcher.
 
 A future dedicated versioned store
 owns one export lifecycle, while a narrow native adapter owns staged,

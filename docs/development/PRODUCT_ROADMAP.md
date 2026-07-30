@@ -116,11 +116,17 @@ deterministic budgets.
 
 v0.7.3 adds bounded exact-byte reads through the already-authorized Project
 Runtime adapter and a Desktop preview for explicitly selected files only.
-Manual refresh re-reads all selected sources. Exact confirmation is local,
-in-memory, invalidated by project/selection/purpose/refresh changes, and grants
-no export authority. Automatic discovery, `.gitignore` parsing, content secret
-scanning, persistent Coding Pack storage, physical export, Action Runtime, and
-AgentFuse integration remain unimplemented.
+A shared runtime read plan classifies byte-independent exclusions before read,
+checks candidate count before the first read, and bounds cumulative eligible
+bytes during reading. Manual refresh re-plans every selected path and re-reads
+only read-required sources. The complete candidate-path digest is recomputed
+from included and excluded evidence and bound to the preview. Exact confirmation
+is local, in-memory, invalidated by project/selection/purpose/refresh changes,
+and grants no export authority. Tauri rejects links observed during pre-read
+checks but does not claim race-free protection against concurrent replacement.
+Automatic discovery, `.gitignore` parsing, content secret scanning, persistent
+Coding Pack storage, physical export, Action Runtime, and AgentFuse integration
+remain unimplemented.
 
 ### v0.8 - Product Packaging and Closed Beta
 

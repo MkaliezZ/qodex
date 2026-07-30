@@ -324,15 +324,25 @@ The third bounded slice connects only explicit Desktop file selection to the
 merged deterministic selector. Project Runtime exposes a dedicated read-only
 exact-byte capability bound to the existing authorized root. Browser mode uses
 the selected `FileSystemFileHandle`; Tauri mode retains containment,
-regular-file, and no-symlink/junction checks and uses a bounded native file
-handle read after metadata size validation. React cannot supply an arbitrary
-root or absolute path.
+regular-file, and pre-read no-symlink/junction checks and uses a bounded native
+file handle read after metadata size validation. The Tauri checks reject links
+observed before the separate path-based open. v0.7.3 does not claim a race-free
+open-by-handle guarantee against concurrent local filesystem mutation; physical
+export requires a stronger native revalidation/open boundary in a later slice.
+React cannot supply an arbitrary root or absolute path.
 
-The local preview binds project binding, open generation, canonical selected
-path digest, purpose, selection identity, and manifest digest. Its portable
-manifest is created only through `createCodingPackManifestFromSelection` and
-contains no local authority. Purpose changes identity but does not discover
-files. A refresh re-reads every selected file and clears prior confirmation.
+The shared Coding Pack Runtime pre-read plan applies the exact selector
+classifier to path metadata, so private, credential-like, vendor, generated,
+project-ignored, and binary-like exclusions require no source read. Candidate
+count is checked before reading and cumulative eligible bytes are bounded while
+reading. Completion accepts exactly the plan's read-required results.
+
+The local preview binds project binding, open generation, the selection's
+recomputed complete candidate-path digest, purpose, selection identity, and
+manifest digest. Its portable manifest is created only through
+`createCodingPackManifestFromSelection` and contains no local authority.
+Purpose changes identity but does not discover files. A refresh re-plans every
+selected path, re-reads only read-required files, and clears prior confirmation.
 Source changes are not continuously monitored in this slice.
 
 Confirmation is exact, in-memory only, and grants no export authority. It is
@@ -344,6 +354,16 @@ V0_7_2_MERGED=true
 CODING_PACK_SELECTED_FILE_PREVIEW_IMPLEMENTED=true
 CODING_PACK_EXACT_CONFIRMATION_IMPLEMENTED=true
 EXACT_AUTHORIZED_BYTE_READ_IMPLEMENTED=true
+PRE_READ_SELECTION_PLAN_IMPLEMENTED=true
+HARD_EXCLUDED_FILE_READ=false
+BINARY_EXCLUDED_FILE_READ=false
+PROJECT_IGNORED_FILE_READ=false
+CANDIDATE_COUNT_CHECKED_BEFORE_READ=true
+ELIGIBLE_BYTE_LIMIT_ENFORCED_DURING_READ=true
+CANDIDATE_PATHS_DIGEST_RECOMPUTED=true
+SELECTED_PATHS_IDENTITY_BOUND_TO_SELECTION=true
+TAURI_PRE_READ_SYMLINK_CHECK=true
+TAURI_RACE_FREE_SYMLINK_GUARANTEE=false
 TEXT_REENCODING_USED=false
 AUTOMATIC_REPOSITORY_DISCOVERY_IMPLEMENTED=false
 GITIGNORE_PARSER_IMPLEMENTED=false

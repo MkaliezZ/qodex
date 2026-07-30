@@ -112,6 +112,7 @@ describe("Coding Pack selection identity binding", () => {
 interface MutableSelection {
   purpose: CodingPackSelectionInput["purpose"];
   selectionRulesVersion: string;
+  candidatePathsDigest: string;
   sourceFingerprint: string;
   packId: string;
   included: Array<{

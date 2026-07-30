@@ -11,7 +11,10 @@ import {
   validateCodingPackPathSets,
 } from "./evidence.js";
 import { CodingPackManifestError } from "./errors.js";
-import { computeCodingPackSourceIdentity } from "./identity.js";
+import {
+  computeCodingPackCandidatePathsDigest,
+  computeCodingPackSourceIdentity,
+} from "./identity.js";
 import type {
   CodingPackCandidateOriginCode,
   CodingPackExclusion,
@@ -63,6 +66,7 @@ export async function normalizeCodingPackSelectionResult(
     [
       "purpose",
       "selectionRulesVersion",
+      "candidatePathsDigest",
       "sourceFingerprint",
       "packId",
       "included",
@@ -84,6 +88,10 @@ export async function normalizeCodingPackSelectionResult(
       "Selection result uses an unsupported rules version.",
     );
   }
+  const candidatePathsDigest = validateDigest(
+    record.candidatePathsDigest,
+    "selection result candidatePathsDigest",
+  );
   const sourceFingerprint = validateDigest(
     record.sourceFingerprint,
     "selection result sourceFingerprint",
@@ -109,6 +117,15 @@ export async function normalizeCodingPackSelectionResult(
   );
   const warnings = validateSelectionWarnings(record.warnings);
   const totals = validateSelectionTotals(record.totals, included, exclusions);
+  const expectedCandidatePathsDigest = await computeCodingPackCandidatePathsDigest(
+    [...included, ...exclusions].map((entry) => entry.relativePath),
+  );
+  if (candidatePathsDigest !== expectedCandidatePathsDigest) {
+    throw new CodingPackManifestError(
+      "identity_mismatch",
+      "Coding Pack candidate path identity does not match its evidence.",
+    );
+  }
   const identity = await computeCodingPackSourceIdentity({
     purpose,
     selectionRulesVersion,
@@ -125,6 +142,7 @@ export async function normalizeCodingPackSelectionResult(
   return freezeCodingPackSelectionResult({
     purpose,
     selectionRulesVersion,
+    candidatePathsDigest,
     sourceFingerprint,
     packId,
     included,

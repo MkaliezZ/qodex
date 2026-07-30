@@ -74,7 +74,7 @@ pack lifecycle event
 | `packages/project-runtime/src/ignore/rules.ts` | `shouldIgnore()` | Relative path | Boolean | Static defaults only; does not parse project `.gitignore` files |
 | same | `isBinaryFile()` | Filename extension | Boolean | Extension heuristic, not byte-level binary or encoding validation |
 | `packages/project-runtime/src/fs/path.ts` | `assertSafeProjectRelativePath()` | Candidate path | Pass or `UnsafeProjectPathError` | Rejects absolute, traversal, empty segments, NUL, and backslashes |
-| `apps/desktop/src/platform/tauriFileSystemAdapter.ts` | `TauriFileSystemAdapter` | Authorized native root and relative path | Directory listing, existing text read/write | Revalidates containment and rejects symlinks; exposes no create/atomic export API |
+| `apps/desktop/src/platform/tauriFileSystemAdapter.ts` | `TauriFileSystemAdapter` | Authorized native root and relative path | Directory listing, existing text read/write | Revalidates containment and rejects links observed during pre-read checks; exposes no create/atomic export API and makes no race-free claim |
 | `apps/desktop/src/platform/openProjectDirectory.ts` | `openProjectDirectory()` | User directory picker | `OpenedProjectDirectory` | Establishes browser or Tauri authorization and keeps the native root private |
 | `apps/desktop/src/platform/projectBinding.ts` | `projectBindingIdentity()` | Access source and private root | SHA-256 project binding/fingerprint | Reusable private binding; fingerprint currently identifies root, not repository content |
 | `apps/desktop/src/hooks/useRuntime.ts` | `openProject()`, `toggleFileSelection()` | User picker and file clicks | React tree, counts, `contextFiles` | Selection is process-local and reset when a project opens; no pack state |
@@ -235,7 +235,10 @@ completed artifact but must not mirror or compete with the operation state.
 
 Only paths discovered under an actively authorized `OpenedProjectDirectory`
 enter selection. Every path is project-relative, normalized, containment
-checked, and symlink-free. The root remains private platform state.
+checked, and rejected when a symlink or junction is observed during the
+platform's bounded pre-read checks. The v0.7.3 path-based open is not a
+race-free guarantee against concurrent replacement. The root remains private
+platform state.
 
 ### Boundary 2: Deterministic Selection
 
@@ -706,7 +709,7 @@ but cannot prove that a pack contains no secret or private information.
 | Oversized repository | Coding Pack core | File-count and aggregate-byte caps | Preview reports cap and omitted counts | Stop discovery with bounded result | Repositories over each limit |
 | Generated files | Selection engine | Generated/build directory and file patterns | `generated` exclusion | Exclude by default | dist, coverage, generated clients, maps |
 | Vendor directories | Selection engine | Vendor/dependency rule set | `vendor` exclusion | Exclude by default | node_modules, vendor, target, venv |
-| Symlink escape | Platform adapter | lstat every segment; never follow links | Safe `symlink` exclusion without target | Exclude or block project traversal | File, directory, junction, chained symlink fixtures |
+| Symlink escape | Platform adapter | lstat each observed segment before path-based open; later export needs a stronger native boundary | Safe `symlink` exclusion without target | Exclude or block project traversal without claiming race-free equivalence | File, directory, junction, chained symlink fixtures |
 | Path traversal | Project/native adapters | Strict project-relative validation and containment | Bounded `invalid_selection` code | Reject entire request | `..`, absolute, UNC, drive, NUL, mixed separators |
 | Submodule boundaries | Selection engine | Detect gitlink/submodule roots; do not recurse | `submodule` exclusion | Exclude until separately authorized | `.gitmodules` plus gitlink-like fixture |
 | Nested repository boundaries | Selection engine | Stop at nested `.git` file/directory marker | `nested_repository` exclusion | Exclude subtree | Nested worktree and repository fixture |
@@ -1074,22 +1077,40 @@ WORKFLOW_CHANGED=false
 v0.7.3 adds a dedicated exact-byte source capability to the already-authorized
 Project Runtime adapter. Browser mode reads the selected
 `FileSystemFileHandle` snapshot as bytes. Tauri mode reuses root containment,
-regular-file, and no-symlink/junction checks, then performs a size preflight
-and a bounded `FileHandle.read` of at most the reviewed limit plus one byte.
-No arbitrary root or absolute path is accepted by React.
+regular-file, and pre-read no-symlink/junction checks, then performs a size
+preflight and a bounded `FileHandle.read` of at most the reviewed limit plus one
+byte. These path-based checks reject links observed before open; they do not
+establish a race-free open-by-handle guarantee against concurrent filesystem
+replacement. No arbitrary root or absolute path is accepted by React.
 
 Desktop converts only the current explicitly selected relative paths, in
-canonical UTF-8 byte order, to `explicit_selection` candidates. It uses
+canonical UTF-8 byte order, to path-only `explicit_selection` metadata. The
+shared Coding Pack Runtime read plan applies the same classifier as direct
+selection and skips every byte-independent exclusion. Candidate count is
+checked before reading; cumulative eligible bytes are checked after each
+read-required result and stop remaining reads on overflow. Completion requires
+exactly one result per read-required entry. It uses
 `createCodingPackManifestFromSelection`, shows portable evidence without local
 authority or source contents, and binds the local preview to the project
-binding, open generation, selected-path digest, purpose, source identity, and
-manifest digest. Manual refresh re-reads all selected files. Confirmation is
+binding, open generation, selection-recomputed complete candidate-path digest,
+purpose, source identity, and manifest digest. Manual refresh re-plans all
+selected paths and re-reads only read-required files. Confirmation is
 ephemeral, grants no export authority, and is cleared or rejected when its
 binding becomes stale.
 
 ```text
 V0_7_3_SELECTED_FILE_PREVIEW_IMPLEMENTED_IN_DRAFT_PR=true
 EXACT_AUTHORIZED_BYTE_READ_IMPLEMENTED=true
+PRE_READ_SELECTION_PLAN_IMPLEMENTED=true
+HARD_EXCLUDED_FILE_READ=false
+BINARY_EXCLUDED_FILE_READ=false
+PROJECT_IGNORED_FILE_READ=false
+CANDIDATE_COUNT_CHECKED_BEFORE_READ=true
+ELIGIBLE_BYTE_LIMIT_ENFORCED_DURING_READ=true
+CANDIDATE_PATHS_DIGEST_RECOMPUTED=true
+SELECTED_PATHS_IDENTITY_BOUND_TO_SELECTION=true
+TAURI_PRE_READ_SYMLINK_CHECK=true
+TAURI_RACE_FREE_SYMLINK_GUARANTEE=false
 TEXT_REENCODING_USED=false
 AUTOMATIC_REPOSITORY_DISCOVERY_IMPLEMENTED=false
 GITIGNORE_PARSER_IMPLEMENTED=false
