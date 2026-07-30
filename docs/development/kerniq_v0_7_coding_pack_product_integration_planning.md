@@ -1,7 +1,7 @@
 # KerniQ v0.7 Coding Pack Product Integration Planning
 
 **Date:** 2026-07-29
-**Status:** Living plan; v0.7.2 merged and v0.7.3 implemented in Draft PR
+**Status:** Living plan; v0.7.3 merged and v0.7.4.1 implemented for Draft PR
 **Planning base:** `0486704d613ea203672d75bee455346cceafb225`
 **v0.6.1 freeze activation merge:** `0486704d613ea203672d75bee455346cceafb225`
 **v0.6.1 freeze activation post-merge CI:** `30432376199`
@@ -16,7 +16,7 @@ Session ledger. At that base, none of those foundations created, previewed,
 identified, persisted, refreshed, or exported a Coding Pack.
 
 ```text
-CURRENT_CODING_PACK_STATE=SELECTED_FILE_PREVIEW_IMPLEMENTED_IN_DRAFT_PR
+CURRENT_CODING_PACK_STATE=DURABLE_EXPORT_PROPOSAL_IMPLEMENTED_FOR_DRAFT_PR
 V0_7_PLANNING_BASE_MAIN=0486704d613ea203672d75bee455346cceafb225
 ```
 
@@ -791,7 +791,19 @@ errors, full confirmation binding, and browser/native capability messaging.
 
 **Boundary:** No physical export. End in one reviewable Draft PR.
 
-### v0.7.4 - Durable Authorization and Atomic Export
+### v0.7.4.1 - Durable Store and Export Proposal Contracts
+
+**Objective:** Add a dedicated Coding Pack store, opaque destination binding,
+exact export proposal, separate export approval, and restart-safe readback.
+
+**Tests:** Store migration, event integrity, proposal and approval binding,
+restart readback, persistence failure, browser capability loss, Desktop
+keyboard flow, and zero destination writes.
+
+**Boundary:** End at durable `PACK_CONFIRMED`. No AgentFuse decision, Action
+Runtime dispatch, staging, destination write, or physical export.
+
+### v0.7.4.2 - Durable Authorization and Atomic Export
 
 **Objective:** Add dedicated operation persistence, Action Runtime export
 proposal/approval, opaque destination binding, native source revalidation, and
@@ -981,7 +993,7 @@ CI_NODE20_DEPRECATION_REVIEW_REQUIRED=true
 V0_7_PLANNING_APPROVED_AND_MERGED
 ```
 
-## v0.7.1 through v0.7.3 Implementation Status
+## v0.7.1 through v0.7.4.1 Implementation Status
 
 The corrected product plan was approved and merged through PR #17:
 
@@ -1126,5 +1138,42 @@ AGENTFUSE_CONNECTED=false
 SESSION_SCHEMA_CHANGED=false
 PROJECT_COMMAND_FREEZE_CHANGED=false
 ARBITRARY_FILE_WRITE_ADDED=false
+WORKFLOW_CHANGED=false
+```
+
+v0.7.3 merged through exact-head merge commit
+`5d5152ca25c0fc2772cec730dd6229dd44aa88cb`.
+
+v0.7.4.1 adds `@qodex/coding-pack-store`, schema
+`kerniq.coding-pack.store.v1`, and a separate Tauri
+`kerniq-coding-pack.sqlite3` database. Operations are reconstructed from
+strictly ordered, bounded, payload-digest-verified `PACK_PROPOSED` and
+`PACK_CONFIRMED` events. The portable proposal binds exact preview, manifest,
+and opaque destination identity; a separate approval binds the exact operation
+and proposal digest. Tauri absolute destination paths stay in the private
+destination-binding table. Browser directory handles remain in memory and are
+not reconstructed from display labels after restart.
+
+Proposal and confirmation persistence complete before UI state advances.
+Restart performs no automatic decision, export, or old-confirmation replay.
+This slice does not implement `PACK_DECIDED`, AgentFuse, Action Runtime,
+staging, filesystem destination writes, or physical export.
+
+```text
+V0_7_3_MERGE_COMMIT=5d5152ca25c0fc2772cec730dd6229dd44aa88cb
+CODING_PACK_STORE_IMPLEMENTED=true
+CODING_PACK_STORE_SCHEMA_V1=true
+PACK_PROPOSED_IMPLEMENTED=true
+PACK_CONFIRMED_IMPLEMENTED=true
+DESTINATION_BINDING_OPAQUE=true
+ABSOLUTE_DESTINATION_PORTABLE=false
+PREVIEW_CONFIRMATION_AUTHORIZES_EXPORT=false
+PACK_DECIDED_IMPLEMENTED=false
+CODING_PACK_EXPORT_IMPLEMENTED=false
+DESTINATION_FILES_WRITTEN=false
+ACTION_RUNTIME_CONNECTED=false
+AGENTFUSE_CONNECTED=false
+SESSION_SCHEMA_CHANGED=false
+PROJECT_COMMAND_FREEZE_CHANGED=false
 WORKFLOW_CHANGED=false
 ```

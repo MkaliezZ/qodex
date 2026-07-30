@@ -8,7 +8,7 @@
     "build": "tsc && vite build",
     "preview": "vite preview",
     "test": "vitest run",
-    "test:e2e": "pnpm --filter @qodex/coding-pack-runtime build && playwright test",
+    "test:e2e": "pnpm --filter @qodex/coding-pack-runtime build && pnpm --filter @qodex/coding-pack-store build && playwright test",
     "tauri": "tauri"
   },
   "dependencies": {
@@ -16,6 +16,7 @@
     "@qodex/agent-runtime": "workspace:*",
     "@qodex/agentfuse-adapter": "workspace:*",
     "@qodex/coding-pack-runtime": "workspace:*",
+    "@qodex/coding-pack-store": "workspace:*",
     "@qodex/context-engine": "workspace:*",
     "@qodex/diff-engine": "workspace:*",
     "@qodex/marketplace-runtime": "workspace:^",

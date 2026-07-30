@@ -1,6 +1,11 @@
+mod coding_pack_database;
 mod managed_python;
 mod session_database;
 
+use coding_pack_database::{
+    CodingPackDatabase, CodingPackDestinationBinding, CodingPackEvent, CodingPackOperation,
+    ConfirmCodingPackOperationRequest, CreateCodingPackOperationRequest, DestinationPickerRequest,
+};
 use managed_python::ManagedPythonState;
 use serde::{Deserialize, Serialize};
 use session_database::{
@@ -153,6 +158,33 @@ async fn pick_project_directory(
 }
 
 #[tauri::command]
+async fn coding_pack_destination_pick_and_bind(
+    window: tauri::Window,
+    request: DestinationPickerRequest,
+    database: tauri::State<'_, CodingPackDatabase>,
+) -> Result<Option<CodingPackDestinationBinding>, String> {
+    let dialog_window = window.clone();
+    let selected = tauri::async_runtime::spawn_blocking(move || {
+        dialog_window
+            .dialog()
+            .file()
+            .set_title("Choose Coding Pack Destination")
+            .blocking_pick_folder()
+    })
+    .await
+    .map_err(|_| "coding_pack_destination_unavailable".to_string())?;
+    let Some(selected) = selected else {
+        return Ok(None);
+    };
+    let path = selected
+        .into_path()
+        .map_err(|_| "coding_pack_destination_unavailable".to_string())?;
+    database
+        .bind_destination(&path, request.created_at)
+        .map(Some)
+}
+
+#[tauri::command]
 fn cancel_project_command(
     run_id: String,
     state: tauri::State<'_, CommandRunState>,
@@ -245,6 +277,53 @@ fn session_persistence_info(state: tauri::State<'_, SessionDatabase>) -> Persist
     state.persistence_info()
 }
 
+#[tauri::command]
+fn coding_pack_store_create(
+    request: CreateCodingPackOperationRequest,
+    state: tauri::State<'_, CodingPackDatabase>,
+) -> Result<(), String> {
+    state.create_operation(request)
+}
+
+#[tauri::command]
+fn coding_pack_store_confirm(
+    request: ConfirmCodingPackOperationRequest,
+    state: tauri::State<'_, CodingPackDatabase>,
+) -> Result<(), String> {
+    state.append_confirmation(request)
+}
+
+#[tauri::command]
+fn coding_pack_store_get(
+    operation_id: String,
+    state: tauri::State<'_, CodingPackDatabase>,
+) -> Result<Option<CodingPackOperation>, String> {
+    state.get_operation(&operation_id)
+}
+
+#[tauri::command]
+fn coding_pack_store_list(
+    state: tauri::State<'_, CodingPackDatabase>,
+) -> Result<Vec<CodingPackOperation>, String> {
+    state.list_operations()
+}
+
+#[tauri::command]
+fn coding_pack_store_events(
+    operation_id: String,
+    state: tauri::State<'_, CodingPackDatabase>,
+) -> Result<Vec<CodingPackEvent>, String> {
+    state.list_events(&operation_id)
+}
+
+#[tauri::command]
+fn coding_pack_destination_get(
+    destination_binding_id: String,
+    state: tauri::State<'_, CodingPackDatabase>,
+) -> Result<Option<CodingPackDestinationBinding>, String> {
+    state.get_destination(&destination_binding_id)
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -254,12 +333,16 @@ pub fn run() {
             let database = SessionDatabase::open(app.handle())
                 .map_err(|error| -> Box<dyn std::error::Error> { error.into() })?;
             app.manage(database);
+            let coding_pack_database = CodingPackDatabase::open(app.handle())
+                .map_err(|error| -> Box<dyn std::error::Error> { error.into() })?;
+            app.manage(coding_pack_database);
             Ok(())
         })
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_fs::init())
         .invoke_handler(tauri::generate_handler![
             pick_project_directory,
+            coding_pack_destination_pick_and_bind,
             run_project_command,
             cancel_project_command,
             session_store_create,
@@ -272,6 +355,12 @@ pub fn run() {
             session_binding_get,
             session_binding_verify,
             session_persistence_info,
+            coding_pack_store_create,
+            coding_pack_store_confirm,
+            coding_pack_store_get,
+            coding_pack_store_list,
+            coding_pack_store_events,
+            coding_pack_destination_get,
             managed_python::managed_python_inspect,
             managed_python::managed_python_provision,
             managed_python::managed_python_verify,

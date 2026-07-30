@@ -1,6 +1,7 @@
 import {
   AlertTriangle,
   Check,
+  FolderOpen,
   PackageCheck,
   RefreshCw,
 } from "lucide-react";
@@ -26,6 +27,15 @@ const ERROR_COPY = {
   coding_pack_confirmation_mismatch: "The confirmation did not match this exact preview.",
 } as const;
 
+const STORE_ERROR_COPY = {
+  coding_pack_store_unavailable: "The local Coding Pack store is unavailable.",
+  coding_pack_proposal_invalid: "The export proposal no longer matches this exact preview.",
+  coding_pack_proposal_expired: "The export proposal expired. Create a new proposal.",
+  coding_pack_approval_mismatch: "The approval did not match this exact export proposal.",
+  coding_pack_destination_unavailable: "Choose an available destination again.",
+  coding_pack_persistence_failed: "The lifecycle update was not persisted. No files were written.",
+} as const;
+
 export function CodingPackPreviewPanel() {
   const {
     projectName,
@@ -39,6 +49,14 @@ export function CodingPackPreviewPanel() {
     isCodingPackPreviewLoading,
     refreshCodingPackPreview,
     confirmCurrentCodingPackPreview,
+    codingPackDestination,
+    codingPackOperation,
+    codingPackRecoveredOperation,
+    codingPackStoreError,
+    isCodingPackExportLoading,
+    chooseCurrentCodingPackDestination,
+    createCurrentCodingPackExportProposal,
+    confirmCurrentCodingPackExportProposal,
   } = useRuntimeContext();
 
   const canPreview = Boolean(projectName) && selectedFileCount > 0;
@@ -247,7 +265,144 @@ export function CodingPackPreviewPanel() {
               {isConfirmed ? "Confirmed" : "Confirm exact preview"}
             </button>
           </div>
+
+          <section
+            className="coding-pack-export-intent"
+            aria-labelledby="coding-pack-export-heading"
+            data-testid="coding-pack-export-intent"
+          >
+            <header>
+              <div>
+                <span className="coding-pack-export-kicker">Durable local intent</span>
+                <h3 id="coding-pack-export-heading">Export proposal</h3>
+              </div>
+              <span className="coding-pack-no-write" role="status">No files written</span>
+            </header>
+            <p>
+              Policy decision not yet evaluated. This records intent only and cannot export files.
+            </p>
+
+            <div className="coding-pack-export-actions">
+              <button
+                type="button"
+                className="qodex-button qodex-button-secondary"
+                disabled={!isConfirmed || isCodingPackExportLoading}
+                onClick={() => void chooseCurrentCodingPackDestination()}
+                aria-label="Choose Coding Pack export destination"
+                data-testid="coding-pack-destination"
+              >
+                <FolderOpen size={13} aria-hidden="true" />
+                {codingPackDestination ? "Change destination" : "Choose destination"}
+              </button>
+              <div className="coding-pack-destination-label" aria-live="polite">
+                <span>Destination</span>
+                <strong>{codingPackDestination?.displayLabel ?? "Not selected"}</strong>
+              </div>
+              <button
+                type="button"
+                className="qodex-button"
+                disabled={
+                  !isConfirmed
+                  || !codingPackDestination
+                  || codingPackOperation !== null
+                  || isCodingPackExportLoading
+                }
+                onClick={() => void createCurrentCodingPackExportProposal()}
+                aria-label="Create exact Coding Pack export proposal"
+                data-testid="coding-pack-create-proposal"
+              >
+                Create export proposal
+              </button>
+            </div>
+
+            {codingPackStoreError ? (
+              <div className="coding-pack-error" role="alert" data-testid="coding-pack-store-error">
+                <AlertTriangle size={14} aria-hidden="true" />
+                <span>{STORE_ERROR_COPY[codingPackStoreError]}</span>
+              </div>
+            ) : null}
+
+            {codingPackOperation ? (
+              <div className="coding-pack-proposal-result" aria-live="polite">
+                <div className="coding-pack-proposal-status">
+                  <strong>
+                    <Check size={13} aria-hidden="true" />
+                    {codingPackOperation.operation.state === "confirmed"
+                      ? "Export proposal confirmed"
+                      : "Export proposal created"}
+                  </strong>
+                  <span>{codingPackOperation.operation.state}</span>
+                </div>
+                <dl>
+                  <IdentityRow
+                    label="Proposal digest"
+                    value={codingPackOperation.proposal.proposalDigest}
+                  />
+                  <div>
+                    <dt>Expires</dt>
+                    <dd>
+                      <time dateTime={codingPackOperation.proposal.expiresAt}>
+                        {new Date(codingPackOperation.proposal.expiresAt).toLocaleString()}
+                      </time>
+                    </dd>
+                  </div>
+                </dl>
+                <button
+                  type="button"
+                  className="qodex-button"
+                  disabled={
+                    codingPackOperation.operation.state !== "proposed"
+                    || isCodingPackExportLoading
+                  }
+                  onClick={() => void confirmCurrentCodingPackExportProposal()}
+                  aria-label="Confirm exact Coding Pack export proposal"
+                  data-testid="coding-pack-confirm-proposal"
+                >
+                  {codingPackOperation.operation.state === "confirmed"
+                    ? "Proposal confirmed"
+                    : "Confirm export proposal"}
+                </button>
+              </div>
+            ) : null}
+          </section>
         </div>
+      ) : null}
+
+      {!codingPackPreview && codingPackRecoveredOperation ? (
+        <section
+          className="coding-pack-recovered-operation"
+          aria-labelledby="coding-pack-recovered-heading"
+          data-testid="coding-pack-recovered-operation"
+        >
+          <header>
+            <div>
+              <span>Recovered durable record</span>
+              <h3 id="coding-pack-recovered-heading">
+                Export proposal {codingPackRecoveredOperation.operation.state}
+              </h3>
+            </div>
+            <span className="coding-pack-no-write">No files written</span>
+          </header>
+          <p>
+            No decision or export was resumed. The previous preview confirmation was not restored.
+          </p>
+          {!codingPackRecoveredOperation.destination.restartAvailable ? (
+            <p>
+              The browser destination capability is unavailable after restart.
+              Select a destination and create a new proposal from a newly confirmed preview.
+            </p>
+          ) : null}
+          <dl>
+            <IdentityRow
+              label="Proposal digest"
+              value={codingPackRecoveredOperation.proposal.proposalDigest}
+            />
+            <div>
+              <dt>Destination</dt>
+              <dd>{codingPackRecoveredOperation.destination.displayLabel}</dd>
+            </div>
+          </dl>
+        </section>
       ) : null}
     </section>
   );

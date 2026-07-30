@@ -262,9 +262,9 @@ records the exact merged evidence chain and bounded non-claims. It is active on
 
 ## Coding Pack v0.7
 
-KerniQ now includes the browser-safe v0.7.1 manifest contracts and the merged
-v0.7.2 deterministic selection/privacy core. The v0.7.3 Draft implementation
-adds a read-only Desktop preview for explicitly selected files, exact authorized
+KerniQ now includes the browser-safe v0.7.1 manifest contracts, the merged
+v0.7.2 deterministic selection/privacy core, and the merged v0.7.3 read-only
+Desktop preview for explicitly selected files. v0.7.3 adds exact authorized
 byte reads, manual refresh, and an in-memory confirmation bound to that exact
 preview. A shared path-only read plan excludes private, credential-like,
 vendor, generated, project-ignored, and binary-like paths before source bytes
@@ -272,12 +272,16 @@ are requested. Candidate count is checked before reading, cumulative eligible
 bytes are bounded during reading, and selected-path identity is recomputed from
 the complete selection evidence. The Tauri path rejects symlinks and junctions
 observed during bounded pre-read checks; it does not claim race-free protection
-against concurrent filesystem replacement. The
+against concurrent filesystem replacement. The v0.7.4.1 Draft implementation
+adds a dedicated durable Coding Pack store, opaque local destination bindings,
+exact export proposals, and separate export approvals. It records only
+`PACK_PROPOSED` and `PACK_CONFIRMED`; confirmation reports “No files written”
+and does not imply a policy decision. The
 [v0.7 plan](docs/development/kerniq_v0_7_coding_pack_product_integration_planning.md)
 and [ADR-022](qodex-config/adr/ADR-022-Coding-Pack-Product-Integration.md)
 define the remaining durable export lifecycle. Automatic repository discovery,
-`.gitignore` parsing, content secret scanning, persistent Coding Pack storage,
-physical export, Action Runtime, and AgentFuse integration are not implemented.
+`.gitignore` parsing, content secret scanning, physical export, Action Runtime,
+and AgentFuse integration are not implemented.
 The v0.6.1 Project Command freeze is unchanged.
 
 ---
@@ -289,9 +293,10 @@ The authoritative roadmap is maintained in
 v0.6 is merged and frozen as the managed Python and universal action
 foundation. The bounded native Desktop Project Command path is implemented and
 its v0.6.1.6 implementation, real proof, and final freeze seal are merged. The
-v0.6.1 Project Command scope is frozen. Coding Pack v0.7.2 is merged and the
-selected-file preview/confirmation v0.7.3 slice is in Draft PR review. Patch
-remains outside this scope.
+v0.6.1 Project Command scope is frozen. Coding Pack v0.7.3 is merged through
+`5d5152ca25c0fc2772cec730dd6229dd44aa88cb`; the v0.7.4.1 durable
+store/proposal slice is implemented for Draft PR review. Patch remains outside
+this scope.
 Installer work is planned for v0.8, and the Stage 2 namespace-wide rename
 remains explicitly deferred.
 

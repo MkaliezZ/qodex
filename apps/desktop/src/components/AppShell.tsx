@@ -20,6 +20,11 @@ import type { ApplyResult, PatchError, PatchProposal } from "@qodex/diff-engine"
 import type { ProjectAccessSource } from "../platform/types";
 import type { AgentLoopTask } from "@qodex/agent-runtime";
 import type { CodingPackPurpose } from "@qodex/coding-pack-runtime";
+import type {
+  CodingPackDestinationBinding,
+  CodingPackOperationSnapshot,
+  CodingPackStoreErrorCode,
+} from "@qodex/coding-pack-store";
 import type { ProposalOrigin } from "../hooks/proposalOwnership";
 import { ProjectCommandRealTauriProof } from "./ProjectCommandRealTauriProof";
 import type {
@@ -58,6 +63,14 @@ interface RuntimeContextValue {
   isCodingPackPreviewLoading: boolean;
   refreshCodingPackPreview: () => Promise<void>;
   confirmCurrentCodingPackPreview: () => Promise<void>;
+  codingPackDestination: CodingPackDestinationBinding | null;
+  codingPackOperation: CodingPackOperationSnapshot | null;
+  codingPackRecoveredOperation: CodingPackOperationSnapshot | null;
+  codingPackStoreError: CodingPackStoreErrorCode | null;
+  isCodingPackExportLoading: boolean;
+  chooseCurrentCodingPackDestination: () => Promise<void>;
+  createCurrentCodingPackExportProposal: () => Promise<void>;
+  confirmCurrentCodingPackExportProposal: () => Promise<void>;
   lastBundle: ContextBundle | null;
   estimatedTokens: number;
   pendingProposal: PatchProposal | null;
