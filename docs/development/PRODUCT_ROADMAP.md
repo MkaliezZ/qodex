@@ -84,7 +84,9 @@ scope is frozen and the next implementation milestone has not started.
 portable manifest merged in `d01ad3b71a83efe906c262fa466417d325969946`;
 v0.7.2 deterministic selection and path-based privacy core merged in
 `1a20c3920ccb83a0c0306ae175be933b24aac161`; v0.7.3 selected-file preview and
-exact ephemeral confirmation implemented for Draft PR review
+exact ephemeral confirmation merged in
+`5d5152ca25c0fc2772cec730dd6229dd44aa88cb`; v0.7.4.1 durable store and export
+proposal contracts implemented for Draft PR review
 
 The source audit found authorized project reads, selected-file context
 assembly, project binding, action contracts, and Session persistence, but no
@@ -124,9 +126,19 @@ from included and excluded evidence and bound to the preview. Exact confirmation
 is local, in-memory, invalidated by project/selection/purpose/refresh changes,
 and grants no export authority. Tauri rejects links observed during pre-read
 checks but does not claim race-free protection against concurrent replacement.
-Automatic discovery, `.gitignore` parsing, content secret scanning, persistent
-Coding Pack storage, physical export, Action Runtime, and AgentFuse integration
-remain unimplemented.
+v0.7.4.1 adds the dedicated `kerniq.coding-pack.store.v1` lifecycle, separate
+Tauri SQLite storage, opaque destination bindings, exact proposal digests, and
+separate export approval. Only `PACK_PROPOSED` and `PACK_CONFIRMED` are
+implemented. Persistence failures fail closed and restart never advances an
+operation automatically. Browser directory authority remains session-only;
+Tauri absolute destination paths remain private to the native binding store.
+The reviewed correction adds UTF-8 canonical identity, immutable destination
+bindings, atomic snapshots, native pre-persistence digest/chronology validation,
+24-hour proposal/approval bounds, and SQLite `synchronous=FULL`.
+
+Automatic discovery, `.gitignore` parsing, content secret scanning, physical
+export, `PACK_DECIDED`, Action Runtime, and AgentFuse integration remain
+unimplemented.
 
 ### v0.8 - Product Packaging and Closed Beta
 

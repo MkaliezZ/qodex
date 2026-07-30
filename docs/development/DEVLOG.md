@@ -1296,3 +1296,57 @@ ARBITRARY_FILE_WRITE_ADDED=false
 ARBITRARY_SHELL_ADDED=false
 WORKFLOW_CHANGED=false
 ```
+
+### KerniQ v0.7.4.1 Durable Coding Pack Store and Export Proposal Contracts
+
+**Date:** 2026-07-30  |  **Status:** Implemented for Draft PR review
+
+v0.7.3 merged through exact-head merge commit
+`5d5152ca25c0fc2772cec730dd6229dd44aa88cb`. This bounded follow-up adds the
+dedicated browser-safe `@qodex/coding-pack-store` package and a separate Tauri
+`kerniq-coding-pack.sqlite3` database using schema
+`kerniq.coding-pack.store.v1`. Durable operations, events, and destination
+bindings do not enter Session Runtime.
+
+The lifecycle implements only `PACK_PROPOSED` and `PACK_CONFIRMED`. Event IDs
+and sequences are unique, payloads are bounded and digest-verified, state is
+reconstructed from events, and corrupt evidence fails closed. An export
+proposal binds the exact preview identity, manifest digest, and opaque
+destination identity. A separate export approval binds the exact operation and
+proposal digest; preview confirmation is reverified but does not authorize
+export.
+
+Tauri keeps the absolute destination only in the private native binding table.
+Browser directory handles remain in memory while serializable operation
+evidence remains restart-readable. The UI reports `proposed` or `confirmed`,
+“Policy decision not yet evaluated,” and “No files written.” Persistence
+failure does not advance UI state.
+
+The final PR correction replaces locale-sensitive canonical ordering with
+UTF-8 byte ordering, rejects malformed Unicode and non-canonical identity,
+enforces exact digest/pack/destination formats and 24-hour lifetime bounds,
+makes destination bindings immutable, and reads operation/event/destination
+evidence through one atomic adapter snapshot. The Tauri boundary validates
+complete proposal and approval evidence and recomputes payload digests before
+transactional persistence. Event timestamps must match their payload evidence;
+historical confirmed records remain readable after expiry. SQLite continues to
+use WAL and now uses `synchronous=FULL`; claims remain bounded to SQLite and the
+underlying filesystem.
+
+```text
+V0_7_3_MERGED=true
+CODING_PACK_STORE_IMPLEMENTED=true
+CODING_PACK_STORE_SCHEMA_V1=true
+PACK_PROPOSED_IMPLEMENTED=true
+PACK_CONFIRMED_IMPLEMENTED=true
+PACK_DECIDED_IMPLEMENTED=false
+CODING_PACK_EXPORT_IMPLEMENTED=false
+DESTINATION_FILES_WRITTEN=false
+ACTION_RUNTIME_CONNECTED=false
+AGENTFUSE_CONNECTED=false
+SESSION_SCHEMA_CHANGED=false
+PROJECT_COMMAND_FREEZE_CHANGED=false
+PATCH_MIGRATED=false
+ARBITRARY_SHELL_ADDED=false
+WORKFLOW_CHANGED=false
+```

@@ -69,6 +69,15 @@
   .coding-pack-file-columns {
     grid-template-columns: 1fr;
   }
+
+  .coding-pack-export-actions {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .coding-pack-destination-label {
+    width: 100%;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {

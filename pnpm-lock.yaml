@@ -26,6 +26,9 @@ importers:
       '@qodex/coding-pack-runtime':
         specifier: workspace:*
         version: link:../../packages/coding-pack-runtime
+      '@qodex/coding-pack-store':
+        specifier: workspace:*
+        version: link:../../packages/coding-pack-store
       '@qodex/context-engine':
         specifier: workspace:*
         version: link:../../packages/context-engine
@@ -133,6 +136,15 @@ importers:
         version: 2.1.9(@types/node@22.20.1)
 
   packages/coding-pack-runtime:
+    devDependencies:
+      typescript:
+        specifier: ^5.5.0
+        version: 5.9.3
+      vitest:
+        specifier: ^2.1.9
+        version: 2.1.9(@types/node@22.20.1)
+
+  packages/coding-pack-store:
     devDependencies:
       typescript:
         specifier: ^5.5.0

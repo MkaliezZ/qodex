@@ -44,6 +44,8 @@ test.describe("KerniQ v0.7.3 selected-file Coding Pack preview", () => {
     await expect(preview.getByText("Source fingerprint")).toBeVisible();
     await expect(preview.getByText("Pack ID")).toBeVisible();
     await expect(preview.getByText("Manifest digest")).toBeVisible();
+    await expect(preview.getByTestId("coding-pack-destination")).toBeDisabled();
+    await expect(preview.getByTestId("coding-pack-create-proposal")).toBeDisabled();
 
     const confirm = preview.getByTestId("coding-pack-confirm");
     await confirm.focus();
@@ -51,6 +53,7 @@ test.describe("KerniQ v0.7.3 selected-file Coding Pack preview", () => {
     await confirm.press("Enter");
     await expect(preview.getByTestId("coding-pack-state")).toHaveText("Confirmed");
     await expect(preview.getByText("Exact preview confirmed")).toBeVisible();
+    await expect(preview.getByTestId("coding-pack-destination")).toBeEnabled();
 
     await purpose.selectOption("review_handoff");
     await expect(preview.getByTestId("coding-pack-state")).toHaveText("Stale");
@@ -83,5 +86,57 @@ test.describe("KerniQ v0.7.3 selected-file Coding Pack preview", () => {
     await expect(page.locator("body")).not.toContainText("privateRootPath");
     await expect(page.locator("body")).not.toContainText(projectFiles["src/math.ts"]);
     expect((await readProjectFixture(page)).writes).toBe(0);
+  });
+
+  test("durably proposes and confirms export intent without writing destination files", async ({ page }) => {
+    await installProjectFixture(page, projectFiles);
+    await setupApp(page);
+    await page.getByRole("button", { name: "Open Project" }).click();
+    await page.getByRole("button", { name: "Files" }).click();
+    await page.locator('button[title="src/math.ts"]').click();
+
+    const preview = page.getByTestId("coding-pack-preview");
+    await preview.getByRole("button", { name: "Create Coding Pack preview" }).click();
+    await preview.getByTestId("coding-pack-confirm").click();
+    const exportIntent = preview.getByTestId("coding-pack-export-intent");
+    await expect(exportIntent.getByText("No files written")).toBeVisible();
+    await expect(exportIntent.getByText("Policy decision not yet evaluated")).toBeVisible();
+
+    const destinationButton = preview.getByTestId("coding-pack-destination");
+    await destinationButton.focus();
+    await expect(destinationButton).toBeFocused();
+    await destinationButton.press("Enter");
+    await expect(exportIntent.getByText("kerniq-smoke")).toBeVisible();
+
+    const createProposal = preview.getByTestId("coding-pack-create-proposal");
+    await expect(createProposal).toBeEnabled();
+    await createProposal.click();
+    await expect(exportIntent.getByText("Export proposal created")).toBeVisible();
+    await expect(exportIntent.getByText("Proposal digest")).toBeVisible();
+    await expect(exportIntent.getByText("Expires")).toBeVisible();
+
+    const confirmProposal = preview.getByTestId("coding-pack-confirm-proposal");
+    await confirmProposal.focus();
+    await expect(confirmProposal).toBeFocused();
+    await confirmProposal.press("Enter");
+    await expect(exportIntent.getByText("Export proposal confirmed")).toBeVisible();
+    await expect(confirmProposal).toBeDisabled();
+    await expect(confirmProposal).toHaveText("Proposal confirmed");
+
+    await expect(page.locator("body")).not.toContainText("browser://");
+    await expect(page.locator("body")).not.toContainText(projectFiles["src/math.ts"]);
+    await expect(exportIntent).not.toContainText("Allowed");
+    await expect(exportIntent).not.toContainText("Exported");
+    await expect(exportIntent).not.toContainText("Completed");
+    expect((await readProjectFixture(page)).writes).toBe(0);
+
+    await page.reload();
+    await page.getByRole("button", { name: "Files" }).click();
+    const recovered = page.getByTestId("coding-pack-recovered-operation");
+    await expect(recovered.getByText("Export proposal confirmed")).toBeVisible();
+    await expect(recovered.getByText("No files written")).toBeVisible();
+    await expect(recovered.getByText("No decision or export was resumed")).toBeVisible();
+    await expect(recovered.getByText("browser destination capability is unavailable")).toBeVisible();
+    await expect(page.getByText("Exact preview confirmed")).toHaveCount(0);
   });
 });

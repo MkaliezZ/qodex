@@ -279,7 +279,7 @@ checks reject symlinks and junctions observed before the path-based open; they
 do not establish a race-free open-by-handle guarantee against concurrent local
 replacement.
 
-The Desktop v0.7.3 Draft slice converts only explicitly selected paths into
+The Desktop v0.7.3 slice converts only explicitly selected paths into
 path-only `explicit_selection` metadata. Coding Pack Runtime applies the same
 shared pre-read classifier used by direct selection, so byte-independent
 private and binary exclusions are recorded without reading those files.
@@ -293,18 +293,42 @@ ephemeral, is invalidated by binding/selection/purpose/refresh changes, and does
 not authorize export. Read-required source-byte changes are re-read on manual
 refresh; there is no watcher.
 
-A future dedicated versioned store
-owns one export lifecycle, while a narrow native adapter owns staged,
-no-overwrite physical export. Session Runtime may reference a verified
-completed artifact but is not a competing lifecycle owner.
+v0.7.4.1 introduces `@qodex/coding-pack-store` as the dedicated versioned
+lifecycle owner. Tauri persists `coding_pack_operations`,
+`coding_pack_events`, and `coding_pack_destination_bindings` in the separate
+`kerniq-coding-pack.sqlite3` database under schema
+`kerniq.coding-pack.store.v1`; Session tables and events are unchanged.
+Browser development persists only serializable lifecycle records while keeping
+the authorized directory handle in an in-memory capability map. Tauri keeps
+the absolute destination path only in the private destination-binding table;
+portable manifests and export proposals contain only opaque binding identity.
+Destination bindings are immutable: repeat registration is accepted only when
+the complete public identity and private native path are unchanged, and the
+first creation timestamp remains authoritative. Operation, event, and
+destination evidence is read as one adapter snapshot; Tauri performs that read
+inside one SQLite transaction.
+
+This slice derives state from bounded, digest-verified `PACK_PROPOSED` and
+`PACK_CONFIRMED` events. Preview confirmation remains separate from export
+approval. Durable confirmation does not evaluate policy, start export, or
+write files. Canonical identity uses deterministic UTF-8 byte ordering and
+well-formed Unicode, proposals and approvals cannot exceed 24 hours, native
+writes independently recompute proposal and event digests and verify chronology,
+and SQLite uses WAL with `synchronous=FULL`. These are SQLite and underlying
+filesystem durability guarantees, not hardware-level persistence claims. A
+later narrow native adapter may own staged, no-overwrite
+physical export only after a durable AgentFuse decision. Session Runtime may
+eventually reference a verified completed artifact but is not a competing
+lifecycle owner.
 
 Read-only deterministic selection uses project capability and privacy controls
 without an AgentFuse decision. Writing/export requires explicit product
 authorization plus a separately versioned AgentFuse export-policy decision,
 durably recorded before export start. AgentFuse does not select files or judge
 content quality. Automatic discovery, `.gitignore` parsing, content secret
-scanning, persistent storage, physical export, Action Runtime, and AgentFuse
-are not connected in v0.7.3. The v0.6.1 Project Command freeze is unchanged.
+scanning, physical export, Action Runtime, and AgentFuse are not connected in
+v0.7.4.1. `PACK_DECIDED`, export-start, and export-completed events do not
+exist in this slice. The v0.6.1 Project Command freeze is unchanged.
 
 Details:
 

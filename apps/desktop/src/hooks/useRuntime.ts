@@ -27,6 +27,12 @@ import type { FileContent, ProjectTree } from "@qodex/project-runtime";
 import type { ModelProvider } from "@qodex/provider-sdk";
 import type { AgentFuseBridgeClient } from "@qodex/agentfuse-adapter";
 import type { CodingPackPurpose } from "@qodex/coding-pack-runtime";
+import {
+  CodingPackStoreError,
+  type CodingPackDestinationBinding,
+  type CodingPackOperationSnapshot,
+  type CodingPackStoreErrorCode,
+} from "@qodex/coding-pack-store";
 import { useProviderContext } from "../components/ProviderContext";
 import { useSessionContext } from "../components/SessionContext";
 import {
@@ -36,11 +42,20 @@ import {
   createSelectedFileCodingPackPreview,
   digestSelectedPaths,
   isCodingPackPreviewStale,
+  verifyCodingPackPreviewConfirmation,
   type CodingPackPreview,
   type CodingPackPreviewConfirmation,
   type CodingPackPreviewErrorCode,
 } from "../codingPack/preview";
 import { openProjectDirectory } from "../platform/openProjectDirectory";
+import {
+  chooseCodingPackDestination,
+  hasCodingPackDestinationCapability,
+} from "../platform/codingPackDestination";
+import {
+  createVerifiedCodingPackExportProposal,
+  getCodingPackStore,
+} from "../platform/codingPackStore";
 import { createManagedPythonBridge } from "../platform/managedPythonBridge";
 import { projectBindingIdentity, type OpenProjectBindingIdentity } from "../platform/projectBinding";
 import { ProjectAccessError, type ProjectAccessSource } from "../platform/types";
@@ -82,6 +97,7 @@ export function useRuntime() {
   const projectGenerationRef = useRef(0);
   const selectedPathsRevisionRef = useRef(0);
   const codingPackPurposeRef = useRef<CodingPackPurpose>("repository_orientation");
+  const codingPackStoreRef = useRef(getCodingPackStore());
   const ctxRef = useRef(new ContextEngine());
   const diffRef = useRef(new DiffEngine());
   const rawResponseRef = useRef("");
@@ -112,6 +128,15 @@ export function useRuntime() {
   const [codingPackPreviewError, setCodingPackPreviewError] =
     useState<CodingPackPreviewErrorCode | null>(null);
   const [isCodingPackPreviewLoading, setIsCodingPackPreviewLoading] = useState(false);
+  const [codingPackDestination, setCodingPackDestination] =
+    useState<CodingPackDestinationBinding | null>(null);
+  const [codingPackOperation, setCodingPackOperation] =
+    useState<CodingPackOperationSnapshot | null>(null);
+  const [codingPackRecoveredOperation, setCodingPackRecoveredOperation] =
+    useState<CodingPackOperationSnapshot | null>(null);
+  const [codingPackStoreError, setCodingPackStoreError] =
+    useState<CodingPackStoreErrorCode | null>(null);
+  const [isCodingPackExportLoading, setIsCodingPackExportLoading] = useState(false);
 
   const [lastBundle, setLastBundle] = useState<ContextBundle | null>(null);
   const [estimatedTokens, setEstimatedTokens] = useState(0);
@@ -127,6 +152,21 @@ export function useRuntime() {
   const [isRollingBack, setIsRollingBack] = useState(false);
   const [agentRollbackAvailable, setAgentRollbackAvailable] = useState(false);
   const [agentRollbackReason, setAgentRollbackReason] = useState<string | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    void codingPackStoreRef.current.listCodingPackOperations()
+      .then((operations) => {
+        if (active) setCodingPackRecoveredOperation(operations[0] ?? null);
+      })
+      .catch((error) => {
+        if (active) setCodingPackStoreError(codingPackStoreErrorCode(
+          error,
+          "coding_pack_store_unavailable",
+        ));
+      });
+    return () => { active = false; };
+  }, []);
 
   const setProposalState = useCallback((proposal: PatchProposal | null, origin: ProposalOrigin | null) => {
     pendingProposalRef.current = proposal;
@@ -268,6 +308,10 @@ export function useRuntime() {
       setCodingPackConfirmation(null);
       setCodingPackPreviewError(null);
       setIsCodingPackPreviewLoading(false);
+      setCodingPackDestination(null);
+      setCodingPackOperation(null);
+      setCodingPackStoreError(null);
+      setIsCodingPackExportLoading(false);
       setProposalState(null, null);
       setProposalNotice(null);
       setCurrentProposal(null);
@@ -304,6 +348,8 @@ export function useRuntime() {
     setSelectedPathsDigest(null);
     setCodingPackConfirmation(null);
     setCodingPackPreviewError(null);
+    setCodingPackOperation(null);
+    setCodingPackStoreError(null);
     let totalSize = 0;
     for (const selectedPath of selectedPaths) {
       const entry = project.index?.files.find((file) => file.path === selectedPath);
@@ -325,6 +371,8 @@ export function useRuntime() {
     setCodingPackPurposeState(purpose);
     setCodingPackConfirmation(null);
     setCodingPackPreviewError(null);
+    setCodingPackOperation(null);
+    setCodingPackStoreError(null);
   }, []);
 
   const refreshCodingPackPreview = useCallback(async () => {
@@ -346,6 +394,8 @@ export function useRuntime() {
     setCodingPackPreviewError(null);
     setCodingPackPreview(null);
     setCodingPackConfirmation(null);
+    setCodingPackOperation(null);
+    setCodingPackStoreError(null);
     try {
       const preview = await createSelectedFileCodingPackPreview({
         projectBindingId: binding.bindingId,
@@ -397,6 +447,8 @@ export function useRuntime() {
         selectionRulesVersion: codingPackSelectionRulesVersion,
       });
       setCodingPackConfirmation(confirmation);
+      setCodingPackOperation(null);
+      setCodingPackStoreError(null);
       setCodingPackPreviewError(null);
     } catch (error) {
       setCodingPackConfirmation(null);
@@ -407,6 +459,124 @@ export function useRuntime() {
       );
     }
   }, [codingPackPreview, selectedPathsDigest]);
+
+  const chooseCurrentCodingPackDestination = useCallback(async () => {
+    if (!codingPackPreview || !codingPackConfirmation || selectedPathsDigest === null) {
+      setCodingPackStoreError("coding_pack_proposal_invalid");
+      return;
+    }
+    setIsCodingPackExportLoading(true);
+    setCodingPackStoreError(null);
+    try {
+      await verifyCodingPackPreviewConfirmation(codingPackConfirmation, codingPackPreview);
+      const destination = await chooseCodingPackDestination(codingPackStoreRef.current);
+      if (destination) {
+        setCodingPackDestination(destination);
+        setCodingPackOperation(null);
+      }
+    } catch (error) {
+      setCodingPackStoreError(codingPackStoreErrorCode(
+        error,
+        "coding_pack_destination_unavailable",
+      ));
+    } finally {
+      setIsCodingPackExportLoading(false);
+    }
+  }, [codingPackConfirmation, codingPackPreview, selectedPathsDigest]);
+
+  const createCurrentCodingPackExportProposal = useCallback(async () => {
+    const preview = codingPackPreview;
+    const confirmation = codingPackConfirmation;
+    const destination = codingPackDestination;
+    const binding = projectBindingRef.current;
+    if (
+      !preview
+      || !confirmation
+      || !destination
+      || !binding
+      || selectedPathsDigest === null
+      || !hasCodingPackDestinationCapability(destination)
+      || isCodingPackPreviewStale(preview, {
+        projectBindingId: binding.bindingId,
+        projectGeneration: projectGenerationRef.current,
+        selectedPathsDigest,
+        purpose: codingPackPurposeRef.current,
+        selectionRulesVersion: codingPackSelectionRulesVersion,
+      })
+    ) {
+      setCodingPackStoreError(
+        destination && !hasCodingPackDestinationCapability(destination)
+          ? "coding_pack_destination_unavailable"
+          : "coding_pack_proposal_invalid",
+      );
+      return;
+    }
+    setIsCodingPackExportLoading(true);
+    setCodingPackStoreError(null);
+    try {
+      const snapshot = await createVerifiedCodingPackExportProposal({
+        store: codingPackStoreRef.current,
+        preview,
+        confirmation,
+        proposalInput: {
+          preview: {
+            projectBindingId: preview.projectBindingId,
+            projectGeneration: preview.projectGeneration,
+            candidatePathsDigest: preview.selection.candidatePathsDigest,
+            sourceFingerprint: preview.selection.sourceFingerprint,
+            packId: preview.selection.packId,
+            manifestDigest: preview.manifest.manifestDigest,
+          },
+          previewConfirmation: {
+            projectBindingId: confirmation.projectBindingId,
+            projectGeneration: confirmation.projectGeneration,
+            selectedPathsDigest: confirmation.selectedPathsDigest,
+            sourceFingerprint: confirmation.sourceFingerprint,
+            packId: confirmation.packId,
+            manifestDigest: confirmation.manifestDigest,
+            confirmedAt: confirmation.confirmedAt,
+          },
+          destination,
+        },
+      });
+      setCodingPackOperation(snapshot);
+      setCodingPackRecoveredOperation(snapshot);
+    } catch (error) {
+      setCodingPackStoreError(codingPackStoreErrorCode(error));
+    } finally {
+      setIsCodingPackExportLoading(false);
+    }
+  }, [
+    codingPackConfirmation,
+    codingPackDestination,
+    codingPackPreview,
+    selectedPathsDigest,
+  ]);
+
+  const confirmCurrentCodingPackExportProposal = useCallback(async () => {
+    const snapshot = codingPackOperation;
+    if (!snapshot || snapshot.operation.state !== "proposed") {
+      setCodingPackStoreError("coding_pack_approval_mismatch");
+      return;
+    }
+    setIsCodingPackExportLoading(true);
+    setCodingPackStoreError(null);
+    try {
+      const approval = codingPackStoreRef.current.createCodingPackExportApproval({
+        operationId: snapshot.operation.operationId,
+        proposalDigest: snapshot.proposal.proposalDigest,
+        expiresAt: snapshot.proposal.expiresAt,
+      });
+      const confirmed = await codingPackStoreRef.current
+        .confirmCodingPackExportProposal(approval);
+      setCodingPackOperation(confirmed);
+      setCodingPackRecoveredOperation(confirmed);
+    } catch (error) {
+      setCodingPackStoreError(codingPackStoreErrorCode(error));
+    } finally {
+      setIsCodingPackExportLoading(false);
+    }
+  }, [codingPackOperation]);
 
   const createPatchAdapter = useCallback((project: ProjectRuntime): AgentPatchAdapter => ({
     prepare: async (response, taskId) => {
@@ -794,6 +964,14 @@ export function useRuntime() {
     isCodingPackPreviewLoading,
     refreshCodingPackPreview,
     confirmCurrentCodingPackPreview,
+    codingPackDestination,
+    codingPackOperation,
+    codingPackRecoveredOperation,
+    codingPackStoreError,
+    isCodingPackExportLoading,
+    chooseCurrentCodingPackDestination,
+    createCurrentCodingPackExportProposal,
+    confirmCurrentCodingPackExportProposal,
     lastBundle,
     estimatedTokens,
     pendingProposal,
@@ -833,4 +1011,11 @@ function createSingleTurnRuntime(
 function sessionTitle(prompt: string): string {
   const normalized = prompt.trim().replace(/\s+/g, " ");
   return normalized.length <= 72 ? normalized : `${normalized.slice(0, 69)}...`;
+}
+
+function codingPackStoreErrorCode(
+  error: unknown,
+  fallback: CodingPackStoreErrorCode = "coding_pack_persistence_failed",
+): CodingPackStoreErrorCode {
+  return error instanceof CodingPackStoreError ? error.code : fallback;
 }

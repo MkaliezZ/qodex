@@ -382,3 +382,57 @@ ARBITRARY_FILE_WRITE_ADDED=false
 ARBITRARY_SHELL_ADDED=false
 WORKFLOW_CHANGED=false
 ```
+
+## v0.7.4.1 Durable Store and Proposal Boundary
+
+The fourth bounded implementation slice introduces the dedicated
+`@qodex/coding-pack-store` package and schema
+`kerniq.coding-pack.store.v1`. Tauri uses a separate
+`kerniq-coding-pack.sqlite3` database with
+`coding_pack_operations`, `coding_pack_events`, and
+`coding_pack_destination_bindings`; it does not add Coding Pack rows or events
+to Session Runtime.
+
+Only `PACK_PROPOSED` and `PACK_CONFIRMED` are valid in this slice. Events have
+strict per-operation sequence, unique IDs, bounded typed payloads, and
+recomputed payload digests. Operation state is reconstructed from those
+events. The proposal uses schema
+`kerniq.coding-pack.export-proposal.v1` and canonical SHA-256 identity. Export
+approval uses `kerniq.coding-pack.export-approval.v1` and binds the exact
+operation and proposal digest. Preview confirmation is verified again but
+cannot serve as export approval.
+
+Destination bindings expose only an opaque ID, local fingerprint, display
+label, creation time, and restart availability. A Tauri absolute destination
+path is stored only in the private native binding table. Browser directory
+handles remain in the in-memory capability layer and cannot be recreated from
+the durable display label.
+
+Canonical proposal and event identity sorts object keys by UTF-8 bytes and
+rejects malformed Unicode, unsafe numbers, and non-exact identity formats.
+Proposal and approval lifetimes are capped at 24 hours. Destination bindings
+are immutable and preserve their first creation timestamp. Store reads return
+operation, events, and destination from one snapshot; Tauri uses one SQLite
+read transaction. Native writes independently validate typed proposal and
+approval evidence, recompute canonical digests, enforce chronology, and fail
+before insertion when identity is invalid. SQLite uses WAL and
+`synchronous=FULL`; no stronger hardware-persistence claim is made.
+
+Both proposal and confirmation state appear only after their durable
+transaction succeeds. Restart reads state without advancing it. There is no
+AgentFuse call, Action Runtime dispatch, `PACK_DECIDED`,
+`PACK_EXPORT_STARTED`, `PACK_EXPORT_COMPLETED`, staging directory, destination
+write, physical export, or Project Command change.
+
+```text
+CODING_PACK_STORE_IMPLEMENTED=true
+PACK_PROPOSED_IMPLEMENTED=true
+PACK_CONFIRMED_IMPLEMENTED=true
+PACK_DECIDED_IMPLEMENTED=false
+CODING_PACK_EXPORT_IMPLEMENTED=false
+DESTINATION_FILES_WRITTEN=false
+ACTION_RUNTIME_CONNECTED=false
+AGENTFUSE_CONNECTED=false
+SESSION_SCHEMA_CHANGED=false
+PROJECT_COMMAND_FREEZE_CHANGED=false
+```
