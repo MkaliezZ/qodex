@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   createCodingPackFileEntry,
-  createCodingPackManifest,
+  createCodingPackManifestFromSelection,
   selectCodingPackSources,
   type CodingPackCandidateInput,
   type CodingPackSelectionInput,
@@ -65,21 +65,19 @@ describe("Coding Pack deterministic selection", () => {
     const first = await selectCodingPackSources(selectionInput(candidates));
     const second = await selectCodingPackSources(selectionInput([...candidates].reverse()));
 
-    const firstManifest = await createCodingPackManifest({
-      purpose: "repository_orientation",
-      selectionRules: rules(),
-      sources: first.included,
-      exclusions: first.exclusions,
+    const firstManifest = await createCodingPackManifestFromSelection({
+      selection: first,
       generatedAt: GENERATED_AT,
     });
-    const secondManifest = await createCodingPackManifest({
-      purpose: "repository_orientation",
-      selectionRules: rules(),
-      sources: second.included,
-      exclusions: second.exclusions,
+    const secondManifest = await createCodingPackManifestFromSelection({
+      selection: second,
       generatedAt: GENERATED_AT,
     });
 
+    expect(first.purpose).toBe("repository_orientation");
+    expect(first.selectionRulesVersion).toBe(rules().version);
+    expect(first.sourceFingerprint).toBe(firstManifest.sourceFingerprint);
+    expect(first.packId).toBe(firstManifest.packId);
     expect(secondManifest.sourceFingerprint).toBe(firstManifest.sourceFingerprint);
     expect(secondManifest.packId).toBe(firstManifest.packId);
   });
@@ -165,18 +163,18 @@ describe("Coding Pack selection contracts and immutability", () => {
     },
   );
 
-  it("rejects unknown rules versions and malformed ignore reason codes", async () => {
+  it("rejects unknown rules versions and caller-controlled ignore reasons", async () => {
     await expect(selectCodingPackSources({
       ...selectionInput([]),
       selectionRules: rules("future-rules-v2"),
     })).rejects.toThrow(/reviewed KerniQ Coding Pack rules version/u);
 
     await expect(selectCodingPackSources(selectionInput([
-      candidate("src/a.ts", "a", {
-        ignoredByProjectRules: true,
-        projectIgnoreReasonCode: "private reason",
-      }),
-    ]))).rejects.toThrow(/portable machine-readable identifier/u);
+      {
+        ...candidate("src/a.ts", "a", { ignoredByProjectRules: true }),
+        projectIgnoreReasonCode: "hard_private_path",
+      } as CodingPackCandidateInput,
+    ]))).rejects.toThrow(/unsupported field/u);
   });
 
   it("rejects invalid paths, malformed Unicode, and exact duplicates", async () => {
@@ -223,6 +221,8 @@ describe("Coding Pack selection contracts and immutability", () => {
     expect(Object.isFrozen(result.exclusions[0])).toBe(true);
     expect(Object.isFrozen(result.warnings)).toBe(true);
     expect(Object.isFrozen(result.totals)).toBe(true);
+    expect(result.sourceFingerprint).toMatch(/^sha256:[0-9a-f]{64}$/u);
+    expect(result.packId).toBe(`pack-${result.sourceFingerprint.slice("sha256:".length)}`);
     expect(result.warnings).toEqual([]);
     expect(result.totals).toEqual({
       candidateCount: 2,

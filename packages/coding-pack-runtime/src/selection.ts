@@ -1,28 +1,33 @@
 import { compareUtf8 } from "./canonical.js";
 import {
-  CODING_PACK_MAX_REASON_BYTES,
+  CODING_PACK_MAX_CANDIDATE_COUNT,
+  CODING_PACK_MAX_ELIGIBLE_CANDIDATE_BYTES,
   CODING_PACK_SELECTION_RULES_VERSION,
 } from "./constants.js";
 import { CodingPackManifestError } from "./errors.js";
+import { computeCodingPackSourceIdentity } from "./identity.js";
 import { createCodingPackFileEntry } from "./manifest.js";
+import {
+  assertNoPortablePathCollisions,
+  freezeCodingPackSelectionResult,
+} from "./selection-result.js";
 import type {
   CodingPackCandidateOriginCode,
   CodingPackExclusion,
-  CodingPackFileEntry,
   CodingPackSelectionInput,
   CodingPackSelectionResult,
   CodingPackSelectionRules,
-  CodingPackSelectionWarning,
+  CodingPackPurpose,
 } from "./types.js";
 import {
-  rejectPortableLocalIdentity,
   requireExactKeys,
   requirePlainRecord,
-  requirePortableMachineIdentifier,
   validatePortablePath,
   validatePurpose,
   validateSelectionRules,
 } from "./validation.js";
+
+export { verifyCodingPackSelectionResult } from "./selection-result.js";
 
 const CANDIDATE_ORIGIN_CODES: ReadonlySet<CodingPackCandidateOriginCode> = new Set([
   "explicit_selection",
@@ -89,11 +94,11 @@ interface NormalizedCandidate {
   readonly bytes: Uint8Array;
   readonly originCode: CodingPackCandidateOriginCode;
   readonly ignoredByProjectRules: boolean;
-  readonly projectIgnoreReasonCode?: string;
   readonly explicitlyExcluded: boolean;
 }
 
 interface NormalizedSelectionInput {
+  readonly purpose: CodingPackPurpose;
   readonly selectionRules: Readonly<CodingPackSelectionRules>;
   readonly candidates: readonly NormalizedCandidate[];
 }
@@ -105,14 +110,14 @@ export async function selectCodingPackSources(
   const candidates = [...normalized.candidates].sort((left, right) =>
     compareUtf8(left.relativePath, right.relativePath)
   );
-  assertNoPathCollisions(candidates);
+  assertNoPortablePathCollisions(candidates);
 
-  const included: CodingPackFileEntry[] = [];
   const exclusions: CodingPackExclusion[] = [];
-  let includedBytes = 0;
+  const potentiallyEligible: NormalizedCandidate[] = [];
+  let eligibleCandidateBytes = 0;
 
   for (const candidate of candidates) {
-    const exclusionReasonCode = classifyCandidate(candidate);
+    const exclusionReasonCode = classifyBeforeDecoding(candidate);
     if (exclusionReasonCode !== undefined) {
       exclusions.push({
         relativePath: candidate.relativePath,
@@ -120,15 +125,6 @@ export async function selectCodingPackSources(
       });
       continue;
     }
-
-    if (!isValidUtf8(candidate.bytes)) {
-      exclusions.push({
-        relativePath: candidate.relativePath,
-        reasonCode: "invalid_utf8",
-      });
-      continue;
-    }
-
     if (candidate.bytes.byteLength > normalized.selectionRules.maxFileBytes) {
       exclusions.push({
         relativePath: candidate.relativePath,
@@ -136,15 +132,41 @@ export async function selectCodingPackSources(
       });
       continue;
     }
+    eligibleCandidateBytes += candidate.bytes.byteLength;
+    if (
+      !Number.isSafeInteger(eligibleCandidateBytes)
+      || eligibleCandidateBytes > CODING_PACK_MAX_ELIGIBLE_CANDIDATE_BYTES
+    ) {
+      throw new CodingPackManifestError(
+        "bounds_exceeded",
+        "Coding Pack eligible candidate bytes exceed their reviewed limit.",
+      );
+    }
+    potentiallyEligible.push(candidate);
+  }
 
-    if (included.length >= normalized.selectionRules.maxFiles) {
+  const validUtf8: NormalizedCandidate[] = [];
+  for (const candidate of potentiallyEligible) {
+    if (!isValidUtf8(candidate.bytes)) {
+      exclusions.push({
+        relativePath: candidate.relativePath,
+        reasonCode: "invalid_utf8",
+      });
+      continue;
+    }
+    validUtf8.push(candidate);
+  }
+
+  const accepted: NormalizedCandidate[] = [];
+  let includedBytes = 0;
+  for (const candidate of validUtf8) {
+    if (accepted.length >= normalized.selectionRules.maxFiles) {
       exclusions.push({
         relativePath: candidate.relativePath,
         reasonCode: "file_count_limit",
       });
       continue;
     }
-
     if (includedBytes + candidate.bytes.byteLength > normalized.selectionRules.maxTotalBytes) {
       exclusions.push({
         relativePath: candidate.relativePath,
@@ -152,17 +174,30 @@ export async function selectCodingPackSources(
       });
       continue;
     }
+    accepted.push(candidate);
+    includedBytes += candidate.bytes.byteLength;
+  }
 
-    const entry = await createCodingPackFileEntry({
+  const included = await Promise.all(accepted.map((candidate) =>
+    createCodingPackFileEntry({
       relativePath: candidate.relativePath,
       bytes: candidate.bytes,
       inclusionReasonCode: candidate.originCode,
-    });
-    included.push(entry);
-    includedBytes += entry.byteCount;
-  }
+    })
+  ));
+  exclusions.sort((left, right) => compareUtf8(left.relativePath, right.relativePath));
+  const identity = await computeCodingPackSourceIdentity({
+    purpose: normalized.purpose,
+    selectionRulesVersion: normalized.selectionRules.version,
+    sources: included,
+    exclusions,
+  });
 
-  return freezeSelectionResult({
+  return freezeCodingPackSelectionResult({
+    purpose: normalized.purpose,
+    selectionRulesVersion: normalized.selectionRules.version,
+    sourceFingerprint: identity.sourceFingerprint,
+    packId: identity.packId,
     included,
     exclusions,
     warnings: [],
@@ -178,7 +213,7 @@ export async function selectCodingPackSources(
 function validateSelectionInput(value: unknown): NormalizedSelectionInput {
   const record = requirePlainRecord(value, "selection input");
   requireExactKeys(record, ["purpose", "selectionRules", "candidates"], "selection input");
-  validatePurpose(record.purpose);
+  const purpose = validatePurpose(record.purpose);
   const selectionRules = validateSelectionRules(record.selectionRules);
   if (selectionRules.version !== CODING_PACK_SELECTION_RULES_VERSION) {
     throw new CodingPackManifestError(
@@ -189,10 +224,17 @@ function validateSelectionInput(value: unknown): NormalizedSelectionInput {
   if (!Array.isArray(record.candidates)) {
     throw new CodingPackManifestError("invalid_input", "selection input candidates must be an array.");
   }
+  if (record.candidates.length > CODING_PACK_MAX_CANDIDATE_COUNT) {
+    throw new CodingPackManifestError(
+      "bounds_exceeded",
+      "Selection input candidate count exceeds its reviewed limit.",
+    );
+  }
   const candidates = record.candidates.map((candidate, index) =>
     validateCandidate(candidate, index)
   );
   return {
+    purpose,
     selectionRules,
     candidates: Object.freeze(candidates),
   };
@@ -208,13 +250,11 @@ function validateCandidate(value: unknown, index: number): Readonly<NormalizedCa
       "bytes",
       "originCode",
       "ignoredByProjectRules",
-      "projectIgnoreReasonCode",
       "explicitlyExcluded",
     ],
     label,
   );
   const relativePath = validatePortablePath(record.relativePath);
-  rejectPortableLocalIdentity(relativePath, `${label} relativePath`);
   if (!(record.bytes instanceof Uint8Array)) {
     throw new CodingPackManifestError("invalid_input", `${label} bytes must be Uint8Array.`);
   }
@@ -230,23 +270,12 @@ function validateCandidate(value: unknown, index: number): Readonly<NormalizedCa
     label,
   );
   const explicitlyExcluded = validateOptionalBoolean(record, "explicitlyExcluded", label);
-  const projectIgnoreReasonCode = Object.prototype.hasOwnProperty.call(
-    record,
-    "projectIgnoreReasonCode",
-  )
-    ? requirePortableMachineIdentifier(
-      record.projectIgnoreReasonCode,
-      `${label} projectIgnoreReasonCode`,
-      CODING_PACK_MAX_REASON_BYTES,
-    )
-    : undefined;
 
   return Object.freeze({
     relativePath,
-    bytes: Uint8Array.from(record.bytes),
+    bytes: record.bytes,
     originCode: record.originCode as CodingPackCandidateOriginCode,
     ignoredByProjectRules,
-    ...(projectIgnoreReasonCode === undefined ? {} : { projectIgnoreReasonCode }),
     explicitlyExcluded,
   });
 }
@@ -263,41 +292,7 @@ function validateOptionalBoolean(
   return record[key] as boolean;
 }
 
-function assertNoPathCollisions(candidates: readonly NormalizedCandidate[]): void {
-  const exactPaths = new Set<string>();
-  const caseFoldedPaths = new Map<string, string>();
-  const normalizedPaths = new Map<string, string>();
-
-  for (const candidate of candidates) {
-    const path = candidate.relativePath;
-    if (exactPaths.has(path)) {
-      throw new CodingPackManifestError("duplicate_path", "Duplicate selection candidate path.");
-    }
-    exactPaths.add(path);
-
-    const folded = path.toUpperCase().toLowerCase();
-    const previousFolded = caseFoldedPaths.get(folded);
-    if (previousFolded !== undefined && previousFolded !== path) {
-      throw new CodingPackManifestError(
-        "path_collision",
-        "Selection candidate paths have a cross-platform case collision.",
-      );
-    }
-    caseFoldedPaths.set(folded, path);
-
-    const normalized = path.normalize("NFC");
-    const previousNormalized = normalizedPaths.get(normalized);
-    if (previousNormalized !== undefined && previousNormalized !== path) {
-      throw new CodingPackManifestError(
-        "path_collision",
-        "Selection candidate paths have a Unicode normalization collision.",
-      );
-    }
-    normalizedPaths.set(normalized, path);
-  }
-}
-
-function classifyCandidate(candidate: NormalizedCandidate): string | undefined {
+function classifyBeforeDecoding(candidate: NormalizedCandidate): string | undefined {
   const segments = candidate.relativePath.split("/");
   if (segments.some((segment) => PRIVATE_DIRECTORY_NAMES.has(segment.toLowerCase()))) {
     return "hard_private_path";
@@ -315,7 +310,7 @@ function classifyCandidate(candidate: NormalizedCandidate): string | undefined {
     return "explicit_exclusion";
   }
   if (candidate.ignoredByProjectRules) {
-    return candidate.projectIgnoreReasonCode ?? "project_ignore";
+    return "project_ignore";
   }
   if (hasBinaryExtension(segments[segments.length - 1])) {
     return "binary_like_extension";
@@ -352,20 +347,4 @@ function isValidUtf8(bytes: Uint8Array): boolean {
   } catch {
     return false;
   }
-}
-
-function freezeSelectionResult(
-  result: CodingPackSelectionResult,
-): Readonly<CodingPackSelectionResult> {
-  const included = Object.freeze(result.included.map((entry) => Object.freeze({ ...entry })));
-  const exclusions = Object.freeze(
-    result.exclusions.map((exclusion) => Object.freeze({ ...exclusion })),
-  );
-  const warnings = Object.freeze(
-    result.warnings.map((warning: CodingPackSelectionWarning) =>
-      Object.freeze({ ...warning })
-    ),
-  );
-  const totals = Object.freeze({ ...result.totals });
-  return Object.freeze({ included, exclusions, warnings, totals });
 }

@@ -768,10 +768,11 @@ caller-supplied set of project-relative candidate paths and exact bytes, with
 UTF-8 evidence, hard path-based privacy exclusions, collision checks, fixed
 budgets, and explicit exclusion reason codes.
 
-**Tests:** Input-order independence, caller-supplied project-ignore decisions,
+**Tests:** Input-order independence, caller-supplied project-ignore booleans,
 credential-like and generated/vendor paths, binary/encoding classification,
-size caps, malformed paths, case and normalization collisions, malicious
-filenames, deep immutability, and manifest compatibility.
+candidate/eligible-byte caps, malformed and Windows-incompatible paths,
+conservative case and normalization collisions, malicious filenames, deep
+immutability, selection-result verification, and manifest compatibility.
 
 **Boundary:** No filesystem discovery, `.gitignore` parser, content secret
 scanner, Desktop preview, persistence, or artifact write. A future authorized
@@ -1013,11 +1014,21 @@ PROJECT_LABEL_AUTOMATIC_LOCAL_COPY=false
 
 v0.7.2 adds the pure `selectCodingPackSources` core for explicit caller-supplied
 candidates. It validates all candidate identities before UTF-8-byte sorting,
-fails closed on case-fold and NFC-equivalent path collisions, applies
-non-overridable private/credential/generated/vendor rules, classifies obvious
-binary extensions and invalid UTF-8, and deterministically applies fixed
-per-file, file-count, and aggregate-byte limits. The deep-frozen result is
-directly usable by the separate manifest builder.
+fails closed on conservative ECMAScript case and NFC-equivalent path
+collisions, applies non-overridable private/credential/generated/vendor rules,
+uses a fixed portable `project_ignore` reason, classifies obvious binary
+extensions and invalid UTF-8, and deterministically applies fixed per-file,
+candidate-count, eligible-byte, file-count, and aggregate-byte limits. It does
+not eagerly copy every candidate or decode oversized files.
+
+The deep-frozen result binds purpose and rules version to its canonical
+`sourceFingerprint` and `packId`. Runtime verification recomputes ordering,
+totals, bounds, and identity. `createCodingPackManifestFromSelection` consumes
+that bound result without accepting an independent purpose or rules version.
+Portable path safety is structural: legitimate relative filenames containing
+identity-like English words are allowed, while Windows-forbidden characters,
+device names, trailing dots/spaces, and segments over 255 UTF-8 bytes are
+rejected.
 
 ```text
 V0_7_1_MERGED=true
@@ -1030,6 +1041,17 @@ AUTHORIZED_PROJECT_DISCOVERY_CONNECTED=false
 FILESYSTEM_DISCOVERY_IMPLEMENTED=false
 GITIGNORE_PARSER_IMPLEMENTED=false
 PROJECT_IGNORE_DECISION_CALLER_SUPPLIED=true
+PROJECT_IGNORE_REASON_CALLER_CONTROLLED=false
+PROJECT_IGNORE_PORTABLE_REASON=project_ignore
+SELECTION_PURPOSE_BOUND=true
+SELECTION_RULES_VERSION_BOUND=true
+SELECTION_SOURCE_IDENTITY_BOUND=true
+SELECTION_RESULT_RUNTIME_VERIFICATION=PASS
+SAFE_RELATIVE_FILENAME_KEYWORDS_ALLOWED=true
+CANDIDATE_COUNT_BOUNDED=true
+ELIGIBLE_CANDIDATE_BYTES_BOUNDED=true
+ALL_CANDIDATE_BYTES_EAGERLY_COPIED=false
+OVERSIZED_FILE_DECODED=false
 CONTENT_SECRET_SCANNING_IMPLEMENTED=false
 PATH_BASED_PRIVACY_CLASSIFICATION_IMPLEMENTED=true
 SECRET_ABSENCE_PROVEN=false

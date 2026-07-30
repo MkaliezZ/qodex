@@ -86,21 +86,27 @@ describe("Coding Pack hard privacy exclusions", () => {
     ]);
   });
 
-  it("applies explicit and caller-supplied project-ignore decisions without overrides", async () => {
+  it("applies explicit and fixed project-ignore decisions without overrides", async () => {
     const result = await select([
       candidate("docs/draft.md", { explicitlyExcluded: true }),
-      candidate("generated/api.ts", {
-        ignoredByProjectRules: true,
-        projectIgnoreReasonCode: "project_generated",
-      }),
+      candidate("generated/api.ts", { ignoredByProjectRules: true }),
       candidate("notes/local.txt", { ignoredByProjectRules: true }),
     ]);
 
     expect(result.exclusions).toEqual([
       { relativePath: "docs/draft.md", reasonCode: "explicit_exclusion" },
-      { relativePath: "generated/api.ts", reasonCode: "project_generated" },
+      { relativePath: "generated/api.ts", reasonCode: "project_ignore" },
       { relativePath: "notes/local.txt", reasonCode: "project_ignore" },
     ]);
+  });
+
+  it("rejects attempts to spoof classifier provenance", async () => {
+    await expect(select([
+      {
+        ...candidate("src/a.ts", { ignoredByProjectRules: true }),
+        projectIgnoreReasonCode: "hard_private_path",
+      } as CodingPackCandidateInput,
+    ])).rejects.toThrow(/unsupported field/u);
   });
 });
 
@@ -136,13 +142,37 @@ describe("Coding Pack portable selection privacy", () => {
   it.each([
     "/Users/example/private-project/source.ts",
     "C:\\Users\\example\\private-project\\source.ts",
-    "src/project-0123456789abcdef.ts",
     `src/sha256:${"a".repeat(64)}.txt`,
-    "src/destination-handle-private.ts",
-    "src/privateRootPath.ts",
-    "src/projectFingerprint.ts",
-  ])("rejects local authority or path material in %s", async (relativePath) => {
+  ])("rejects structurally non-portable path %s", async (relativePath) => {
     await expect(select([candidate(relativePath)])).rejects.toThrow();
+  });
+
+  it.each([
+    "src/projectFingerprint.ts",
+    "src/project-0123456789abcdef.ts",
+    "docs/destinationHandle.md",
+    "src/privateRootPath.ts",
+    "fixtures/sha256-aaaaaaaa.txt",
+  ])("accepts legitimate relative filename %s without keyword filtering", async (relativePath) => {
+    const result = await select([candidate(relativePath)]);
+    expect(result.included.map((entry) => entry.relativePath)).toEqual([relativePath]);
+  });
+
+  it.each([
+    "src/name:variant.ts",
+    "src/name*.ts",
+    "src/name?.ts",
+    "con",
+    "CON.txt",
+    "src/AUX.md",
+    "logs/LPT1.log",
+    "src/trailing.",
+    "src/trailing ",
+    `src/${"é".repeat(128)}.ts`,
+  ])("rejects non-portable filename %s", async (relativePath) => {
+    await expect(select([candidate(relativePath)])).rejects.toMatchObject({
+      code: "invalid_path",
+    });
   });
 
   it("does not serialize source contents or ambient authority sentinels", async () => {
@@ -163,5 +193,7 @@ describe("Coding Pack portable selection privacy", () => {
       expect(serialized).not.toContain(privateValue);
     }
     expect(serialized).not.toContain("portable source");
+    expect(serialized).not.toContain("projectBindingId");
+    expect(serialized).not.toContain("destinationHandle");
   });
 });

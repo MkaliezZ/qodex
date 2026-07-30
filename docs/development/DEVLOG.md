@@ -1171,28 +1171,45 @@ and GitHub workflows are unchanged.
 v0.7.2 is implemented for review in a Draft PR as a pure extension of
 `@qodex/coding-pack-runtime`. `selectCodingPackSources` accepts only an explicit
 caller-supplied array of project-relative paths and exact `Uint8Array` bytes.
-It validates and copies the complete input before processing, rejects duplicate
-and cross-platform-colliding paths, sorts by exact UTF-8 bytes, applies
-non-overridable private, credential, generated, vendor, and binary path rules,
-then applies explicit/project-ignore decisions and fixed per-file, file-count,
-and aggregate-byte budgets. Invalid UTF-8 is an exclusion; unexpected contract
-errors fail the selection.
+It validates candidate identities without eagerly copying bytes, rejects
+duplicate and conservatively cross-platform-colliding paths, sorts by exact
+UTF-8 bytes, applies non-overridable private, credential, generated, vendor,
+binary, explicit, and fixed `project_ignore` rules before decoding, then
+enforces per-file, 5,000-candidate, 50 MiB eligible-input, file-count, and
+aggregate-pack budgets. Oversized files are not decoded. Invalid UTF-8 is an
+exclusion; unexpected contract errors fail the selection.
 
-The result contains deep-frozen manifest-compatible file evidence, exclusions,
-empty bounded warnings, and aggregate totals. It never includes source bytes,
-raw scanner output, caught exception text, local authority identifiers, or
-destination handles. Classification is path- and filename-based only and does
-not prove that selected text contains no secret.
+The result binds purpose, selection-rules version, `sourceFingerprint`, and
+`packId` to deep-frozen manifest-compatible evidence, exclusions, empty bounded
+warnings, and aggregate totals. `createCodingPackManifestFromSelection`
+runtime-verifies that complete result and prevents independent purpose or rules
+substitution. The same internal canonical identity implementation serves
+selection, manifest creation, and both verification paths.
 
-The package now has 181 focused tests, including 55 selection tests for input
-order independence, manifest identity compatibility, hard-deny override
-resistance, Windows case collisions, macOS normalization collisions, valid
-non-BMP paths, exact LF/CRLF evidence, invalid UTF-8, deep immutability,
-privacy sentinels, and deterministic budget overflow.
+Portable paths use structural field separation rather than rejecting English
+identity keywords in legitimate relative filenames. Every segment rejects
+Windows-forbidden characters, reserved device names, trailing dots/spaces, and
+more than 255 UTF-8 bytes. Case collision checks are a conservative ECMAScript
+Unicode casing heuristic, not a universal filesystem-equivalence proof.
+
+The package now has 205 focused tests covering selection/manifest identity
+binding, result verification and tampering, fixed ignore provenance, safe
+keyword filenames, Windows-portable segments, bounded candidate work,
+oversized no-decode behavior, order independence, collisions, UTF-8, deep
+immutability, privacy sentinels, and deterministic budget overflow.
 
 ```text
 V0_7_1_MERGED=true
 CODING_PACK_SELECTION_CORE_IMPLEMENTED=true
+SELECTION_PURPOSE_BOUND=true
+SELECTION_RULES_VERSION_BOUND=true
+SELECTION_SOURCE_IDENTITY_BOUND=true
+PROJECT_IGNORE_REASON_CALLER_CONTROLLED=false
+SAFE_RELATIVE_FILENAME_KEYWORDS_ALLOWED=true
+CANDIDATE_COUNT_BOUNDED=true
+ELIGIBLE_CANDIDATE_BYTES_BOUNDED=true
+ALL_CANDIDATE_BYTES_EAGERLY_COPIED=false
+OVERSIZED_FILE_DECODED=false
 AUTHORIZED_PROJECT_DISCOVERY_CONNECTED=false
 GITIGNORE_PARSER_IMPLEMENTED=false
 CONTENT_SECRET_SCANNING_IMPLEMENTED=false

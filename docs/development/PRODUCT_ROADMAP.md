@@ -108,7 +108,9 @@ rejects ill-formed UTF-16 before canonical UTF-8 processing, and keeps an
 optional project label explicit rather than deriving it from a local folder.
 
 v0.7.2 adds pure caller-supplied candidate selection, fixed hard exclusions,
-strict UTF-8 classification, fail-closed case/normalization collisions, and
+strict UTF-8 classification, conservative fail-closed case/normalization
+collisions, Windows-portable filename rules, bounded candidate work, fixed
+project-ignore provenance, runtime-verified purpose/rules/source identity, and
 deterministic budgets. Authorized filesystem discovery, `.gitignore` parsing,
 content secret scanning, UI, persistence, export, native commands, Action
 Runtime, and AgentFuse integration remain unimplemented.

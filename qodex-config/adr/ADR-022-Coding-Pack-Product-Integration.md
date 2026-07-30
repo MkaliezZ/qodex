@@ -258,20 +258,30 @@ WORKFLOW_CHANGED=false
 
 The second bounded slice adds only a pure browser-safe selection and
 path-classification API to `@qodex/coding-pack-runtime`. The caller supplies
-project-relative candidate paths, exact bytes, reviewed origin codes, and
-optional project-ignore decisions. The package does not discover, open, or
-write files.
+project-relative candidate paths, exact bytes, reviewed origin codes, and an
+optional project-ignore boolean. The portable ignore reason is always
+`project_ignore`; callers cannot provide authoritative classifier reasons. The
+package does not discover, open, or write files.
 
-The selector validates and defensively copies the complete input, rejects exact
-duplicates and fail-closed case-fold/NFC collisions, orders candidates by exact
-UTF-8 bytes, applies non-overridable private, credential, generated, vendor,
-and obvious binary path rules, validates UTF-8 without replacement, and applies
-the reviewed fixed budgets in deterministic order. Its deep-frozen result is
-manifest-compatible but does not create a manifest.
+The selector validates identities without eagerly copying all bytes, rejects
+exact duplicates and conservative fail-closed ECMAScript case/NFC collisions,
+orders candidates by exact UTF-8 bytes, applies non-overridable private,
+credential, generated, vendor, explicit, ignore, binary, and per-file rules
+before decoding, and caps candidate count plus potentially eligible bytes.
+Accepted files are copied only inside the exact-byte hashing boundary.
+
+The result binds purpose and rules version to its canonical source fingerprint
+and pack ID. Runtime verification recomputes shape, ordering, overlap, totals,
+bounds, and identity. Manifest creation from selection accepts no independent
+purpose or rules version. Portable paths rely on structural field separation:
+identity-like English words are allowed in legitimate relative filenames,
+while Windows-forbidden characters/device names, trailing dots/spaces, and
+segments over 255 UTF-8 bytes are rejected.
 
 Path and filename classification does not prove that included text contains no
-secret. v0.7.2 does not parse `.gitignore`, scan content, emit source snippets,
-or connect the authorized Project Runtime adapter.
+secret. The case heuristic does not prove universal filesystem equivalence.
+v0.7.2 does not parse `.gitignore`, scan content, emit source snippets, or
+connect the authorized Project Runtime adapter.
 
 ```text
 V0_7_1_MERGED=true
@@ -279,6 +289,17 @@ CODING_PACK_SELECTION_CORE_IMPLEMENTED=true
 AUTHORIZED_PROJECT_DISCOVERY_CONNECTED=false
 GITIGNORE_PARSER_IMPLEMENTED=false
 PROJECT_IGNORE_DECISION_CALLER_SUPPLIED=true
+PROJECT_IGNORE_REASON_CALLER_CONTROLLED=false
+PROJECT_IGNORE_PORTABLE_REASON=project_ignore
+SELECTION_PURPOSE_BOUND=true
+SELECTION_RULES_VERSION_BOUND=true
+SELECTION_SOURCE_IDENTITY_BOUND=true
+SELECTION_RESULT_RUNTIME_VERIFICATION=PASS
+SAFE_RELATIVE_FILENAME_KEYWORDS_ALLOWED=true
+CANDIDATE_COUNT_BOUNDED=true
+ELIGIBLE_CANDIDATE_BYTES_BOUNDED=true
+ALL_CANDIDATE_BYTES_EAGERLY_COPIED=false
+OVERSIZED_FILE_DECODED=false
 CONTENT_SECRET_SCANNING_IMPLEMENTED=false
 PATH_BASED_PRIVACY_CLASSIFICATION_IMPLEMENTED=true
 SECRET_ABSENCE_PROVEN=false
