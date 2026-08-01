@@ -121,8 +121,14 @@ transactional `PACK_DECIDED` event bound to the proposal, durable
 `PACK_CONFIRMED` payload digest, request digest, AgentFuse source/package/
 protocol identity, and export policy identity. Persistence failure leaves the
 operation confirmed. TypeScript and native boundaries recompute the request
-digest and require `decidedAt` to precede proposal and approval expiry.
-Duplicate decisions fail closed.
+digest. `evaluationStartedAt` must precede proposal and approval expiry;
+allow/deny completion must also remain in-window, while late allow/block or
+bridge failure persists as terminal error evidence with truthful `decidedAt`.
+Bridge responses reject unknown keys and private/raw fields. Browser and Tauri
+revalidate the observed destination capability immediately before evaluation,
+without claiming a race-free filesystem guarantee. Duplicate decisions fail
+closed. A same-process guard prevents concurrent evaluation of one operation,
+but bridge invocation is not exactly-once across crashes or persistence retry.
 
 Restart does not evaluate, retry, or export. Decided records are historical and
 non-actionable. There is no `PACK_EXPORT_STARTED`, `PACK_EXPORT_COMPLETED`,

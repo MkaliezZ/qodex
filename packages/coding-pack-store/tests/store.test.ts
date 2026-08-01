@@ -201,6 +201,37 @@ describe("CodingPackStore lifecycle", () => {
     })).rejects.toMatchObject({ code: "coding_pack_approval_mismatch" });
   });
 
+  it("persists terminal error evidence after expiry when evaluation began in-window", async () => {
+    const adapter = new InMemoryCodingPackStoreAdapter();
+    const store = createStore(adapter);
+    const destination = await destinationBinding("late-error");
+    await store.registerDestinationBinding(destination);
+    const proposed = await store.createCodingPackExportProposal(proposalInput(destination));
+    const approval = store.createCodingPackExportApproval({
+      operationId: proposed.operation.operationId,
+      proposalDigest: proposed.proposal.proposalDigest,
+      approvedAt: CREATED_AT,
+      expiresAt: APPROVAL_EXPIRES_AT,
+    });
+    const confirmed = await store.confirmCodingPackExportProposal(approval);
+    const persistenceRetryStore = createStore(adapter, 5 * 60 * 1000 + 1);
+
+    const decided = await persistenceRetryStore.recordCodingPackExportDecision({
+      operationId: confirmed.operation.operationId,
+      decision: {
+        ...await decisionPayload(confirmed, "error"),
+        reasonCode: "bridge_timeout",
+        evaluationStartedAt: "2026-07-30T00:04:59.999Z",
+        decidedAt: "2026-07-30T00:05:00.001Z",
+      },
+    });
+
+    expect(decided.operation.state).toBe("decided_error");
+    expect(decided.decision?.evaluationStartedAt).toBe(
+      "2026-07-30T00:04:59.999Z",
+    );
+  });
+
   it("derives the same proposal digest from the same exact inputs", async () => {
     const destination = await destinationBinding("same");
     const firstStore = createStore(new InMemoryCodingPackStoreAdapter());
@@ -671,6 +702,7 @@ async function decisionPayload(
       "sha256:752a8bf1f251e5c05f07ddd8d820af3c5554fb37e3a47fbcf41933f614167d07",
     decision,
     reasonCode: decision === "allow" ? "policy_allowed" : `policy_${decision}`,
+    evaluationStartedAt: CREATED_AT,
     decidedAt: CREATED_AT,
   };
 }

@@ -55,6 +55,7 @@ import {
 import { openProjectDirectory } from "../platform/openProjectDirectory";
 import {
   chooseCodingPackDestination,
+  createCodingPackDestinationCapabilityVerifier,
   hasCodingPackDestinationCapability,
 } from "../platform/codingPackDestination";
 import {
@@ -612,13 +613,16 @@ export function useRuntime() {
         store: codingPackStoreRef.current,
         adapter: new CodingPackAgentFuseAdapter({ bridge }),
         operationId: snapshot.operation.operationId,
-        destinationCapabilityAvailable: (current) => (
-          current.destination.destinationBindingId
-            === codingPackDestination.destinationBindingId
-          && current.destination.destinationFingerprint
-            === codingPackDestination.destinationFingerprint
-          && hasCodingPackDestinationCapability(codingPackDestination)
-        ),
+        destinationCapabilityVerifier: {
+          async verifyDestinationCapability(current) {
+            return current.destinationBindingId
+                === codingPackDestination.destinationBindingId
+              && current.destinationFingerprint
+                === codingPackDestination.destinationFingerprint
+              && createCodingPackDestinationCapabilityVerifier()
+                .verifyDestinationCapability(current);
+          },
+        },
       });
       const decided = await codingPackStoreRef.current.getCodingPackOperation(
         snapshot.operation.operationId,

@@ -316,7 +316,14 @@ remains separate from export approval. `@qodex/coding-pack-agentfuse` builds a
 digest-only trusted request from one live confirmed snapshot and maps canonical
 AgentFuse allow/block/failure to durable allow/deny/error evidence. Durable
 store and native boundaries recompute the request digest and require the
-decision timestamp to remain inside the proposal and approval lifetime.
+evaluation start to remain inside the proposal and approval lifetime. Allow or
+deny completion must also remain in-window; late allow/block and late bridge
+failure become durable terminal error evidence with truthful completion time.
+The bridge response has exact keys, and browser/native destination capability
+is revalidated immediately before invocation without claiming a race-free
+filesystem guarantee. One process prevents concurrent calls for the same
+operation, but invocation is not exactly-once across crashes or persistence
+retries.
 Decision does not start export or write files. Canonical identity uses
 deterministic UTF-8 byte ordering and
 well-formed Unicode, proposals and approvals cannot exceed 24 hours, native

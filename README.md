@@ -285,7 +285,13 @@ SQLite WAL with `synchronous=FULL`. Recovered operations remain non-actionable
 historical records. The v0.7.4.2 Draft adds the independent
 `kerniq-coding-pack-export-v1` AgentFuse profile and a trusted digest-only
 request. It durably records exactly one `PACK_DECIDED` allow, deny, or error
-event in store schema v2. The UI reports the policy result while continuing to
+event in store schema v2. Each attempt binds `evaluationStartedAt`; a late
+allow/block is persisted as terminal error evidence, while bridge errors may be
+recorded after expiry when evaluation began in-window. Responses use exact-key
+validation and the destination capability is revalidated immediately before
+evaluation. The durable event is at-most-once, while AgentFuse invocation is
+guarded only within the current process and is not claimed exactly-once across
+crashes. The UI reports the policy result while continuing to
 show “No files written” and “Export has not started.” Recovered decisions are
 historical and non-actionable. The
 [v0.7 plan](docs/development/kerniq_v0_7_coding_pack_product_integration_planning.md)

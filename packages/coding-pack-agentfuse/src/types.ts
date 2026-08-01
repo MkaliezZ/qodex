@@ -59,6 +59,7 @@ export interface CodingPackAgentFuseDecisionResult {
   readonly policyDigest: string;
   readonly decision: CodingPackAgentFuseDecision;
   readonly reasonCode: string;
+  readonly evaluationStartedAt: string;
   readonly decidedAt: string;
 }
 
@@ -74,12 +75,17 @@ export interface EvaluateCodingPackExportPolicyOptions {
     evaluate(
       snapshot: CodingPackOperationSnapshot,
       signal: AbortSignal,
+      evaluationStartedAt: string,
     ): Promise<CodingPackAgentFuseDecisionResult>;
   };
   readonly operationId: string;
-  readonly destinationCapabilityAvailable: (
-    snapshot: CodingPackOperationSnapshot,
-  ) => boolean;
+  readonly destinationCapabilityVerifier: CodingPackDestinationCapabilityVerifier;
   readonly signal?: AbortSignal;
   readonly now?: () => Date;
+}
+
+export interface CodingPackDestinationCapabilityVerifier {
+  verifyDestinationCapability(
+    binding: CodingPackOperationSnapshot["destination"],
+  ): Promise<boolean>;
 }

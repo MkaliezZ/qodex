@@ -127,7 +127,7 @@ describe("Coding Pack AgentFuse decision lifecycle", () => {
       store: prepared.store,
       adapter: adapter(bridge),
       operationId: prepared.confirmed.operation.operationId,
-      destinationCapabilityAvailable: () => true,
+      destinationCapabilityVerifier: verifier(true),
       now: () => new Date(NOW),
     });
 
@@ -152,6 +152,10 @@ describe("Coding Pack AgentFuse decision lifecycle", () => {
       protocolVersion: "future",
     })],
     ["malformed response", async () => "invalid"],
+    ["array response", async () => []],
+    ["prototype-bearing response", async (request: CodingPackAgentFuseBridgeRequest) => (
+      Object.assign(Object.create({ inherited: true }), response(request, "allow"))
+    )],
     ["policy identity mismatch", async (request: CodingPackAgentFuseBridgeRequest) => ({
       ...response(request, "allow"),
       payload: {
@@ -168,7 +172,7 @@ describe("Coding Pack AgentFuse decision lifecycle", () => {
       store: prepared.store,
       adapter: adapter(bridge),
       operationId: prepared.confirmed.operation.operationId,
-      destinationCapabilityAvailable: () => true,
+      destinationCapabilityVerifier: verifier(true),
       now: () => new Date(NOW),
     });
 
@@ -176,6 +180,155 @@ describe("Coding Pack AgentFuse decision lifecycle", () => {
     expect((await prepared.store.getCodingPackOperation(
       prepared.confirmed.operation.operationId,
     ))?.operation.state).toBe("decided_error");
+  });
+
+  it.each([
+    ["unknown outer field", (value: ReturnType<typeof response>) => ({
+      ...value,
+      futureDecisionMetadata: "unsafe",
+    })],
+    ["unknown payload field", (value: ReturnType<typeof response>) => ({
+      ...value,
+      payload: { ...value.payload, futureDecisionMetadata: "unsafe" },
+    })],
+    ["missing outer field", (value: ReturnType<typeof response>) => {
+      const { messageType: _messageType, ...missing } = value;
+      return missing;
+    }],
+    ["missing payload field", (value: ReturnType<typeof response>) => {
+      const { policyDigest: _policyDigest, ...missing } = value.payload;
+      return { ...value, payload: missing };
+    }],
+    ["array payload", (value: ReturnType<typeof response>) => ({
+      ...value,
+      payload: [],
+    })],
+    ["prototype-bearing payload", (value: ReturnType<typeof response>) => ({
+      ...value,
+      payload: Object.assign(Object.create({ inherited: true }), value.payload),
+    })],
+    ["raw error", (value: ReturnType<typeof response>) => ({
+      ...value,
+      payload: { ...value.payload, rawError: "/private/error" },
+    })],
+    ["absolute destination", (value: ReturnType<typeof response>) => ({
+      ...value,
+      payload: { ...value.payload, absoluteDestination: "/private/export" },
+    })],
+    ["traceback", (value: ReturnType<typeof response>) => ({
+      ...value,
+      payload: { ...value.payload, traceback: "sensitive" },
+    })],
+    ["source contents", (value: ReturnType<typeof response>) => ({
+      ...value,
+      payload: { ...value.payload, sourceContents: "secret" },
+    })],
+    ["manifest contents", (value: ReturnType<typeof response>) => ({
+      ...value,
+      payload: { ...value.payload, manifestContents: "secret" },
+    })],
+    ["shell", (value: ReturnType<typeof response>) => ({
+      ...value,
+      payload: { ...value.payload, shell: "rm" },
+    })],
+    ["command", (value: ReturnType<typeof response>) => ({
+      ...value,
+      payload: { ...value.payload, command: "rm" },
+    })],
+    ["ill-formed decision ID", (value: ReturnType<typeof response>) => ({
+      ...value,
+      payload: { ...value.payload, decisionId: "decision-\ud800" },
+    })],
+    ["controlled decision ID", (value: ReturnType<typeof response>) => ({
+      ...value,
+      payload: { ...value.payload, decisionId: "decision\nunsafe" },
+    })],
+    ["oversized decision ID", (value: ReturnType<typeof response>) => ({
+      ...value,
+      payload: { ...value.payload, decisionId: "d".repeat(257) },
+    })],
+    ["invalid reason code", (value: ReturnType<typeof response>) => ({
+      ...value,
+      payload: { ...value.payload, reasonCode: "Not_Canonical" },
+    })],
+    ["non-canonical timestamp", (value: ReturnType<typeof response>) => ({
+      ...value,
+      payload: { ...value.payload, decidedAt: "2026-07-30T00:00:01Z" },
+    })],
+  ] as const)("maps a bridge response with %s to exact terminal error evidence", async (
+    _name,
+    mutate,
+  ) => {
+    const prepared = await preparedStore();
+    const bridge: CodingPackAgentFuseBridgeClient = {
+      requestCodingPackExportDecision: vi.fn(async (request) => (
+        mutate(response(request, "allow"))
+      )),
+    };
+    const result = await evaluateCodingPackExportPolicy({
+      store: prepared.store,
+      adapter: adapter(bridge),
+      operationId: prepared.confirmed.operation.operationId,
+      destinationCapabilityVerifier: verifier(true),
+      now: () => new Date(NOW),
+    });
+
+    expect(result).toMatchObject({
+      decision: "error",
+      reasonCode: "invalid_bridge_response",
+      evaluationStartedAt: NOW,
+    });
+    expect(JSON.stringify(result)).not.toContain("/private");
+  });
+
+  it.each(["allow", "block"] as const)(
+    "converts late AgentFuse %s into durable terminal error evidence",
+    async (bridgeDecision) => {
+      const prepared = await preparedStore();
+      prepared.setStoreNow("2026-07-30T00:10:00.001Z");
+      const result = await evaluateCodingPackExportPolicy({
+        store: prepared.store,
+        adapter: adapter(bridgeFor(bridgeDecision, EXPIRES)),
+        operationId: prepared.confirmed.operation.operationId,
+        destinationCapabilityVerifier: verifier(true),
+        now: () => new Date("2026-07-30T00:09:59.999Z"),
+      });
+
+      expect(result).toMatchObject({
+        decision: "error",
+        reasonCode: "decision_window_expired_during_evaluation",
+        evaluationStartedAt: "2026-07-30T00:09:59.999Z",
+        decidedAt: EXPIRES,
+      });
+      expect((await prepared.store.getCodingPackOperation(
+        prepared.confirmed.operation.operationId,
+      ))?.operation.state).toBe("decided_error");
+    },
+  );
+
+  it("persists bridge timeout evidence completed after expiry", async () => {
+    const prepared = await preparedStore();
+    const completedAt = "2026-07-30T00:10:00.001Z";
+    prepared.setStoreNow(completedAt);
+    const bridge: CodingPackAgentFuseBridgeClient = {
+      requestCodingPackExportDecision: vi.fn(async () => {
+        throw new Error("bridge timeout");
+      }),
+    };
+    const result = await evaluateCodingPackExportPolicy({
+      store: prepared.store,
+      adapter: adapter(bridge, completedAt),
+      operationId: prepared.confirmed.operation.operationId,
+      destinationCapabilityVerifier: verifier(true),
+      now: () => new Date("2026-07-30T00:09:59.999Z"),
+    });
+
+    expect(result).toMatchObject({
+      decision: "error",
+      reasonCode: "bridge_timeout",
+      evaluationStartedAt: "2026-07-30T00:09:59.999Z",
+      decidedAt: completedAt,
+    });
   });
 
   it("does not call AgentFuse when confirmation or destination capability is absent", async () => {
@@ -192,7 +345,7 @@ describe("Coding Pack AgentFuse decision lifecycle", () => {
       store,
       adapter: adapter(bridge),
       operationId: proposed.operation.operationId,
-      destinationCapabilityAvailable: () => true,
+      destinationCapabilityVerifier: verifier(true),
       now: () => new Date(NOW),
     })).rejects.toBeTruthy();
     expect(bridge.requestCodingPackExportDecision).not.toHaveBeenCalled();
@@ -208,7 +361,7 @@ describe("Coding Pack AgentFuse decision lifecycle", () => {
       store,
       adapter: adapter(bridge),
       operationId: proposed.operation.operationId,
-      destinationCapabilityAvailable: () => false,
+      destinationCapabilityVerifier: verifier(false),
       now: () => new Date(NOW),
     })).rejects.toBeTruthy();
     expect(bridge.requestCodingPackExportDecision).not.toHaveBeenCalled();
@@ -221,7 +374,7 @@ describe("Coding Pack AgentFuse decision lifecycle", () => {
       store: expired.store,
       adapter: adapter(expiredBridge),
       operationId: expired.confirmed.operation.operationId,
-      destinationCapabilityAvailable: () => true,
+      destinationCapabilityVerifier: verifier(true),
       now: () => new Date("2026-07-30T00:10:00.000Z"),
     })).rejects.toMatchObject({ code: "coding_pack_proposal_expired" });
     expect(expiredBridge.requestCodingPackExportDecision).not.toHaveBeenCalled();
@@ -232,7 +385,7 @@ describe("Coding Pack AgentFuse decision lifecycle", () => {
       store: decided.store,
       adapter: adapter(firstBridge),
       operationId: decided.confirmed.operation.operationId,
-      destinationCapabilityAvailable: () => true,
+      destinationCapabilityVerifier: verifier(true),
       now: () => new Date(NOW),
     });
     const secondBridge = bridgeFor("allow");
@@ -240,10 +393,28 @@ describe("Coding Pack AgentFuse decision lifecycle", () => {
       store: decided.store,
       adapter: adapter(secondBridge),
       operationId: decided.confirmed.operation.operationId,
-      destinationCapabilityAvailable: () => true,
+      destinationCapabilityVerifier: verifier(true),
       now: () => new Date(NOW),
     })).rejects.toBeTruthy();
     expect(secondBridge.requestCodingPackExportDecision).not.toHaveBeenCalled();
+  });
+
+  it("does not backdate evaluation when destination verification crosses expiry", async () => {
+    const prepared = await preparedStore();
+    const bridge = bridgeFor("allow");
+    const verifierAfterDelay = verifier(true);
+    const times = ["2026-07-30T00:09:59.999Z", EXPIRES];
+
+    await expect(evaluateCodingPackExportPolicy({
+      store: prepared.store,
+      adapter: adapter(bridge),
+      operationId: prepared.confirmed.operation.operationId,
+      destinationCapabilityVerifier: verifierAfterDelay,
+      now: () => new Date(times.shift() ?? EXPIRES),
+    })).rejects.toMatchObject({ code: "coding_pack_proposal_expired" });
+
+    expect(verifierAfterDelay.verifyDestinationCapability).toHaveBeenCalledTimes(1);
+    expect(bridge.requestCodingPackExportDecision).not.toHaveBeenCalled();
   });
 
   it("does not call AgentFuse when durable snapshot reconstruction fails", async () => {
@@ -255,7 +426,7 @@ describe("Coding Pack AgentFuse decision lifecycle", () => {
       store: prepared.store,
       adapter: adapter(bridge),
       operationId: prepared.confirmed.operation.operationId,
-      destinationCapabilityAvailable: () => true,
+      destinationCapabilityVerifier: verifier(true),
       now: () => new Date(NOW),
     })).rejects.toThrow("corrupt durable event chain");
     expect(bridge.requestCodingPackExportDecision).not.toHaveBeenCalled();
@@ -265,39 +436,85 @@ describe("Coding Pack AgentFuse decision lifecycle", () => {
     const prepared = await preparedStore();
     const record = vi.spyOn(prepared.store, "recordCodingPackExportDecision")
       .mockRejectedValueOnce(new Error("durable write failed"));
+    const bridge = bridgeFor("allow");
     await expect(evaluateCodingPackExportPolicy({
       store: prepared.store,
-      adapter: adapter(bridgeFor("allow")),
+      adapter: adapter(bridge),
       operationId: prepared.confirmed.operation.operationId,
-      destinationCapabilityAvailable: () => true,
+      destinationCapabilityVerifier: verifier(true),
       now: () => new Date(NOW),
     })).rejects.toThrow("durable write failed");
     expect(record).toHaveBeenCalledTimes(1);
     expect((await prepared.store.getCodingPackOperation(
       prepared.confirmed.operation.operationId,
     ))?.operation.state).toBe("confirmed");
+    await expect(evaluateCodingPackExportPolicy({
+      store: prepared.store,
+      adapter: adapter(bridge),
+      operationId: prepared.confirmed.operation.operationId,
+      destinationCapabilityVerifier: verifier(true),
+      now: () => new Date(NOW),
+    })).resolves.toMatchObject({ decision: "allow" });
+    expect(bridge.requestCodingPackExportDecision).toHaveBeenCalledTimes(2);
+  });
+
+  it("permits only one same-process evaluation for an operation", async () => {
+    const prepared = await preparedStore();
+    let release: (() => void) | undefined;
+    const bridge: CodingPackAgentFuseBridgeClient = {
+      requestCodingPackExportDecision: vi.fn(async (request) => new Promise((resolve) => {
+        release = () => resolve(response(request, "allow"));
+      })),
+    };
+    const first = evaluateCodingPackExportPolicy({
+      store: prepared.store,
+      adapter: adapter(bridge),
+      operationId: prepared.confirmed.operation.operationId,
+      destinationCapabilityVerifier: verifier(true),
+      now: () => new Date(NOW),
+    });
+    await expect(evaluateCodingPackExportPolicy({
+      store: prepared.store,
+      adapter: adapter(bridge),
+      operationId: prepared.confirmed.operation.operationId,
+      destinationCapabilityVerifier: verifier(true),
+      now: () => new Date(NOW),
+    })).rejects.toMatchObject({ code: "coding_pack_decision_in_progress" });
+    await vi.waitFor(() => expect(release).toBeTypeOf("function"));
+    release?.();
+    await expect(first).resolves.toMatchObject({ decision: "allow" });
+    expect(bridge.requestCodingPackExportDecision).toHaveBeenCalledTimes(1);
   });
 });
 
-function adapter(bridge: CodingPackAgentFuseBridgeClient) {
+function adapter(bridge: CodingPackAgentFuseBridgeClient, completedAt = NOW) {
   return new CodingPackAgentFuseAdapter({
     bridge,
     messageIdFactory: () => "message-1",
-    clock: () => new Date(NOW),
+    clock: () => new Date(completedAt),
   });
 }
 
-function bridgeFor(decision: "allow" | "block") {
+function bridgeFor(decision: "allow" | "block", decidedAt = NOW) {
   return {
     requestCodingPackExportDecision: vi.fn(
-      async (request: CodingPackAgentFuseBridgeRequest) => response(request, decision),
+      async (request: CodingPackAgentFuseBridgeRequest) => (
+        response(request, decision, decidedAt)
+      ),
     ),
+  };
+}
+
+function verifier(available: boolean) {
+  return {
+    verifyDestinationCapability: vi.fn(async () => available),
   };
 }
 
 function response(
   request: CodingPackAgentFuseBridgeRequest,
   decision: "allow" | "block",
+  decidedAt = NOW,
 ) {
   return {
     protocolVersion: AGENTFUSE_BRIDGE_PROTOCOL,
@@ -314,7 +531,7 @@ function response(
       agentFuseCommit: AGENTFUSE_SOURCE_COMMIT,
       policyProfileId: CODING_PACK_EXPORT_POLICY_ID,
       policyDigest: CODING_PACK_EXPORT_POLICY_DIGEST,
-      decidedAt: NOW,
+      decidedAt,
     },
   };
 }
@@ -324,7 +541,11 @@ async function confirmedSnapshot(): Promise<CodingPackOperationSnapshot> {
 }
 
 async function preparedStore() {
-  const store = createStore(new InMemoryCodingPackStoreAdapter());
+  let storeNow = NOW;
+  const store = createStore(
+    new InMemoryCodingPackStoreAdapter(),
+    () => new Date(storeNow),
+  );
   const destination = await binding();
   await store.registerDestinationBinding(destination);
   const proposed = await store.createCodingPackExportProposal(
@@ -337,13 +558,22 @@ async function preparedStore() {
     expiresAt: EXPIRES,
   });
   const confirmed = await store.confirmCodingPackExportProposal(approval);
-  return { store, confirmed };
+  return {
+    store,
+    confirmed,
+    setStoreNow(value: string) {
+      storeNow = value;
+    },
+  };
 }
 
-function createStore(adapter: InMemoryCodingPackStoreAdapter): CodingPackStore {
+function createStore(
+  adapter: InMemoryCodingPackStoreAdapter,
+  now: () => Date = () => new Date(NOW),
+): CodingPackStore {
   let id = 0;
   return new CodingPackStore(adapter, {
-    now: () => new Date(NOW),
+    now,
     createId: () => `coding-pack-id-${++id}`,
   });
 }

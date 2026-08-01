@@ -21,6 +21,25 @@ import type {
 } from "./types.js";
 
 const REASON_CODE_PATTERN = /^[a-z][a-z0-9_]{0,63}$/u;
+const RESPONSE_KEYS = [
+  "protocolVersion",
+  "messageId",
+  "messageType",
+  "payload",
+] as const;
+const RESPONSE_PAYLOAD_KEYS = [
+  "decisionId",
+  "operationId",
+  "requestDigest",
+  "decision",
+  "reasonCode",
+  "policyVersion",
+  "schemaVersion",
+  "agentFuseCommit",
+  "policyProfileId",
+  "policyDigest",
+  "decidedAt",
+] as const;
 
 export class CodingPackAgentFuseAdapter {
   private readonly messageIdFactory;
@@ -35,8 +54,12 @@ export class CodingPackAgentFuseAdapter {
   async evaluate(
     snapshot: CodingPackOperationSnapshot,
     signal: AbortSignal,
+    evaluationStartedAt: string,
   ): Promise<CodingPackAgentFuseDecisionResult> {
-    const request = createCodingPackAgentFuseExportRequest(snapshot, this.clock());
+    const request = createCodingPackAgentFuseExportRequest(
+      snapshot,
+      new Date(evaluationStartedAt),
+    );
     const requestDigest = await createCodingPackAgentFuseRequestDigest(request);
     const policyDigest = await trustedCodingPackExportPolicyDigest();
     const messageId = this.messageIdFactory();
@@ -61,13 +84,23 @@ export class CodingPackAgentFuseAdapter {
         operationId: request.operationId,
         requestDigest,
       });
+      const late = Date.parse(response.payload.decidedAt)
+        >= Math.min(
+          Date.parse(snapshot.proposal.expiresAt),
+          Date.parse(snapshot.approval?.expiresAt ?? snapshot.proposal.expiresAt),
+        );
       return result({
         decisionId: response.payload.decisionId,
         requestDigest,
         proposalDigest: request.proposalDigest,
         approvalEvidenceDigest: request.approvalEvidenceDigest,
-        decision: response.payload.decision === "block" ? "deny" : "allow",
-        reasonCode: response.payload.reasonCode,
+        decision: late
+          ? "error"
+          : response.payload.decision === "block" ? "deny" : "allow",
+        reasonCode: late
+          ? "decision_window_expired_during_evaluation"
+          : response.payload.reasonCode,
+        evaluationStartedAt,
         decidedAt: response.payload.decidedAt,
       });
     } catch (error) {
@@ -79,7 +112,8 @@ export class CodingPackAgentFuseAdapter {
         approvalEvidenceDigest: request.approvalEvidenceDigest,
         decision: "error",
         reasonCode,
-        decidedAt: this.clock().toISOString(),
+        evaluationStartedAt,
+        decidedAt: completionTimestamp(this.clock, evaluationStartedAt),
       });
     }
   }
@@ -93,12 +127,12 @@ function validateResponse(
     readonly requestDigest: string;
   },
 ): CodingPackAgentFuseBridgeResponse {
-  if (!isRecord(value) || !isRecord(value.payload)) invalidResponse();
-  const payload = value.payload;
+  const response = exactRecord(value, RESPONSE_KEYS);
+  const payload = exactRecord(response.payload, RESPONSE_PAYLOAD_KEYS);
   if (
-    value.protocolVersion !== AGENTFUSE_BRIDGE_PROTOCOL
-    || value.messageId !== expected.messageId
-    || value.messageType !== "coding_pack_export_decision_result"
+    response.protocolVersion !== AGENTFUSE_BRIDGE_PROTOCOL
+    || response.messageId !== expected.messageId
+    || response.messageType !== "coding_pack_export_decision_result"
     || !boundedText(payload.decisionId, 256)
     || payload.operationId !== expected.operationId
     || payload.requestDigest !== expected.requestDigest
@@ -113,7 +147,7 @@ function validateResponse(
   ) {
     invalidResponse();
   }
-  return value as unknown as CodingPackAgentFuseBridgeResponse;
+  return response as unknown as CodingPackAgentFuseBridgeResponse;
 }
 
 function result(
@@ -125,6 +159,7 @@ function result(
     | "approvalEvidenceDigest"
     | "decision"
     | "reasonCode"
+    | "evaluationStartedAt"
     | "decidedAt"
   >,
 ): CodingPackAgentFuseDecisionResult {
@@ -151,14 +186,33 @@ function classifyFailure(error: unknown): string {
   return "invalid_bridge_response";
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
+function exactRecord<const Keys extends readonly string[]>(
+  value: unknown,
+  keys: Keys,
+): { [Key in Keys[number]]: unknown } {
+  if (
+    typeof value !== "object"
+    || value === null
+    || Array.isArray(value)
+    || (Object.getPrototypeOf(value) !== Object.prototype
+      && Object.getPrototypeOf(value) !== null)
+  ) {
+    invalidResponse();
+  }
+  const record = value as Record<string, unknown>;
+  const expected = new Set<string>(keys);
+  const actual = Object.keys(record);
+  if (actual.length !== expected.size || actual.some((key) => !expected.has(key))) {
+    invalidResponse();
+  }
+  return record as { [Key in Keys[number]]: unknown };
 }
 
 function boundedText(value: unknown, maximum: number): value is string {
   return typeof value === "string"
     && value.length > 0
     && new TextEncoder().encode(value).byteLength <= maximum
+    && wellFormed(value)
     && !/\p{Cc}/u.test(value);
 }
 
@@ -170,6 +224,27 @@ function canonicalTimestamp(value: unknown): value is string {
   if (typeof value !== "string") return false;
   const parsed = Date.parse(value);
   return Number.isFinite(parsed) && new Date(parsed).toISOString() === value;
+}
+
+function wellFormed(value: string): boolean {
+  for (let index = 0; index < value.length; index += 1) {
+    const code = value.charCodeAt(index);
+    if (code >= 0xd800 && code <= 0xdbff) {
+      const next = value.charCodeAt(index + 1);
+      if (!(next >= 0xdc00 && next <= 0xdfff)) return false;
+      index += 1;
+    } else if (code >= 0xdc00 && code <= 0xdfff) {
+      return false;
+    }
+  }
+  return true;
+}
+
+function completionTimestamp(clock: () => Date, evaluationStartedAt: string): string {
+  const completed = clock();
+  return completed.getTime() >= Date.parse(evaluationStartedAt)
+    ? completed.toISOString()
+    : evaluationStartedAt;
 }
 
 function invalidResponse(): never {

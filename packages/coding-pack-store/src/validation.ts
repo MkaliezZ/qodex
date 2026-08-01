@@ -108,6 +108,7 @@ const DECIDED_PAYLOAD_KEYS = [
   "policyDigest",
   "decision",
   "reasonCode",
+  "evaluationStartedAt",
   "decidedAt",
 ] as const;
 
@@ -446,6 +447,7 @@ export function validateDecidedPayload(
     invalid();
   }
   requireDigest(payload.policyDigest);
+  timestamp(payload.evaluationStartedAt);
   timestamp(payload.decidedAt);
   return Object.freeze({
     ...(payload as unknown as CodingPackDecidedEventPayload),

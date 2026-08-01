@@ -13,6 +13,7 @@ import { BrowserCodingPackStoreAdapter } from "./browserCodingPackStore";
 import {
   type CodingPackDestinationInvoker,
   chooseCodingPackDestination,
+  createCodingPackDestinationCapabilityVerifier,
   hasCodingPackDestinationCapability,
 } from "./codingPackDestination";
 import {
@@ -138,6 +139,15 @@ describe("Desktop Coding Pack store adapters", () => {
     expect(binding && hasCodingPackDestinationCapability(binding)).toBe(true);
     expect(picker).toHaveBeenCalledWith({ mode: "readwrite" });
     expect("createWritable" in handle).toBe(false);
+    await expect(createCodingPackDestinationCapabilityVerifier({
+      isTauriRuntime: () => false,
+    }).verifyDestinationCapability(binding!)).resolves.toBe(true);
+    await expect(createCodingPackDestinationCapabilityVerifier({
+      isTauriRuntime: () => false,
+    }).verifyDestinationCapability({
+      ...binding!,
+      destinationBindingId: `destination-${"f".repeat(24)}`,
+    })).resolves.toBe(false);
   });
 
   it("accepts only the public Tauri binding returned by the native picker", async () => {
@@ -156,6 +166,23 @@ describe("Desktop Coding Pack store adapters", () => {
       { request: { createdAt: CREATED_AT } },
     );
     expect(JSON.stringify(selected)).not.toContain("/");
+  });
+
+  it("uses only the read-only native destination verifier command", async () => {
+    const binding = await destination("native-verifier", true);
+    const invokeCommand = vi.fn(async (command: string) => (
+      command === "coding_pack_destination_verify"
+    ));
+    const verifier = createCodingPackDestinationCapabilityVerifier({
+      isTauriRuntime: () => true,
+      invokeCommand: invokeCommand as unknown as CodingPackDestinationInvoker,
+    });
+
+    await expect(verifier.verifyDestinationCapability(binding)).resolves.toBe(true);
+    expect(invokeCommand).toHaveBeenCalledWith("coding_pack_destination_verify", {
+      destinationBindingId: binding.destinationBindingId,
+    });
+    expect(invokeCommand).toHaveBeenCalledTimes(1);
   });
 
   it("does not call the store when product-level preview confirmation is tampered", async () => {
@@ -313,6 +340,7 @@ function decidedEvent() {
         "sha256:752a8bf1f251e5c05f07ddd8d820af3c5554fb37e3a47fbcf41933f614167d07",
       decision: "allow" as const,
       reasonCode: "policy_allowed",
+      evaluationStartedAt: CREATED_AT,
       decidedAt: CREATED_AT,
     },
   };

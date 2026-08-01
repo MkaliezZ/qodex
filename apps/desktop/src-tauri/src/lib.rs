@@ -325,6 +325,14 @@ fn coding_pack_destination_get(
     state.get_destination(&destination_binding_id)
 }
 
+#[tauri::command]
+fn coding_pack_destination_verify(
+    destination_binding_id: String,
+    state: tauri::State<'_, CodingPackDatabase>,
+) -> Result<bool, String> {
+    state.verify_destination_capability(&destination_binding_id)
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -362,6 +370,7 @@ pub fn run() {
             coding_pack_store_snapshot,
             coding_pack_store_operation_ids,
             coding_pack_destination_get,
+            coding_pack_destination_verify,
             managed_python::managed_python_inspect,
             managed_python::managed_python_provision,
             managed_python::managed_python_verify,

@@ -1245,12 +1245,24 @@ or policy source.
 One live atomic `PACK_CONFIRMED` snapshot is required before AgentFuse is
 called. The durable confirmed payload digest is the approval evidence identity.
 TypeScript and native persistence recompute the exact request digest, and the
-decision timestamp must remain inside both proposal and approval lifetimes.
+evaluation start must remain inside both proposal and approval lifetimes.
+Allow/deny completion must also remain inside the window; late allow/block and
+bridge/protocol completion after expiry persist as terminal error evidence with
+the actual `decidedAt`. Bridge responses reject unknown fields, malformed
+Unicode, non-canonical timestamps, and private error/path/content fields.
+Browser/Tauri destination capability is revalidated immediately before the
+call. Tauri canonicalizes the private stored path and recomputes its fingerprint
+without returning the path or writing.
 Canonical AgentFuse `allow` maps to `decided_allow`, `block` maps to
 `decided_deny`, and bridge/protocol/policy failure maps to `decided_error`.
 Store schema v2 persists exactly one `PACK_DECIDED` event; browser and SQLite
 v1 migration preserves proposed and confirmed history without automatic
 decision.
+
+The store guarantees at most one durable `PACK_DECIDED`. An operation-keyed
+in-process guard limits concurrent evaluations to one bridge call, but AgentFuse
+invocation is not exactly-once across crashes, multiple processes, or an
+explicit retry after decision persistence failure.
 
 Decision persistence failure leaves the operation confirmed and UI state does
 not advance. Restarted confirmed and decided operations are historical and
@@ -1263,6 +1275,11 @@ CODING_PACK_STORE_SCHEMA_V2=true
 PACK_PROPOSED_IMPLEMENTED=true
 PACK_CONFIRMED_IMPLEMENTED=true
 PACK_DECIDED_IMPLEMENTED=true
+EVALUATION_STARTED_AT_BOUND=true
+BRIDGE_RESPONSE_EXACT_KEYS=true
+DESTINATION_PRE_DECISION_REVALIDATION=true
+DURABLE_PACK_DECIDED_AT_MOST_ONCE=true
+AGENTFUSE_INVOCATION_EXACTLY_ONCE_ACROSS_CRASHES=false
 CODING_PACK_EXPORT_POLICY_ID=kerniq-coding-pack-export-v1
 CODING_PACK_EXPORT_POLICY_DIGEST=sha256:752a8bf1f251e5c05f07ddd8d820af3c5554fb37e3a47fbcf41933f614167d07
 PACK_EXPORT_STARTED_IMPLEMENTED=false

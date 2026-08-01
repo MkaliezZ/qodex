@@ -163,6 +163,7 @@ struct DecidedPayload {
     policy_digest: String,
     decision: String,
     reason_code: String,
+    evaluation_started_at: String,
     decided_at: String,
 }
 
@@ -189,18 +190,8 @@ impl CodingPackDatabase {
     ) -> Result<CodingPackDestinationBinding, String> {
         let canonical = canonical_destination(selected_path)?;
         parse_timestamp(&created_at).map_err(|_| destination_unavailable())?;
-        let private_path = canonical
-            .to_str()
-            .ok_or_else(destination_unavailable)?
-            .to_string();
-        validate_external_string(&private_path, 16 * 1024, false)
-            .map_err(|_| destination_unavailable())?;
-        let mut hasher = Sha256::new();
-        hasher.update(b"tauri\0");
-        hasher.update(private_path.as_bytes());
-        let fingerprint_hex = format!("{:x}", hasher.finalize());
-        let destination_fingerprint = format!("sha256:{fingerprint_hex}");
-        let destination_binding_id = format!("destination-{}", &fingerprint_hex[..24]);
+        let (private_path, destination_fingerprint, destination_binding_id) =
+            destination_identity(&canonical)?;
         let display_label = canonical
             .file_name()
             .and_then(|value| value.to_str())
@@ -362,12 +353,6 @@ impl CodingPackDatabase {
             &proposal,
         )?;
         let decision = validate_decided_pair(&operation, &event, &proposal, &approval, &events[1])?;
-        let now = current_time_millis()?;
-        if parse_timestamp(&proposal.expires_at)? <= now
-            || parse_timestamp(&approval.expires_at)? <= now
-        {
-            return Err(persistence_failed());
-        }
         if !immutable_operation_fields_match(&current, &operation)
             || current.state != "confirmed"
             || current.last_event_sequence != 2
@@ -452,6 +437,31 @@ impl CodingPackDatabase {
     ) -> Result<Option<CodingPackDestinationBinding>, String> {
         let connection = self.lock()?;
         select_destination_public(&connection, destination_binding_id)
+    }
+
+    pub fn verify_destination_capability(
+        &self,
+        destination_binding_id: &str,
+    ) -> Result<bool, String> {
+        if !is_destination_binding_id(destination_binding_id) {
+            return Ok(false);
+        }
+        let connection = self.lock()?;
+        let Some(stored) = select_destination_private(&connection, destination_binding_id)? else {
+            return Ok(false);
+        };
+        if !stored.binding.restart_available {
+            return Ok(false);
+        }
+        let Ok(canonical) = canonical_destination(Path::new(&stored.private_absolute_path)) else {
+            return Ok(false);
+        };
+        let Ok((private_path, fingerprint, binding_id)) = destination_identity(&canonical) else {
+            return Ok(false);
+        };
+        Ok(private_path == stored.private_absolute_path
+            && binding_id == stored.binding.destination_binding_id
+            && fingerprint == stored.binding.destination_fingerprint)
     }
 
     fn lock(&self) -> Result<std::sync::MutexGuard<'_, Connection>, String> {
@@ -840,9 +850,16 @@ fn validate_decided_pair(
         || payload.proposal_digest != proposal.proposal_digest
         || payload.approval_evidence_digest != confirmed_event.payload_digest
         || event.recorded_at != payload.decided_at
-        || parse_timestamp(&payload.decided_at)? < parse_timestamp(&approval.approved_at)?
-        || parse_timestamp(&payload.decided_at)? >= parse_timestamp(&approval.expires_at)?
-        || parse_timestamp(&payload.decided_at)? >= parse_timestamp(&proposal.expires_at)?
+        || parse_timestamp(&payload.evaluation_started_at)?
+            < parse_timestamp(&approval.approved_at)?
+        || parse_timestamp(&payload.evaluation_started_at)?
+            >= parse_timestamp(&approval.expires_at)?
+        || parse_timestamp(&payload.evaluation_started_at)?
+            >= parse_timestamp(&proposal.expires_at)?
+        || parse_timestamp(&payload.decided_at)? < parse_timestamp(&payload.evaluation_started_at)?
+        || (payload.decision != "error"
+            && (parse_timestamp(&payload.decided_at)? >= parse_timestamp(&approval.expires_at)?
+                || parse_timestamp(&payload.decided_at)? >= parse_timestamp(&proposal.expires_at)?))
         || event.payload_digest != sha256_canonical(&event.payload)?
         || !operation_matches_proposal(operation, proposal)
     {
@@ -866,6 +883,7 @@ fn validate_decided_payload(payload: &DecidedPayload) -> Result<(), String> {
     {
         return Err(persistence_failed());
     }
+    parse_timestamp(&payload.evaluation_started_at)?;
     parse_timestamp(&payload.decided_at)?;
     Ok(())
 }
@@ -1253,6 +1271,24 @@ fn canonical_destination(path: &Path) -> Result<PathBuf, String> {
     fs::canonicalize(path).map_err(|_| destination_unavailable())
 }
 
+fn destination_identity(canonical: &Path) -> Result<(String, String, String), String> {
+    let private_path = canonical
+        .to_str()
+        .ok_or_else(destination_unavailable)?
+        .to_string();
+    validate_external_string(&private_path, 16 * 1024, false)
+        .map_err(|_| destination_unavailable())?;
+    let mut hasher = Sha256::new();
+    hasher.update(b"tauri\0");
+    hasher.update(private_path.as_bytes());
+    let fingerprint_hex = format!("{:x}", hasher.finalize());
+    Ok((
+        private_path,
+        format!("sha256:{fingerprint_hex}"),
+        format!("destination-{}", &fingerprint_hex[..24]),
+    ))
+}
+
 fn store_unavailable() -> String {
     "coding_pack_store_unavailable".into()
 }
@@ -1563,6 +1599,62 @@ mod tests {
     }
 
     #[test]
+    fn destination_capability_verification_is_read_only_and_fails_closed() {
+        let root = test_root();
+        let destination = root.join("exports");
+        fs::create_dir_all(&destination).unwrap();
+        let database = CodingPackDatabase::open_path(&root.join("store.sqlite3")).unwrap();
+        let binding = database
+            .bind_destination(&destination, "2026-07-30T00:00:00.000Z".into())
+            .unwrap();
+
+        assert!(database
+            .verify_destination_capability(&binding.destination_binding_id)
+            .unwrap());
+        let row_count = database
+            .lock()
+            .unwrap()
+            .query_row(
+                "SELECT COUNT(*) FROM coding_pack_destination_bindings",
+                [],
+                |row| row.get::<_, i64>(0),
+            )
+            .unwrap();
+        fs::remove_dir_all(&destination).unwrap();
+        assert!(!database
+            .verify_destination_capability(&binding.destination_binding_id)
+            .unwrap());
+        fs::create_dir_all(&destination).unwrap();
+        database
+            .lock()
+            .unwrap()
+            .execute(
+                "UPDATE coding_pack_destination_bindings
+                 SET destination_fingerprint = ?2
+                 WHERE destination_binding_id = ?1",
+                params![binding.destination_binding_id, digest('9')],
+            )
+            .unwrap();
+        assert!(!database
+            .verify_destination_capability(&binding.destination_binding_id)
+            .unwrap());
+        assert_eq!(
+            database
+                .lock()
+                .unwrap()
+                .query_row(
+                    "SELECT COUNT(*) FROM coding_pack_destination_bindings",
+                    [],
+                    |row| row.get::<_, i64>(0),
+                )
+                .unwrap(),
+            row_count
+        );
+        drop(database);
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
     fn native_boundary_rejects_invalid_proposal_and_event_identity_before_write() {
         let root = test_root();
         let destination = root.join("exports");
@@ -1671,6 +1763,47 @@ mod tests {
             .unwrap();
         assert_eq!(snapshot.operation.state, "confirmed");
         assert_eq!(snapshot.events.len(), 2);
+        drop(database);
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn late_error_decision_persists_truthful_terminal_evidence() {
+        let root = test_root();
+        let destination = root.join("exports");
+        fs::create_dir_all(&destination).unwrap();
+        let database = CodingPackDatabase::open_path(&root.join("store.sqlite3")).unwrap();
+        let binding = database
+            .bind_destination(&destination, "2026-07-30T00:00:00.000Z".into())
+            .unwrap();
+        let proposed = proposed_request(&binding);
+        database.create_operation(proposed.clone()).unwrap();
+        database
+            .append_confirmation(confirmation_request(&proposed))
+            .unwrap();
+        let confirmed = database
+            .get_operation_snapshot_data("operation-1")
+            .unwrap()
+            .unwrap();
+        let mut late_error = decision_request(&confirmed);
+        late_error.operation.state = "decided_error".into();
+        late_error.decided_event.payload["decision"] = Value::String("error".into());
+        late_error.decided_event.payload["reasonCode"] = Value::String("bridge_timeout".into());
+        late_error.decided_event.payload["evaluationStartedAt"] =
+            Value::String("2099-07-30T00:04:59.999Z".into());
+        late_error.decided_event.payload["decidedAt"] =
+            Value::String("2099-07-30T00:05:00.001Z".into());
+        late_error.decided_event.recorded_at = "2099-07-30T00:05:00.001Z".into();
+        late_error.decided_event.payload_digest =
+            sha256_canonical(&late_error.decided_event.payload).unwrap();
+
+        database.append_decision(late_error).unwrap();
+        let decided = database
+            .get_operation_snapshot_data("operation-1")
+            .unwrap()
+            .unwrap();
+        assert_eq!(decided.operation.state, "decided_error");
+        assert_eq!(decided.events.len(), 3);
         drop(database);
         fs::remove_dir_all(root).unwrap();
     }
@@ -1802,6 +1935,7 @@ mod tests {
             policy_digest: CODING_PACK_EXPORT_POLICY_DIGEST.into(),
             decision: "allow".into(),
             reason_code: "policy_allowed".into(),
+            evaluation_started_at: "2099-07-30T00:00:01.000Z".into(),
             decided_at: "2099-07-30T00:00:02.000Z".into(),
         };
         let payload = serde_json::to_value(payload).unwrap();

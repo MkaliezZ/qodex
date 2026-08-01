@@ -110,6 +110,7 @@ export interface CodingPackDecidedEventPayload {
   readonly policyDigest: string;
   readonly decision: "allow" | "deny" | "error";
   readonly reasonCode: string;
+  readonly evaluationStartedAt: string;
   readonly decidedAt: string;
 }
 

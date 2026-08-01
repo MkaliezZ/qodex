@@ -35,6 +35,7 @@ const STORE_ERROR_COPY = {
   coding_pack_proposal_expired: "The export proposal expired. Create a new proposal.",
   coding_pack_approval_mismatch: "The approval did not match this exact export proposal.",
   coding_pack_destination_unavailable: "Choose an available destination again.",
+  coding_pack_decision_in_progress: "This export policy is already being evaluated.",
   coding_pack_persistence_failed: "The lifecycle update was not persisted. No files were written.",
 } as const;
 

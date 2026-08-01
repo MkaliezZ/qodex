@@ -224,18 +224,21 @@ export class CodingPackStore {
       throw new CodingPackStoreError("coding_pack_approval_mismatch");
     }
     const now = this.now();
-    if (
-      Date.parse(snapshot.proposal.expiresAt) <= now.getTime()
-      || Date.parse(snapshot.approval.expiresAt) <= now.getTime()
-    ) {
-      throw new CodingPackStoreError("coding_pack_proposal_expired");
-    }
+    const evaluationStartedAt = Date.parse(decision.evaluationStartedAt);
+    const decidedAt = Date.parse(decision.decidedAt);
+    const approvalExpiresAt = Date.parse(snapshot.approval.expiresAt);
+    const proposalExpiresAt = Date.parse(snapshot.proposal.expiresAt);
     if (
       decision.proposalDigest !== snapshot.proposal.proposalDigest
       || decision.approvalEvidenceDigest !== snapshot.events[1].payloadDigest
-      || Date.parse(decision.decidedAt) < Date.parse(snapshot.approval.approvedAt)
-      || Date.parse(decision.decidedAt) >= Date.parse(snapshot.approval.expiresAt)
-      || Date.parse(decision.decidedAt) >= Date.parse(snapshot.proposal.expiresAt)
+      || evaluationStartedAt < Date.parse(snapshot.approval.approvedAt)
+      || evaluationStartedAt >= approvalExpiresAt
+      || evaluationStartedAt >= proposalExpiresAt
+      || decidedAt < evaluationStartedAt
+      || (decision.decision !== "error" && (
+        decidedAt >= approvalExpiresAt
+        || decidedAt >= proposalExpiresAt
+      ))
     ) {
       throw new CodingPackStoreError("coding_pack_approval_mismatch");
     }
@@ -248,6 +251,7 @@ export class CodingPackStore {
     if (decision.requestDigest !== expectedRequestDigest) {
       throw new CodingPackStoreError("coding_pack_approval_mismatch");
     }
+    rejectFutureTimestamp(decision.evaluationStartedAt, now, true);
     rejectFutureTimestamp(decision.decidedAt, now, true);
     const decidedEvent = await validateEvent({
       eventId: boundedId(this.createId()),
@@ -450,9 +454,14 @@ async function reconstructSnapshot(
       || decision.approvalEvidenceDigest !== secondEvent?.payloadDigest
       || decision.requestDigest !== expectedRequestDigest
       || thirdEvent?.recordedAt !== decision.decidedAt
-      || Date.parse(decision.decidedAt) < Date.parse(approval.approvedAt)
-      || Date.parse(decision.decidedAt) >= Date.parse(approval.expiresAt)
-      || Date.parse(decision.decidedAt) >= Date.parse(proposal.expiresAt)
+      || Date.parse(decision.evaluationStartedAt) < Date.parse(approval.approvedAt)
+      || Date.parse(decision.evaluationStartedAt) >= Date.parse(approval.expiresAt)
+      || Date.parse(decision.evaluationStartedAt) >= Date.parse(proposal.expiresAt)
+      || Date.parse(decision.decidedAt) < Date.parse(decision.evaluationStartedAt)
+      || (decision.decision !== "error" && (
+        Date.parse(decision.decidedAt) >= Date.parse(approval.expiresAt)
+        || Date.parse(decision.decidedAt) >= Date.parse(proposal.expiresAt)
+      ))
     ) {
       invalid();
     }

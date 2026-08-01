@@ -142,7 +142,11 @@ v0.7.4.2 migrates the dedicated store to
 `kerniq-coding-pack-export-v1` AgentFuse profile, derives one digest-only request
 from a live confirmed snapshot, and persists exactly one `PACK_DECIDED`
 allow/deny/error event. It performs no source read, destination write, staging,
-or Action Runtime dispatch. Recovered decisions remain historical.
+or Action Runtime dispatch. The corrected contract binds evaluation start,
+turns late allow/block into terminal error evidence, validates exact response
+keys, revalidates the observed destination capability, and distinguishes one
+durable decision from non-crash-safe bridge invocation. Recovered decisions
+remain historical.
 
 Automatic discovery, `.gitignore` parsing, content secret scanning, physical
 export, `PACK_EXPORT_STARTED`, `PACK_EXPORT_COMPLETED`, and Action Runtime

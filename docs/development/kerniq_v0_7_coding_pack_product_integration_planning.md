@@ -1203,9 +1203,18 @@ is `kerniq-coding-pack-export-v1` with digest
 `sha256:752a8bf1f251e5c05f07ddd8d820af3c5554fb37e3a47fbcf41933f614167d07`.
 Store schema v2 adds exactly one `PACK_DECIDED` allow/deny/error event and
 migrates v1 history without automatic advancement.
+The corrected event binds `evaluationStartedAt`. Evaluation must begin in-window;
+allow/deny must also complete in-window, while a late result is durable error
+evidence. Exact-key bridge validation and immediate destination capability
+revalidation fail closed. The durable event is at-most-once, but AgentFuse
+invocation is not exactly-once across crashes, processes, or explicit retry
+after persistence failure.
 
 ```text
 PACK_DECIDED_IMPLEMENTED=true
+EVALUATION_STARTED_AT_BOUND=true
+DESTINATION_PRE_DECISION_REVALIDATION=true
+AGENTFUSE_INVOCATION_EXACTLY_ONCE_ACROSS_CRASHES=false
 AGENTFUSE_EXPORT_POLICY_CONNECTED=true
 PACK_EXPORT_STARTED_IMPLEMENTED=false
 PACK_EXPORT_COMPLETED_IMPLEMENTED=false
