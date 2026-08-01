@@ -352,7 +352,7 @@ async function reconstructSnapshot(
 ): Promise<CodingPackOperationSnapshot> {
   if (
     events.length < 1
-    || events.length > 3
+    || events.length > 5
     || operation.lastEventSequence !== events.length
   ) {
     invalid();
@@ -403,11 +403,49 @@ async function reconstructSnapshot(
   const decision = thirdEvent && "decision" in thirdEvent.payload
     ? thirdEvent.payload
     : null;
-  const expectedState = decision
-    ? decisionState(decision.decision)
-    : approval
-      ? "confirmed"
-      : "proposed";
+  const fourthEvent = events[3];
+  if (
+    fourthEvent
+    && (
+      fourthEvent.eventType !== "PACK_EXPORT_STARTED"
+      || !("startedAt" in fourthEvent.payload)
+    )
+  ) {
+    invalid();
+  }
+  const exportStarted = fourthEvent && "startedAt" in fourthEvent.payload
+    ? fourthEvent.payload
+    : null;
+  const fifthEvent = events[4];
+  if (
+    fifthEvent
+    && fifthEvent.eventType !== "PACK_EXPORT_COMPLETED"
+    && fifthEvent.eventType !== "PACK_EXPORT_INTERRUPTED"
+  ) {
+    invalid();
+  }
+  const exportCompleted = fifthEvent
+    && fifthEvent.eventType === "PACK_EXPORT_COMPLETED"
+    && "completedAt" in fifthEvent.payload
+    ? fifthEvent.payload
+    : null;
+  const exportInterrupted = fifthEvent
+    && fifthEvent.eventType === "PACK_EXPORT_INTERRUPTED"
+    && "interruptedAt" in fifthEvent.payload
+    ? fifthEvent.payload
+    : null;
+  if (fifthEvent && !exportCompleted && !exportInterrupted) invalid();
+  const expectedState = exportCompleted
+    ? "export_completed"
+    : exportInterrupted
+      ? "export_interrupted"
+      : exportStarted
+        ? "export_started"
+        : decision
+          ? decisionState(decision.decision)
+          : approval
+            ? "confirmed"
+            : "proposed";
   if (
     operation.state !== expectedState
     || operation.projectBindingId !== proposal.projectBindingId
@@ -467,11 +505,59 @@ async function reconstructSnapshot(
     }
     validateDecidedPayload(decision);
   }
+  if (exportStarted) {
+    if (
+      !approval
+      || !decision
+      || decision.decision !== "allow"
+      || fourthEvent?.recordedAt !== exportStarted.startedAt
+      || exportStarted.decisionId !== decision.decisionId
+      || exportStarted.requestDigest !== decision.requestDigest
+      || exportStarted.proposalDigest !== proposal.proposalDigest
+      || exportStarted.manifestDigest !== proposal.manifestDigest
+      || exportStarted.destinationBindingId !== proposal.destinationBindingId
+      || exportStarted.destinationFingerprint !== proposal.destinationFingerprint
+      || Date.parse(exportStarted.startedAt) < Date.parse(decision.decidedAt)
+      || Date.parse(exportStarted.startedAt) >= Date.parse(proposal.expiresAt)
+      || Date.parse(exportStarted.startedAt) >= Date.parse(approval.expiresAt)
+    ) {
+      invalid();
+    }
+  }
+  if (exportCompleted) {
+    if (
+      !exportStarted
+      || fifthEvent?.recordedAt !== exportCompleted.completedAt
+      || exportCompleted.exportAttemptId !== exportStarted.exportAttemptId
+      || exportCompleted.exportPlanDigest !== exportStarted.exportPlanDigest
+      || exportCompleted.manifestDigest !== exportStarted.manifestDigest
+      || exportCompleted.targetName !== exportStarted.targetName
+      || exportCompleted.sourceFileCount !== exportStarted.sourceFileCount
+      || exportCompleted.sourceTotalBytes !== exportStarted.sourceTotalBytes
+      || Date.parse(exportCompleted.completedAt) < Date.parse(exportStarted.startedAt)
+    ) {
+      invalid();
+    }
+  }
+  if (exportInterrupted) {
+    if (
+      !exportStarted
+      || fifthEvent?.recordedAt !== exportInterrupted.interruptedAt
+      || exportInterrupted.exportAttemptId !== exportStarted.exportAttemptId
+      || exportInterrupted.exportPlanDigest !== exportStarted.exportPlanDigest
+      || Date.parse(exportInterrupted.interruptedAt) < Date.parse(exportStarted.startedAt)
+    ) {
+      invalid();
+    }
+  }
   return Object.freeze({
     operation,
     proposal,
     approval,
     decision,
+    exportStarted,
+    exportCompleted,
+    exportInterrupted,
     destination,
     events: Object.freeze([...events]),
   });

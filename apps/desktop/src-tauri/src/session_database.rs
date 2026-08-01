@@ -1,6 +1,7 @@
 use rusqlite::{params, Connection, OptionalExtension, TransactionBehavior};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use sha2::{Digest, Sha256};
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
@@ -357,6 +358,37 @@ impl SessionDatabase {
         }))
     }
 
+    pub(crate) fn resolve_private_project_root(
+        &self,
+        binding_id: &str,
+    ) -> Result<Option<PathBuf>, String> {
+        let stored: Option<(String, String)> = self
+            .lock()?
+            .query_row(
+                "SELECT private_root_path, project_fingerprint
+                 FROM project_bindings WHERE binding_id = ?1",
+                [binding_id],
+                |row| Ok((row.get(0)?, row.get(1)?)),
+            )
+            .optional()
+            .map_err(database_read_error)?;
+        let Some((private_root_path, stored_fingerprint)) = stored else {
+            return Ok(None);
+        };
+        let canonical = canonical_project_root(&private_root_path)?;
+        let canonical_text = canonical
+            .to_str()
+            .ok_or_else(|| "The selected project root is not UTF-8 addressable.".to_string())?;
+        let (expected_binding_id, expected_fingerprint) = project_binding_identity(canonical_text);
+        if binding_id != expected_binding_id
+            || stored_fingerprint != expected_fingerprint
+            || private_root_path != canonical_text
+        {
+            return Ok(None);
+        }
+        Ok(Some(canonical))
+    }
+
     pub fn persistence_info(&self) -> PersistenceInfo {
         PersistenceInfo {
             kind: "sqlite",
@@ -523,6 +555,17 @@ fn canonical_project_root(root: &str) -> Result<PathBuf, String> {
     fs::canonicalize(root).map_err(|_| "The selected project root could not be normalized.".into())
 }
 
+fn project_binding_identity(canonical_root: &str) -> (String, String) {
+    let mut hasher = Sha256::new();
+    hasher.update(b"tauri\0");
+    hasher.update(canonical_root.as_bytes());
+    let fingerprint_hex = format!("{:x}", hasher.finalize());
+    (
+        format!("project-{}", &fingerprint_hex[..24]),
+        format!("sha256:{fingerprint_hex}"),
+    )
+}
+
 fn database_open_error(_: rusqlite::Error) -> String {
     "KerniQ could not initialize its local session database; no user data was deleted.".into()
 }
@@ -685,6 +728,51 @@ mod tests {
                 },
             )
             .unwrap());
+        drop(database);
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn native_project_root_resolver_requires_recomputed_private_identity() {
+        let root = test_root();
+        let project = root.join("project");
+        fs::create_dir_all(&project).unwrap();
+        let canonical = fs::canonicalize(&project).unwrap();
+        let canonical_text = canonical.to_str().unwrap();
+        let (binding_id, fingerprint) = project_binding_identity(canonical_text);
+        let database = SessionDatabase::open_path(&root.join("sessions.sqlite3")).unwrap();
+        database
+            .upsert_binding(ProjectBindingInput {
+                binding_id: binding_id.clone(),
+                display_name: "Project".into(),
+                private_root_path: canonical_text.into(),
+                project_fingerprint: fingerprint,
+                last_opened_at: "2026-01-01T00:00:00Z".into(),
+            })
+            .unwrap();
+
+        assert_eq!(
+            database.resolve_private_project_root(&binding_id).unwrap(),
+            Some(canonical)
+        );
+        assert!(database
+            .resolve_private_project_root("project-000000000000000000000000")
+            .unwrap()
+            .is_none());
+        database
+            .lock()
+            .unwrap()
+            .execute(
+                "UPDATE project_bindings SET project_fingerprint = 'tampered'
+                 WHERE binding_id = ?1",
+                [&binding_id],
+            )
+            .unwrap();
+        assert!(database
+            .resolve_private_project_root(&binding_id)
+            .unwrap()
+            .is_none());
+
         drop(database);
         fs::remove_dir_all(root).unwrap();
     }

@@ -11,7 +11,7 @@ const projectFiles = {
   "logo.png": "fixture binary-like bytes",
 };
 
-test.describe("KerniQ v0.7.4.2 Coding Pack preview and AgentFuse decision", () => {
+test.describe("KerniQ v0.7.4.3 Coding Pack preview, decision, and export boundary", () => {
   test("covers no-project, no-selection, confirmation, stale, and keyboard states", async ({ page }) => {
     await installProjectFixture(page, projectFiles, { readDelayMs: 300 });
     await setupApp(page);
@@ -132,6 +132,10 @@ test.describe("KerniQ v0.7.4.2 Coding Pack preview and AgentFuse decision", () =
     await expect(preview.getByTestId("coding-pack-policy-result")).toContainText(
       "Export has not started",
     );
+    await expect(exportIntent.getByText(
+      "Native Desktop required for atomic export",
+    )).toBeVisible();
+    await expect(preview.getByTestId("coding-pack-export")).toHaveCount(0);
 
     await expect(page.locator("body")).not.toContainText("browser://");
     await expect(page.locator("body")).not.toContainText(projectFiles["src/math.ts"]);
@@ -149,5 +153,6 @@ test.describe("KerniQ v0.7.4.2 Coding Pack preview and AgentFuse decision", () =
     await expect(page.getByTestId("coding-pack-evaluate-policy")).toHaveCount(0);
     await expect(recovered.getByText("browser destination capability is unavailable")).toBeVisible();
     await expect(page.getByText("Exact preview confirmed")).toHaveCount(0);
+    await expect(recovered.getByTestId("coding-pack-export")).toHaveCount(0);
   });
 });

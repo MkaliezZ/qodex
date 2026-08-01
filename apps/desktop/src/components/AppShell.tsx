@@ -32,6 +32,10 @@ import type {
   CodingPackPreviewConfirmation,
   CodingPackPreviewErrorCode,
 } from "../codingPack/preview";
+import type {
+  CodingPackNativeExportErrorCode,
+  CodingPackNativeExportResult,
+} from "../platform/codingPackNativeExport";
 
 const PROJECT_COMMAND_REAL_PROOF_ENABLED =
   import.meta.env.VITE_KERNIQ_ENABLE_AGENTFUSE_PROOF === "1"
@@ -72,6 +76,10 @@ interface RuntimeContextValue {
   createCurrentCodingPackExportProposal: () => Promise<void>;
   confirmCurrentCodingPackExportProposal: () => Promise<void>;
   evaluateCurrentCodingPackExportPolicy: () => Promise<void>;
+  codingPackNativeExportAvailable: boolean;
+  codingPackNativeExportResult: CodingPackNativeExportResult | null;
+  codingPackNativeExportError: CodingPackNativeExportErrorCode | null;
+  exportCurrentCodingPack: () => Promise<void>;
   lastBundle: ContextBundle | null;
   estimatedTokens: number;
   pendingProposal: PatchProposal | null;

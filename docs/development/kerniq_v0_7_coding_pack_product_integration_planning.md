@@ -1,7 +1,7 @@
 # KerniQ v0.7 Coding Pack Product Integration Planning
 
 **Date:** 2026-07-29
-**Status:** Living plan; v0.7.4.1 merged and v0.7.4.2 implemented for Draft PR
+**Status:** Living plan; v0.7.4.2 merged and v0.7.4.3 implemented for Draft PR
 **Planning base:** `0486704d613ea203672d75bee455346cceafb225`
 **v0.6.1 freeze activation merge:** `0486704d613ea203672d75bee455346cceafb225`
 **v0.6.1 freeze activation post-merge CI:** `30432376199`
@@ -16,7 +16,7 @@ Session ledger. At that base, none of those foundations created, previewed,
 identified, persisted, refreshed, or exported a Coding Pack.
 
 ```text
-CURRENT_CODING_PACK_STATE=DURABLE_EXPORT_PROPOSAL_IMPLEMENTED_FOR_DRAFT_PR
+CURRENT_CODING_PACK_STATE=TAURI_NATIVE_ATOMIC_EXPORT_IMPLEMENTED_FOR_DRAFT_PR
 V0_7_PLANNING_BASE_MAIN=0486704d613ea203672d75bee455346cceafb225
 ```
 
@@ -1220,6 +1220,35 @@ PACK_EXPORT_STARTED_IMPLEMENTED=false
 PACK_EXPORT_COMPLETED_IMPLEMENTED=false
 CODING_PACK_EXPORT_IMPLEMENTED=false
 DESTINATION_FILES_WRITTEN=false
+ACTION_RUNTIME_CONNECTED=false
+SESSION_SCHEMA_CHANGED=false
+PROJECT_COMMAND_FREEZE_CHANGED=false
+```
+
+## v0.7.4.3 Native Atomic Export
+
+v0.7.4.2 merged through exact-head merge commit
+`6d592a199d5d4ee65663f107f64dfbb91cd1d8e5`.
+
+v0.7.4.3 implements the planned write boundary in Tauri Desktop only. A current
+preview and confirmation are required in memory; durable historical allow is
+never independently actionable. Native code resolves only trusted local
+bindings, revalidates manifest/source/destination identity before STARTED,
+stages under the destination parent, and uses platform no-overwrite directory
+promotion. The portable bundle contains only canonical `manifest.json` and
+exact included bytes beneath `sources/`. Browser export, Action Runtime,
+automatic restart replay/retry, and cross-filesystem fallback remain disabled.
+
+```text
+CODING_PACK_STORE_SCHEMA_V3=true
+PACK_EXPORT_STARTED_IMPLEMENTED=true
+PACK_EXPORT_COMPLETED_IMPLEMENTED=true
+PACK_EXPORT_INTERRUPTED_IMPLEMENTED=true
+CODING_PACK_NATIVE_EXPORT_IMPLEMENTED=true
+BROWSER_PHYSICAL_EXPORT_IMPLEMENTED=false
+CROSS_FILESYSTEM_COPY_FALLBACK=false
+RESTART_AUTO_EXPORT=false
+RESTART_AUTO_RETRY=false
 ACTION_RUNTIME_CONNECTED=false
 SESSION_SCHEMA_CHANGED=false
 PROJECT_COMMAND_FREEZE_CHANGED=false

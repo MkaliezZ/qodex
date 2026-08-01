@@ -1,4 +1,6 @@
-export const CODING_PACK_STORE_SCHEMA_VERSION = "kerniq.coding-pack.store.v2" as const;
+export const CODING_PACK_STORE_SCHEMA_VERSION = "kerniq.coding-pack.store.v3" as const;
+export const CODING_PACK_EXPORT_PLAN_SCHEMA_VERSION =
+  "kerniq.coding-pack.export-plan.v1" as const;
 export const CODING_PACK_EXPORT_PROPOSAL_SCHEMA_VERSION =
   "kerniq.coding-pack.export-proposal.v1" as const;
 export const CODING_PACK_EXPORT_APPROVAL_SCHEMA_VERSION =
@@ -15,11 +17,17 @@ export type CodingPackOperationState =
   | "confirmed"
   | "decided_allow"
   | "decided_deny"
-  | "decided_error";
+  | "decided_error"
+  | "export_started"
+  | "export_completed"
+  | "export_interrupted";
 export type CodingPackEventType =
   | "PACK_PROPOSED"
   | "PACK_CONFIRMED"
-  | "PACK_DECIDED";
+  | "PACK_DECIDED"
+  | "PACK_EXPORT_STARTED"
+  | "PACK_EXPORT_COMPLETED"
+  | "PACK_EXPORT_INTERRUPTED";
 
 export interface CodingPackDestinationBinding {
   readonly destinationBindingId: string;
@@ -114,6 +122,69 @@ export interface CodingPackDecidedEventPayload {
   readonly decidedAt: string;
 }
 
+export interface CodingPackNativeExportPlan {
+  readonly schemaVersion: typeof CODING_PACK_EXPORT_PLAN_SCHEMA_VERSION;
+  readonly operationId: string;
+  readonly exportAttemptId: string;
+  readonly decisionId: string;
+  readonly requestDigest: string;
+  readonly proposalDigest: string;
+  readonly candidatePathsDigest: string;
+  readonly sourceFingerprint: string;
+  readonly packId: string;
+  readonly manifestDigest: string;
+  readonly destinationBindingId: string;
+  readonly destinationFingerprint: string;
+  readonly targetName: string;
+  readonly manifestByteCount: number;
+  readonly sourceFileCount: number;
+  readonly sourceTotalBytes: number;
+  readonly exportStartedAt: string;
+  readonly exportPlanDigest: string;
+}
+
+export interface CodingPackExportStartedEventPayload {
+  readonly exportAttemptId: string;
+  readonly exportPlanDigest: string;
+  readonly decisionId: string;
+  readonly requestDigest: string;
+  readonly proposalDigest: string;
+  readonly manifestDigest: string;
+  readonly destinationBindingId: string;
+  readonly destinationFingerprint: string;
+  readonly targetName: string;
+  readonly sourceFileCount: number;
+  readonly sourceTotalBytes: number;
+  readonly startedAt: string;
+}
+
+export interface CodingPackExportCompletedEventPayload {
+  readonly exportAttemptId: string;
+  readonly exportPlanDigest: string;
+  readonly manifestDigest: string;
+  readonly targetName: string;
+  readonly sourceFileCount: number;
+  readonly sourceTotalBytes: number;
+  readonly completedAt: string;
+}
+
+export type CodingPackExportInterruptedPhaseCode =
+  | "staging_create"
+  | "manifest_write"
+  | "source_write"
+  | "flush"
+  | "promotion"
+  | "cleanup";
+
+export interface CodingPackExportInterruptedEventPayload {
+  readonly exportAttemptId: string;
+  readonly exportPlanDigest: string;
+  readonly phaseCode: CodingPackExportInterruptedPhaseCode;
+  readonly physicalState: "not_promoted";
+  readonly reasonCode: string;
+  readonly interruptedAt: string;
+}
+
 export interface CodingPackAgentFuseExportRequestIdentity {
   readonly protocolVersion: typeof CODING_PACK_AGENTFUSE_EXPORT_PROTOCOL;
   readonly operationId: string;
@@ -131,7 +202,10 @@ export interface CodingPackAgentFuseExportRequestIdentity {
 export type CodingPackEventPayload =
   | CodingPackProposedEventPayload
   | CodingPackConfirmedEventPayload
-  | CodingPackDecidedEventPayload;
+  | CodingPackDecidedEventPayload
+  | CodingPackExportStartedEventPayload
+  | CodingPackExportCompletedEventPayload
+  | CodingPackExportInterruptedEventPayload;
 
 export interface CodingPackEvent {
   readonly eventId: string;
@@ -149,6 +223,9 @@ export interface CodingPackOperationSnapshot {
   readonly proposal: CodingPackExportProposal;
   readonly approval: CodingPackExportApproval | null;
   readonly decision: CodingPackDecidedEventPayload | null;
+  readonly exportStarted: CodingPackExportStartedEventPayload | null;
+  readonly exportCompleted: CodingPackExportCompletedEventPayload | null;
+  readonly exportInterrupted: CodingPackExportInterruptedEventPayload | null;
   readonly destination: CodingPackDestinationBinding;
   readonly events: readonly CodingPackEvent[];
 }

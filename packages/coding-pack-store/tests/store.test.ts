@@ -516,6 +516,154 @@ describe("CodingPackStore lifecycle", () => {
 });
 
 describe("CodingPackStore event integrity", () => {
+  it("reconstructs started, completed, and interrupted export evidence exactly", async () => {
+    const adapter = new InspectableAdapter();
+    const store = createStore(adapter);
+    const destination = await destinationBinding("native-lifecycle");
+    await store.registerDestinationBinding(destination);
+    const proposed = await store.createCodingPackExportProposal(proposalInput(destination));
+    const approval = store.createCodingPackExportApproval({
+      operationId: proposed.operation.operationId,
+      proposalDigest: proposed.proposal.proposalDigest,
+      approvedAt: CREATED_AT,
+      expiresAt: APPROVAL_EXPIRES_AT,
+    });
+    const confirmed = await store.confirmCodingPackExportProposal(approval);
+    const decided = await store.recordCodingPackExportDecision({
+      operationId: confirmed.operation.operationId,
+      decision: await decisionPayload(confirmed, "allow"),
+    });
+    const startedPayload = {
+      exportAttemptId: "export-attempt-1",
+      exportPlanDigest: digest("a"),
+      decisionId: decided.decision!.decisionId,
+      requestDigest: decided.decision!.requestDigest,
+      proposalDigest: decided.proposal.proposalDigest,
+      manifestDigest: decided.proposal.manifestDigest,
+      destinationBindingId: decided.destination.destinationBindingId,
+      destinationFingerprint: decided.destination.destinationFingerprint,
+      targetName: `kerniq-coding-pack-${"4".repeat(64)}`,
+      sourceFileCount: 1,
+      sourceTotalBytes: 27,
+      startedAt: "2026-07-30T00:00:01.000Z",
+    } as const;
+    const startedEvent: CodingPackEvent = {
+      eventId: "event-export-started",
+      operationId: decided.operation.operationId,
+      eventSequence: 4,
+      eventType: "PACK_EXPORT_STARTED",
+      eventVersion: 1,
+      recordedAt: startedPayload.startedAt,
+      payloadDigest: await createEventPayloadDigest(startedPayload),
+      payload: startedPayload,
+    };
+    adapter.operations.set(decided.operation.operationId, {
+      ...decided.operation,
+      state: "export_started",
+      lastEventSequence: 4,
+    });
+    adapter.events.get(decided.operation.operationId)!.push(startedEvent);
+    const started = await store.getCodingPackOperation(decided.operation.operationId);
+    expect(started?.operation.state).toBe("export_started");
+    expect(started?.exportStarted).toEqual(startedPayload);
+    expect(started?.exportCompleted).toBeNull();
+    expect(started?.exportInterrupted).toBeNull();
+
+    const completedPayload = {
+      exportAttemptId: startedPayload.exportAttemptId,
+      exportPlanDigest: startedPayload.exportPlanDigest,
+      manifestDigest: startedPayload.manifestDigest,
+      targetName: startedPayload.targetName,
+      sourceFileCount: startedPayload.sourceFileCount,
+      sourceTotalBytes: startedPayload.sourceTotalBytes,
+      completedAt: "2026-07-30T00:00:02.000Z",
+    } as const;
+    const completedEvent: CodingPackEvent = {
+      eventId: "event-export-completed",
+      operationId: decided.operation.operationId,
+      eventSequence: 5,
+      eventType: "PACK_EXPORT_COMPLETED",
+      eventVersion: 1,
+      recordedAt: completedPayload.completedAt,
+      payloadDigest: await createEventPayloadDigest(completedPayload),
+      payload: completedPayload,
+    };
+    adapter.operations.set(decided.operation.operationId, {
+      ...decided.operation,
+      state: "export_completed",
+      lastEventSequence: 5,
+    });
+    adapter.events.get(decided.operation.operationId)!.push(completedEvent);
+    expect((await store.getCodingPackOperation(
+      decided.operation.operationId,
+    ))?.exportCompleted).toEqual(completedPayload);
+
+    const interruptedPayload = {
+      exportAttemptId: startedPayload.exportAttemptId,
+      exportPlanDigest: startedPayload.exportPlanDigest,
+      phaseCode: "promotion",
+      physicalState: "not_promoted",
+      reasonCode: "atomic_promotion_failed",
+      interruptedAt: "2026-07-30T00:00:02.000Z",
+    } as const;
+    const interruptedEvent: CodingPackEvent = {
+      eventId: "event-export-interrupted",
+      operationId: decided.operation.operationId,
+      eventSequence: 5,
+      eventType: "PACK_EXPORT_INTERRUPTED",
+      eventVersion: 1,
+      recordedAt: interruptedPayload.interruptedAt,
+      payloadDigest: await createEventPayloadDigest(interruptedPayload),
+      payload: interruptedPayload,
+    };
+    adapter.operations.set(decided.operation.operationId, {
+      ...decided.operation,
+      state: "export_interrupted",
+      lastEventSequence: 5,
+    });
+    adapter.events.set(decided.operation.operationId, [
+      ...decided.events,
+      startedEvent,
+      interruptedEvent,
+    ]);
+    expect((await store.getCodingPackOperation(
+      decided.operation.operationId,
+    ))?.exportInterrupted).toEqual(interruptedPayload);
+  });
+
+  it("rejects completion without start and duplicate export terminal evidence", async () => {
+    const destination = await destinationBinding("invalid-export-sequence");
+    const adapter = new InspectableAdapter();
+    const store = createStore(adapter);
+    await store.registerDestinationBinding(destination);
+    const proposed = await store.createCodingPackExportProposal(proposalInput(destination));
+    adapter.operations.set(proposed.operation.operationId, {
+      ...proposed.operation,
+      state: "export_completed",
+      lastEventSequence: 2,
+    });
+    adapter.events.get(proposed.operation.operationId)!.push({
+      eventId: "completion-without-start",
+      operationId: proposed.operation.operationId,
+      eventSequence: 2,
+      eventType: "PACK_EXPORT_COMPLETED",
+      eventVersion: 1,
+      recordedAt: CREATED_AT,
+      payloadDigest: digest("9"),
+      payload: {
+        exportAttemptId: "attempt",
+        exportPlanDigest: digest("a"),
+        manifestDigest: digest("4"),
+        targetName: `kerniq-coding-pack-${"4".repeat(64)}`,
+        sourceFileCount: 0,
+        sourceTotalBytes: 0,
+        completedAt: CREATED_AT,
+      },
+    });
+    await expect(store.getCodingPackOperation(proposed.operation.operationId))
+      .rejects.toMatchObject({ code: "coding_pack_proposal_invalid" });
+  });
+
   it("rejects missing, duplicate, out-of-order, and mutated event evidence", async () => {
     const destination = await destinationBinding("events");
     const adapter = new InspectableAdapter();

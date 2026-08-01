@@ -74,7 +74,7 @@ describe("Desktop Coding Pack store adapters", () => {
     expect(storage.value()).not.toContain("FileSystemDirectoryHandle");
   });
 
-  it("migrates browser v1 records to v2 without deciding or exporting", async () => {
+  it("migrates browser v1 records to v3 without deciding or exporting", async () => {
     const storage = new MemoryStorage();
     const adapter = new BrowserCodingPackStoreAdapter(storage);
     const binding = await destination("browser-migration", false);
@@ -82,7 +82,7 @@ describe("Desktop Coding Pack store adapters", () => {
     await adapter.createOperation(operation(binding), proposedEvent(binding));
     storage.replaceValue(
       storage.value().replace(
-        "kerniq.coding-pack.store.v2",
+        "kerniq.coding-pack.store.v3",
         "kerniq.coding-pack.store.v1",
       ),
     );
@@ -91,8 +91,9 @@ describe("Desktop Coding Pack store adapters", () => {
     const snapshot = await migrated.getOperationSnapshotData("operation-1");
     expect(snapshot?.operation.state).toBe("proposed");
     expect(snapshot?.events).toHaveLength(1);
-    expect(storage.value()).toContain("kerniq.coding-pack.store.v2");
+    expect(storage.value()).toContain("kerniq.coding-pack.store.v3");
     expect(storage.value()).not.toContain("PACK_DECIDED");
+    expect(storage.value()).not.toContain("PACK_EXPORT_STARTED");
   });
 
   it("rejects browser rebinding and never mixes a concurrent confirmation into a snapshot", async () => {
