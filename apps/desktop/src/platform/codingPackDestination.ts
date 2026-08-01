@@ -5,6 +5,9 @@ import {
   type CodingPackDestinationBinding,
   type CodingPackStore,
 } from "@qodex/coding-pack-store";
+import type {
+  CodingPackDestinationCapabilityVerifier,
+} from "@qodex/coding-pack-agentfuse";
 
 interface CodingPackDirectoryPickerHost {
   showDirectoryPicker?: (
@@ -69,6 +72,26 @@ export function hasCodingPackDestinationCapability(
 ): boolean {
   return binding.restartAvailable
     || browserDestinationCapabilities.has(binding.destinationBindingId);
+}
+
+export function createCodingPackDestinationCapabilityVerifier(
+  dependencies: Pick<
+    CodingPackDestinationDependencies,
+    "isTauriRuntime" | "invokeCommand"
+  > = {},
+): CodingPackDestinationCapabilityVerifier {
+  return {
+    async verifyDestinationCapability(binding) {
+      if ((dependencies.isTauriRuntime ?? isTauri)()) {
+        const invokeCommand = dependencies.invokeCommand ?? invoke;
+        return invokeCommand<boolean>("coding_pack_destination_verify", {
+          destinationBindingId: binding.destinationBindingId,
+        });
+      }
+      const handle = browserDestinationCapabilities.get(binding.destinationBindingId);
+      return binding.restartAvailable === false && handle?.kind === "directory";
+    },
+  };
 }
 
 function isCancellation(error: unknown): boolean {

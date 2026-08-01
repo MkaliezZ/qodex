@@ -282,6 +282,27 @@ export async function installProjectFixture(
       if (persistent) localStorage.setItem(storageKey, JSON.stringify(state));
     };
     window.__kerniqProjectFixture = state;
+    window.__kerniqTestCodingPackAgentFuseBridge = {
+      requestCodingPackExportDecision: async (request) => ({
+        protocolVersion: "kerniq.agentfuse.bridge.v1",
+        messageId: request.messageId,
+        messageType: "coding_pack_export_decision_result",
+        payload: {
+          decisionId: `coding-pack-e2e-${request.payload.request.operationId}`,
+          operationId: request.payload.request.operationId,
+          requestDigest: request.payload.requestDigest,
+          decision: "allow",
+          reasonCode: "policy_allowed",
+          policyVersion: "dhms-agentfuse-runtime-guard@3.6.0",
+          schemaVersion: "agentfuse-evidence-schema-v0.1",
+          agentFuseCommit: "ec4b5842339dccfba0db62df7541920759203bc9",
+          policyProfileId: "kerniq-coding-pack-export-v1",
+          policyDigest:
+            "sha256:752a8bf1f251e5c05f07ddd8d820af3c5554fb37e3a47fbcf41933f614167d07",
+          decidedAt: new Date().toISOString(),
+        },
+      }),
+    };
 
     class TestFileHandle {
       readonly kind = "file";

@@ -86,7 +86,8 @@ v0.7.2 deterministic selection and path-based privacy core merged in
 `1a20c3920ccb83a0c0306ae175be933b24aac161`; v0.7.3 selected-file preview and
 exact ephemeral confirmation merged in
 `5d5152ca25c0fc2772cec730dd6229dd44aa88cb`; v0.7.4.1 durable store and export
-proposal contracts implemented for Draft PR review
+proposal contracts merged in `c3f7c9cef73cb9660f9b4d39c325dc8c4e3f5170`;
+v0.7.4.2 AgentFuse export decision implemented for Draft PR review
 
 The source audit found authorized project reads, selected-file context
 assembly, project binding, action contracts, and Session persistence, but no
@@ -136,9 +137,20 @@ The reviewed correction adds UTF-8 canonical identity, immutable destination
 bindings, atomic snapshots, native pre-persistence digest/chronology validation,
 24-hour proposal/approval bounds, and SQLite `synchronous=FULL`.
 
+v0.7.4.2 migrates the dedicated store to
+`kerniq.coding-pack.store.v2`, adds the separately frozen
+`kerniq-coding-pack-export-v1` AgentFuse profile, derives one digest-only request
+from a live confirmed snapshot, and persists exactly one `PACK_DECIDED`
+allow/deny/error event. It performs no source read, destination write, staging,
+or Action Runtime dispatch. The corrected contract binds evaluation start,
+turns late allow/block into terminal error evidence, validates exact response
+keys, revalidates the observed destination capability, and distinguishes one
+durable decision from non-crash-safe bridge invocation. Recovered decisions
+remain historical.
+
 Automatic discovery, `.gitignore` parsing, content secret scanning, physical
-export, `PACK_DECIDED`, Action Runtime, and AgentFuse integration remain
-unimplemented.
+export, `PACK_EXPORT_STARTED`, `PACK_EXPORT_COMPLETED`, and Action Runtime
+export dispatch remain unimplemented.
 
 ### v0.8 - Product Packaging and Closed Beta
 

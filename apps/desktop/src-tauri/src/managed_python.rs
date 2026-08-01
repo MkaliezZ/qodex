@@ -23,6 +23,11 @@ const BRIDGE_PROTOCOL: &str = "kerniq.agentfuse.bridge.v1";
 const PROJECT_COMMAND_POLICY_PROFILE: &str = "kerniq-project-command-v1";
 const PROJECT_COMMAND_POLICY_DIGEST: &str =
     "sha256:9c01df377b0cfd8db8392dc8966a2f12b38ad1b2ab9c89780ac049ac0eed38ad";
+const CODING_PACK_EXPORT_POLICY_PROFILE: &str = "kerniq-coding-pack-export-v1";
+const CODING_PACK_EXPORT_POLICY_DIGEST: &str =
+    "sha256:752a8bf1f251e5c05f07ddd8d820af3c5554fb37e3a47fbcf41933f614167d07";
+const CODING_PACK_EXPORT_PROTOCOL: &str = "kerniq.coding-pack.agentfuse-export.v1";
+const CODING_PACK_EXPORT_FORMAT: &str = "kerniq-coding-pack-bundle-v1";
 const BRIDGE_PYTHON_FLAGS: [&str; 3] = ["-B", "-s", "-E"];
 const MESSAGE_LIMIT: usize = 64 * 1024;
 const STDOUT_LIMIT: usize = 256 * 1024;
@@ -1188,10 +1193,13 @@ fn read_bounded(mut reader: impl Read, limit: usize) -> BoundedBytes {
 fn validate_native_decision_request(
     request: &AgentFuseNativeDecisionRequest,
 ) -> Result<(), String> {
-    if request.protocol_version != BRIDGE_PROTOCOL
-        || request.message_type != "decision_request"
-        || request.message_id.trim().is_empty()
-    {
+    if request.protocol_version != BRIDGE_PROTOCOL || request.message_id.trim().is_empty() {
+        return Err("AgentFuse decision request protocol is invalid.".into());
+    }
+    if request.message_type == "coding_pack_export_decision_request" {
+        return validate_native_coding_pack_decision_request(request);
+    }
+    if request.message_type != "decision_request" {
         return Err("AgentFuse decision request protocol is invalid.".into());
     }
     let fixture = request
@@ -1232,6 +1240,139 @@ fn validate_native_decision_request(
         return Err("AgentFuse decision request exceeds its message bound.".into());
     }
     Ok(())
+}
+
+fn validate_native_coding_pack_decision_request(
+    request: &AgentFuseNativeDecisionRequest,
+) -> Result<(), String> {
+    let payload = request
+        .payload
+        .as_object()
+        .ok_or("Coding Pack AgentFuse payload must be an object.")?;
+    let expected_payload_keys = [
+        "request",
+        "requestDigest",
+        "policyProfileId",
+        "expectedPolicyDigest",
+    ];
+    if payload.len() != expected_payload_keys.len()
+        || expected_payload_keys
+            .iter()
+            .any(|key| !payload.contains_key(*key))
+        || payload.get("policyProfileId").and_then(Value::as_str)
+            != Some(CODING_PACK_EXPORT_POLICY_PROFILE)
+        || payload.get("expectedPolicyDigest").and_then(Value::as_str)
+            != Some(CODING_PACK_EXPORT_POLICY_DIGEST)
+        || !payload
+            .get("requestDigest")
+            .and_then(Value::as_str)
+            .is_some_and(is_sha256)
+    {
+        return Err("Coding Pack AgentFuse policy identity is invalid.".into());
+    }
+    let trusted = payload
+        .get("request")
+        .and_then(Value::as_object)
+        .ok_or("Coding Pack AgentFuse request must be an object.")?;
+    let expected_request_keys = [
+        "protocolVersion",
+        "operationId",
+        "proposalDigest",
+        "approvalEvidenceDigest",
+        "candidatePathsDigest",
+        "sourceFingerprint",
+        "packId",
+        "manifestDigest",
+        "destinationBindingId",
+        "destinationFingerprint",
+        "exportFormat",
+    ];
+    if trusted.len() != expected_request_keys.len()
+        || expected_request_keys
+            .iter()
+            .any(|key| !trusted.contains_key(*key))
+        || trusted.get("protocolVersion").and_then(Value::as_str)
+            != Some(CODING_PACK_EXPORT_PROTOCOL)
+        || trusted.get("exportFormat").and_then(Value::as_str) != Some(CODING_PACK_EXPORT_FORMAT)
+        || !trusted
+            .get("operationId")
+            .and_then(Value::as_str)
+            .is_some_and(|value| {
+                !value.is_empty()
+                    && value.len() <= 256
+                    && !value.chars().any(char::is_control)
+                    && !absolute_path_like(value)
+            })
+        || [
+            "proposalDigest",
+            "approvalEvidenceDigest",
+            "candidatePathsDigest",
+            "sourceFingerprint",
+            "manifestDigest",
+            "destinationFingerprint",
+        ]
+        .iter()
+        .any(|key| {
+            !trusted
+                .get(*key)
+                .and_then(Value::as_str)
+                .is_some_and(is_sha256)
+        })
+        || !trusted
+            .get("packId")
+            .and_then(Value::as_str)
+            .is_some_and(is_pack_id)
+        || !trusted
+            .get("destinationBindingId")
+            .and_then(Value::as_str)
+            .is_some_and(is_destination_binding_id)
+    {
+        return Err("Coding Pack AgentFuse request contract is invalid.".into());
+    }
+    if serde_json::to_vec(request)
+        .map(|bytes| bytes.len() > MESSAGE_LIMIT)
+        .unwrap_or(true)
+    {
+        return Err("AgentFuse decision request exceeds its message bound.".into());
+    }
+    Ok(())
+}
+
+fn is_sha256(value: &str) -> bool {
+    value.len() == 71
+        && value.starts_with("sha256:")
+        && value[7..]
+            .bytes()
+            .all(|byte| byte.is_ascii_hexdigit() && !byte.is_ascii_uppercase())
+}
+
+fn absolute_path_like(value: &str) -> bool {
+    let bytes = value.as_bytes();
+    value.starts_with('/')
+        || value.starts_with('\\')
+        || (bytes.len() >= 3
+            && bytes[0].is_ascii_alphabetic()
+            && bytes[1] == b':'
+            && matches!(bytes[2], b'/' | b'\\'))
+        || value
+            .get(..7)
+            .is_some_and(|prefix| prefix.eq_ignore_ascii_case("file://"))
+}
+
+fn is_pack_id(value: &str) -> bool {
+    value.len() == 69
+        && value.starts_with("pack-")
+        && value[5..]
+            .bytes()
+            .all(|byte| byte.is_ascii_hexdigit() && !byte.is_ascii_uppercase())
+}
+
+fn is_destination_binding_id(value: &str) -> bool {
+    value.len() == 36
+        && value.starts_with("destination-")
+        && value[12..]
+            .bytes()
+            .all(|byte| byte.is_ascii_hexdigit() && !byte.is_ascii_uppercase())
 }
 
 fn validate_handshake<'a>(
@@ -1618,6 +1759,39 @@ mod tests {
             }))
             .is_err()
         );
+
+        let coding_pack_request = AgentFuseNativeDecisionRequest {
+            protocol_version: BRIDGE_PROTOCOL.into(),
+            message_id: "coding-pack-message-1".into(),
+            message_type: "coding_pack_export_decision_request".into(),
+            payload: json!({
+                "request": {
+                    "protocolVersion": CODING_PACK_EXPORT_PROTOCOL,
+                    "operationId": "operation-1",
+                    "proposalDigest": format!("sha256:{}", "1".repeat(64)),
+                    "approvalEvidenceDigest": format!("sha256:{}", "2".repeat(64)),
+                    "candidatePathsDigest": format!("sha256:{}", "3".repeat(64)),
+                    "sourceFingerprint": format!("sha256:{}", "4".repeat(64)),
+                    "packId": format!("pack-{}", "5".repeat(64)),
+                    "manifestDigest": format!("sha256:{}", "6".repeat(64)),
+                    "destinationBindingId": format!("destination-{}", "7".repeat(24)),
+                    "destinationFingerprint": format!("sha256:{}", "8".repeat(64)),
+                    "exportFormat": CODING_PACK_EXPORT_FORMAT
+                },
+                "requestDigest": format!("sha256:{}", "9".repeat(64)),
+                "policyProfileId": CODING_PACK_EXPORT_POLICY_PROFILE,
+                "expectedPolicyDigest": CODING_PACK_EXPORT_POLICY_DIGEST
+            }),
+        };
+        assert!(validate_native_decision_request(&coding_pack_request).is_ok());
+        let mut unknown_field = coding_pack_request.clone();
+        unknown_field.payload["request"]["absoluteDestination"] =
+            Value::String("/private/export".into());
+        assert!(validate_native_decision_request(&unknown_field).is_err());
+        let mut absolute_operation = coding_pack_request;
+        absolute_operation.payload["request"]["operationId"] =
+            Value::String("C:\\private\\export".into());
+        assert!(validate_native_decision_request(&absolute_operation).is_err());
     }
 
     #[test]

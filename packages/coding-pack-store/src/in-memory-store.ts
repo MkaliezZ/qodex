@@ -64,6 +64,30 @@ export class InMemoryCodingPackStoreAdapter implements CodingPackStoreAdapter {
     this.operations.set(operation.operationId, clone(operation));
   }
 
+  async appendDecision(
+    operation: CodingPackOperationRecord,
+    decidedEvent: CodingPackEvent,
+  ): Promise<void> {
+    const current = this.operations.get(operation.operationId);
+    const events = this.events.get(operation.operationId);
+    if (
+      !current
+      || !events
+      || current.state !== "confirmed"
+      || current.lastEventSequence !== 2
+      || operation.lastEventSequence !== 3
+      || decidedEvent.eventSequence !== 3
+      || events.some((event) => (
+        event.eventId === decidedEvent.eventId
+        || event.eventSequence === decidedEvent.eventSequence
+      ))
+    ) {
+      throw new CodingPackStoreError("coding_pack_persistence_failed");
+    }
+    events.push(clone(decidedEvent));
+    this.operations.set(operation.operationId, clone(operation));
+  }
+
   async getOperationSnapshotData(
     operationId: string,
   ): Promise<CodingPackStoredSnapshotData | null> {

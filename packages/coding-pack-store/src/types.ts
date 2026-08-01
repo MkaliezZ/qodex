@@ -1,13 +1,25 @@
-export const CODING_PACK_STORE_SCHEMA_VERSION = "kerniq.coding-pack.store.v1" as const;
+export const CODING_PACK_STORE_SCHEMA_VERSION = "kerniq.coding-pack.store.v2" as const;
 export const CODING_PACK_EXPORT_PROPOSAL_SCHEMA_VERSION =
   "kerniq.coding-pack.export-proposal.v1" as const;
 export const CODING_PACK_EXPORT_APPROVAL_SCHEMA_VERSION =
   "kerniq.coding-pack.export-approval.v1" as const;
 export const CODING_PACK_EXPORT_FORMAT = "kerniq-coding-pack-bundle-v1" as const;
+export const CODING_PACK_AGENTFUSE_EXPORT_PROTOCOL =
+  "kerniq.coding-pack.agentfuse-export.v1" as const;
+export const CODING_PACK_AGENTFUSE_EXPORT_TOOL =
+  "kerniq.coding_pack.export" as const;
 export const CODING_PACK_EVENT_VERSION = 1 as const;
 
-export type CodingPackOperationState = "proposed" | "confirmed";
-export type CodingPackEventType = "PACK_PROPOSED" | "PACK_CONFIRMED";
+export type CodingPackOperationState =
+  | "proposed"
+  | "confirmed"
+  | "decided_allow"
+  | "decided_deny"
+  | "decided_error";
+export type CodingPackEventType =
+  | "PACK_PROPOSED"
+  | "PACK_CONFIRMED"
+  | "PACK_DECIDED";
 
 export interface CodingPackDestinationBinding {
   readonly destinationBindingId: string;
@@ -85,9 +97,41 @@ export interface CodingPackConfirmedEventPayload {
   readonly approval: CodingPackExportApproval;
 }
 
+export interface CodingPackDecidedEventPayload {
+  readonly decisionId: string;
+  readonly requestDigest: string;
+  readonly proposalDigest: string;
+  readonly approvalEvidenceDigest: string;
+  readonly agentFuseSourceCommit:
+    "ec4b5842339dccfba0db62df7541920759203bc9";
+  readonly agentFusePackageVersion: "3.6.0";
+  readonly bridgeProtocol: "kerniq.agentfuse.bridge.v1";
+  readonly policyId: "kerniq-coding-pack-export-v1";
+  readonly policyDigest: string;
+  readonly decision: "allow" | "deny" | "error";
+  readonly reasonCode: string;
+  readonly evaluationStartedAt: string;
+  readonly decidedAt: string;
+}
+
+export interface CodingPackAgentFuseExportRequestIdentity {
+  readonly protocolVersion: typeof CODING_PACK_AGENTFUSE_EXPORT_PROTOCOL;
+  readonly operationId: string;
+  readonly proposalDigest: string;
+  readonly approvalEvidenceDigest: string;
+  readonly candidatePathsDigest: string;
+  readonly sourceFingerprint: string;
+  readonly packId: string;
+  readonly manifestDigest: string;
+  readonly destinationBindingId: string;
+  readonly destinationFingerprint: string;
+  readonly exportFormat: typeof CODING_PACK_EXPORT_FORMAT;
+}
+
 export type CodingPackEventPayload =
   | CodingPackProposedEventPayload
-  | CodingPackConfirmedEventPayload;
+  | CodingPackConfirmedEventPayload
+  | CodingPackDecidedEventPayload;
 
 export interface CodingPackEvent {
   readonly eventId: string;
@@ -104,6 +148,7 @@ export interface CodingPackOperationSnapshot {
   readonly operation: CodingPackOperationRecord;
   readonly proposal: CodingPackExportProposal;
   readonly approval: CodingPackExportApproval | null;
+  readonly decision: CodingPackDecidedEventPayload | null;
   readonly destination: CodingPackDestinationBinding;
   readonly events: readonly CodingPackEvent[];
 }
@@ -130,6 +175,11 @@ export interface CreateCodingPackExportApprovalInput {
   readonly expiresAt?: string;
 }
 
+export interface RecordCodingPackExportDecisionInput {
+  readonly operationId: string;
+  readonly decision: CodingPackDecidedEventPayload;
+}
+
 export interface CodingPackStoreAdapter {
   registerDestinationBinding(binding: CodingPackDestinationBinding): Promise<void>;
   createOperation(
@@ -139,6 +189,10 @@ export interface CodingPackStoreAdapter {
   appendConfirmation(
     operation: CodingPackOperationRecord,
     confirmedEvent: CodingPackEvent,
+  ): Promise<void>;
+  appendDecision(
+    operation: CodingPackOperationRecord,
+    decidedEvent: CodingPackEvent,
   ): Promise<void>;
   getOperationSnapshotData(
     operationId: string,

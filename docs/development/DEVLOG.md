@@ -1229,6 +1229,71 @@ ARBITRARY_SHELL_ADDED=false
 WORKFLOW_CHANGED=false
 ```
 
+### KerniQ v0.7.4.2 AgentFuse Coding Pack Export Decision
+
+**Date:** 2026-07-30  |  **Status:** Implemented for Draft PR review
+
+v0.7.4.1 merged through exact-head merge commit
+`c3f7c9cef73cb9660f9b4d39c325dc8c4e3f5170`. This bounded follow-up adds
+`@qodex/coding-pack-agentfuse` and the independent
+`kerniq-coding-pack-export-v1` policy profile with frozen digest
+`sha256:752a8bf1f251e5c05f07ddd8d820af3c5554fb37e3a47fbcf41933f614167d07`.
+The trusted request contains only operation and portable digest identity. It
+contains no absolute path, source contents, destination label, shell, command,
+or policy source.
+
+One live atomic `PACK_CONFIRMED` snapshot is required before AgentFuse is
+called. The durable confirmed payload digest is the approval evidence identity.
+TypeScript and native persistence recompute the exact request digest, and the
+evaluation start must remain inside both proposal and approval lifetimes.
+Allow/deny completion must also remain inside the window; late allow/block and
+bridge/protocol completion after expiry persist as terminal error evidence with
+the actual `decidedAt`. Bridge responses reject unknown fields, malformed
+Unicode, non-canonical timestamps, and private error/path/content fields.
+Browser/Tauri destination capability is revalidated immediately before the
+call. Tauri canonicalizes the private stored path and recomputes its fingerprint
+without returning the path or writing.
+Canonical AgentFuse `allow` maps to `decided_allow`, `block` maps to
+`decided_deny`, and bridge/protocol/policy failure maps to `decided_error`.
+Store schema v2 persists exactly one `PACK_DECIDED` event; browser and SQLite
+v1 migration preserves proposed and confirmed history without automatic
+decision.
+
+The store guarantees at most one durable `PACK_DECIDED`. An operation-keyed
+in-process guard limits concurrent evaluations to one bridge call, but AgentFuse
+invocation is not exactly-once across crashes, multiple processes, or an
+explicit retry after decision persistence failure.
+
+Decision persistence failure leaves the operation confirmed and UI state does
+not advance. Restarted confirmed and decided operations are historical and
+non-actionable. The UI always reports “No files written” and “Export has not
+started.”
+
+```text
+V0_7_4_1_MERGE_COMMIT=c3f7c9cef73cb9660f9b4d39c325dc8c4e3f5170
+CODING_PACK_STORE_SCHEMA_V2=true
+PACK_PROPOSED_IMPLEMENTED=true
+PACK_CONFIRMED_IMPLEMENTED=true
+PACK_DECIDED_IMPLEMENTED=true
+EVALUATION_STARTED_AT_BOUND=true
+BRIDGE_RESPONSE_EXACT_KEYS=true
+DESTINATION_PRE_DECISION_REVALIDATION=true
+DURABLE_PACK_DECIDED_AT_MOST_ONCE=true
+AGENTFUSE_INVOCATION_EXACTLY_ONCE_ACROSS_CRASHES=false
+CODING_PACK_EXPORT_POLICY_ID=kerniq-coding-pack-export-v1
+CODING_PACK_EXPORT_POLICY_DIGEST=sha256:752a8bf1f251e5c05f07ddd8d820af3c5554fb37e3a47fbcf41933f614167d07
+PACK_EXPORT_STARTED_IMPLEMENTED=false
+PACK_EXPORT_COMPLETED_IMPLEMENTED=false
+CODING_PACK_EXPORT_IMPLEMENTED=false
+DESTINATION_FILES_WRITTEN=false
+ACTION_RUNTIME_CONNECTED=false
+SESSION_SCHEMA_CHANGED=false
+PROJECT_COMMAND_FREEZE_CHANGED=false
+PATCH_MIGRATED=false
+ARBITRARY_SHELL_ADDED=false
+WORKFLOW_CHANGED=false
+```
+
 ### KerniQ v0.7.3 Selected-File Coding Pack Preview and Exact Confirmation
 
 **Date:** 2026-07-30  |  **Status:** Implemented for Draft PR review

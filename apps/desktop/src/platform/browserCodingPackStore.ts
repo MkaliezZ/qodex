@@ -9,7 +9,7 @@ import type {
 const STORAGE_KEY = "kerniq.coding-pack.store.v1";
 
 interface BrowserCodingPackState {
-  readonly schemaVersion: "kerniq.coding-pack.store.v1";
+  readonly schemaVersion: "kerniq.coding-pack.store.v2";
   readonly operations: Record<string, CodingPackOperationRecord>;
   readonly events: Record<string, CodingPackEvent[]>;
   readonly destinations: Record<string, CodingPackDestinationBinding>;
@@ -72,6 +72,32 @@ export class BrowserCodingPackStoreAdapter implements CodingPackStoreAdapter {
     this.write(state);
   }
 
+  async appendDecision(
+    operation: CodingPackOperationRecord,
+    decidedEvent: CodingPackEvent,
+  ): Promise<void> {
+    const state = this.read();
+    const current = state.operations[operation.operationId];
+    const events = state.events[operation.operationId];
+    if (
+      !current
+      || !events
+      || current.state !== "confirmed"
+      || current.lastEventSequence !== 2
+      || operation.lastEventSequence !== 3
+      || decidedEvent.eventSequence !== 3
+      || events.some((event) => (
+        event.eventId === decidedEvent.eventId
+        || event.eventSequence === decidedEvent.eventSequence
+      ))
+    ) {
+      throw new Error("coding_pack_persistence_failed");
+    }
+    state.operations[operation.operationId] = clone(operation);
+    state.events[operation.operationId] = [...events, clone(decidedEvent)];
+    this.write(state);
+  }
+
   async getOperationSnapshotData(
     operationId: string,
   ): Promise<CodingPackStoredSnapshotData | null> {
@@ -93,13 +119,33 @@ export class BrowserCodingPackStoreAdapter implements CodingPackStoreAdapter {
   private read(): BrowserCodingPackState {
     const raw = this.storage.getItem(STORAGE_KEY);
     if (!raw) return emptyState();
-    const parsed = JSON.parse(raw) as Partial<BrowserCodingPackState>;
+    const parsed = JSON.parse(raw) as {
+      schemaVersion?: unknown;
+      operations?: unknown;
+      events?: unknown;
+      destinations?: unknown;
+    };
     if (
-      parsed.schemaVersion !== "kerniq.coding-pack.store.v1"
-      || !plainRecord(parsed.operations)
+      !plainRecord(parsed.operations)
       || !plainRecord(parsed.events)
       || !plainRecord(parsed.destinations)
     ) {
+      throw new Error("coding_pack_store_unavailable");
+    }
+    if (parsed.schemaVersion === "kerniq.coding-pack.store.v1") {
+      const migrated: BrowserCodingPackState = {
+        schemaVersion: "kerniq.coding-pack.store.v2",
+        operations: clone(parsed.operations) as Record<string, CodingPackOperationRecord>,
+        events: clone(parsed.events) as Record<string, CodingPackEvent[]>,
+        destinations: clone(parsed.destinations) as Record<
+          string,
+          CodingPackDestinationBinding
+        >,
+      };
+      this.write(migrated);
+      return migrated;
+    }
+    if (parsed.schemaVersion !== "kerniq.coding-pack.store.v2") {
       throw new Error("coding_pack_store_unavailable");
     }
     return parsed as BrowserCodingPackState;
@@ -112,7 +158,7 @@ export class BrowserCodingPackStoreAdapter implements CodingPackStoreAdapter {
 
 function emptyState(): BrowserCodingPackState {
   return {
-    schemaVersion: "kerniq.coding-pack.store.v1",
+    schemaVersion: "kerniq.coding-pack.store.v2",
     operations: {},
     events: {},
     destinations: {},

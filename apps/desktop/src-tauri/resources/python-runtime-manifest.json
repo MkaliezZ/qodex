@@ -65,7 +65,7 @@
     "expectedModule": "dhms_agentfuse/runtime_guard.py"
   },
   "bridge": {
-    "installedTreeSha256": "34e0633e303a0e2b5107832d42486503f7c1f55a0e717001d176345ecfbe9ef3"
+    "installedTreeSha256": "a751d19b278d6f74d332f6a5f777285910cd786d700da4aa1871aca4cd693496"
   },
   "bridgeProtocolVersion": "kerniq.agentfuse.bridge.v1",
   "decisionSchemaVersion": "agentfuse-evidence-schema-v0.1",

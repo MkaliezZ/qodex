@@ -26,6 +26,11 @@ import { ProjectRuntime } from "@qodex/project-runtime";
 import type { FileContent, ProjectTree } from "@qodex/project-runtime";
 import type { ModelProvider } from "@qodex/provider-sdk";
 import type { AgentFuseBridgeClient } from "@qodex/agentfuse-adapter";
+import {
+  CodingPackAgentFuseAdapter,
+  evaluateCodingPackExportPolicy,
+  type CodingPackAgentFuseBridgeClient,
+} from "@qodex/coding-pack-agentfuse";
 import type { CodingPackPurpose } from "@qodex/coding-pack-runtime";
 import {
   CodingPackStoreError,
@@ -50,6 +55,7 @@ import {
 import { openProjectDirectory } from "../platform/openProjectDirectory";
 import {
   chooseCodingPackDestination,
+  createCodingPackDestinationCapabilityVerifier,
   hasCodingPackDestinationCapability,
 } from "../platform/codingPackDestination";
 import {
@@ -578,6 +584,59 @@ export function useRuntime() {
     }
   }, [codingPackOperation]);
 
+  const evaluateCurrentCodingPackExportPolicy = useCallback(async () => {
+    const snapshot = codingPackOperation;
+    const bridge: CodingPackAgentFuseBridgeClient | null =
+      createManagedPythonBridge()
+      ?? (import.meta.env.DEV
+        ? window.__kerniqTestCodingPackAgentFuseBridge ?? null
+        : null);
+    if (
+      !snapshot
+      || snapshot.operation.state !== "confirmed"
+      || !snapshot.approval
+      || !codingPackDestination
+      || !hasCodingPackDestinationCapability(codingPackDestination)
+      || !bridge
+    ) {
+      setCodingPackStoreError(
+        codingPackDestination
+          ? "coding_pack_store_unavailable"
+          : "coding_pack_destination_unavailable",
+      );
+      return;
+    }
+    setIsCodingPackExportLoading(true);
+    setCodingPackStoreError(null);
+    try {
+      await evaluateCodingPackExportPolicy({
+        store: codingPackStoreRef.current,
+        adapter: new CodingPackAgentFuseAdapter({ bridge }),
+        operationId: snapshot.operation.operationId,
+        destinationCapabilityVerifier: {
+          async verifyDestinationCapability(current) {
+            return current.destinationBindingId
+                === codingPackDestination.destinationBindingId
+              && current.destinationFingerprint
+                === codingPackDestination.destinationFingerprint
+              && createCodingPackDestinationCapabilityVerifier()
+                .verifyDestinationCapability(current);
+          },
+        },
+      });
+      const decided = await codingPackStoreRef.current.getCodingPackOperation(
+        snapshot.operation.operationId,
+      );
+      if (!decided) throw new CodingPackStoreError("coding_pack_store_unavailable");
+      setCodingPackOperation(decided);
+      setCodingPackRecoveredOperation(decided);
+    } catch (error) {
+      setCodingPackStoreError(codingPackStoreErrorCode(error));
+    } finally {
+      setIsCodingPackExportLoading(false);
+    }
+  }, [codingPackDestination, codingPackOperation]);
+
   const createPatchAdapter = useCallback((project: ProjectRuntime): AgentPatchAdapter => ({
     prepare: async (response, taskId) => {
       const parsed = parseModelPatchResponse(response, taskId);
@@ -972,6 +1031,7 @@ export function useRuntime() {
     chooseCurrentCodingPackDestination,
     createCurrentCodingPackExportProposal,
     confirmCurrentCodingPackExportProposal,
+    evaluateCurrentCodingPackExportPolicy,
     lastBundle,
     estimatedTokens,
     pendingProposal,

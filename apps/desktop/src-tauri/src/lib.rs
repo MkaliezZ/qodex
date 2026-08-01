@@ -4,7 +4,8 @@ mod session_database;
 
 use coding_pack_database::{
     CodingPackDatabase, CodingPackDestinationBinding, CodingPackStoredSnapshotData,
-    ConfirmCodingPackOperationRequest, CreateCodingPackOperationRequest, DestinationPickerRequest,
+    ConfirmCodingPackOperationRequest, CreateCodingPackOperationRequest,
+    DecideCodingPackOperationRequest, DestinationPickerRequest,
 };
 use managed_python::ManagedPythonState;
 use serde::{Deserialize, Serialize};
@@ -294,6 +295,14 @@ fn coding_pack_store_confirm(
 }
 
 #[tauri::command]
+fn coding_pack_store_decide(
+    request: DecideCodingPackOperationRequest,
+    state: tauri::State<'_, CodingPackDatabase>,
+) -> Result<(), String> {
+    state.append_decision(request)
+}
+
+#[tauri::command]
 fn coding_pack_store_snapshot(
     operation_id: String,
     state: tauri::State<'_, CodingPackDatabase>,
@@ -314,6 +323,14 @@ fn coding_pack_destination_get(
     state: tauri::State<'_, CodingPackDatabase>,
 ) -> Result<Option<CodingPackDestinationBinding>, String> {
     state.get_destination(&destination_binding_id)
+}
+
+#[tauri::command]
+fn coding_pack_destination_verify(
+    destination_binding_id: String,
+    state: tauri::State<'_, CodingPackDatabase>,
+) -> Result<bool, String> {
+    state.verify_destination_capability(&destination_binding_id)
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -349,9 +366,11 @@ pub fn run() {
             session_persistence_info,
             coding_pack_store_create,
             coding_pack_store_confirm,
+            coding_pack_store_decide,
             coding_pack_store_snapshot,
             coding_pack_store_operation_ids,
             coding_pack_destination_get,
+            coding_pack_destination_verify,
             managed_python::managed_python_inspect,
             managed_python::managed_python_provision,
             managed_python::managed_python_verify,

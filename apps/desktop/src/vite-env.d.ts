@@ -2,6 +2,7 @@
 
 import type { ProjectCommandRunner } from "@qodex/agent-runtime";
 import type { AgentFuseBridgeClient } from "@qodex/agentfuse-adapter";
+import type { CodingPackAgentFuseBridgeClient } from "@qodex/coding-pack-agentfuse";
 import type { SessionStore } from "@qodex/session-runtime";
 
 interface ImportMetaEnv {
@@ -19,6 +20,8 @@ declare global {
     __kerniqTestCommandRunner?: ProjectCommandRunner;
     /** Development-only deterministic AgentFuse bridge installed by Playwright fixtures. */
     __kerniqTestAgentFuseBridge?: AgentFuseBridgeClient;
+    /** Development-only deterministic Coding Pack AgentFuse bridge. */
+    __kerniqTestCodingPackAgentFuseBridge?: CodingPackAgentFuseBridgeClient;
     /** Development-only deterministic persistence adapter installed by Playwright fixtures. */
     __kerniqTestSessionStore?: SessionStore;
   }

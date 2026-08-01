@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+from collections.abc import Mapping
 from datetime import datetime, timezone
 import hashlib
 import importlib
@@ -42,7 +43,30 @@ _PROJECT_COMMAND_PARAMETER_KEYS = {
     "policyProfileId",
     "policyDigest",
 }
+_CODING_PACK_EXPORT_PROFILE = "kerniq-coding-pack-export-v1"
+_CODING_PACK_EXPORT_POLICY_DIGEST = (
+    "sha256:752a8bf1f251e5c05f07ddd8d820af3"
+    "c5554fb37e3a47fbcf41933f614167d07"
+)
+_CODING_PACK_EXPORT_PROTOCOL = "kerniq.coding-pack.agentfuse-export.v1"
+_CODING_PACK_EXPORT_ACTION = "kerniq.coding_pack.export"
+_CODING_PACK_EXPORT_FORMAT = "kerniq-coding-pack-bundle-v1"
+_CODING_PACK_EXPORT_REQUEST_KEYS = {
+    "protocolVersion",
+    "operationId",
+    "proposalDigest",
+    "approvalEvidenceDigest",
+    "candidatePathsDigest",
+    "sourceFingerprint",
+    "packId",
+    "manifestDigest",
+    "destinationBindingId",
+    "destinationFingerprint",
+    "exportFormat",
+}
 _SHA256_PATTERN = re.compile(r"^sha256:[0-9a-f]{64}$")
+_PACK_ID_PATTERN = re.compile(r"^pack-[0-9a-f]{64}$")
+_DESTINATION_ID_PATTERN = re.compile(r"^destination-[0-9a-f]{24}$")
 
 
 class ProtocolFailure(Exception):
@@ -298,6 +322,64 @@ class CanonicalAgentFuse:
             "evidence": evidence,
         }
 
+    def decide_coding_pack_export(self, payload: dict[str, Any]) -> dict[str, Any]:
+        request = require_mapping(payload.get("request"), "request")
+        profile_id = require_text(payload.get("policyProfileId"), "policyProfileId")
+        expected_digest = require_text(
+            payload.get("expectedPolicyDigest"),
+            "expectedPolicyDigest",
+        )
+        request_digest = require_text(payload.get("requestDigest"), "requestDigest")
+        if profile_id != _CODING_PACK_EXPORT_PROFILE:
+            raise ProtocolFailure("unsupported_policy_profile")
+        if expected_digest != _CODING_PACK_EXPORT_POLICY_DIGEST:
+            raise ProtocolFailure("policy_digest_mismatch")
+        operation_id = request.get("operationId")
+        tool_call_id = (
+            operation_id
+            if bounded_identity_text(operation_id, 256)
+            else "invalid-coding-pack-operation"
+        )
+        tool_call = self.runtime_guard.ToolCallRequest(
+            tool_call_id=tool_call_id,
+            tool_name=_CODING_PACK_EXPORT_ACTION,
+            arguments=dict(request),
+            safe_metadata={
+                "request_digest": request_digest,
+                "policy_profile_id": profile_id,
+                "policy_digest": expected_digest,
+            },
+        )
+        guard = self.runtime_guard.RuntimeGuard(
+            allow_tools={_CODING_PACK_EXPORT_ACTION},
+            default_action="block",
+            policy=coding_pack_export_policy,
+        )
+        resolved = guard.evaluate(tool_call)
+        if resolved.action not in {"allow", "block"}:
+            raise ProtocolFailure("canonical_decision_invalid")
+        evidence = resolved.evidence.to_dict()
+        decision_id = stable_id(
+            "decision",
+            tool_call_id,
+            request_digest,
+            profile_id,
+            expected_digest,
+            evidence["record_id"],
+        )
+        return {
+            "decisionId": decision_id,
+            "operationId": tool_call_id,
+            "requestDigest": request_digest,
+            "decision": resolved.action,
+            "reasonCode": resolved.reason_code,
+            "policyVersion": f"dhms-agentfuse-runtime-guard@{self.package_version}",
+            "schemaVersion": self.evidence_schema.SCHEMA_VERSION,
+            "agentFuseCommit": self.source_commit,
+            "policyProfileId": profile_id,
+            "policyDigest": expected_digest,
+        }
+
 
 class BridgeService:
     def __init__(self, canonical: CanonicalAgentFuse) -> None:
@@ -339,6 +421,17 @@ class BridgeService:
                 decision = self.canonical.decide(payload)
                 decision["decidedAt"] = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
                 return self._message(message_id, "decision_result", decision), False
+            if message_type == "coding_pack_export_decision_request":
+                decision = self.canonical.decide_coding_pack_export(payload)
+                decision["decidedAt"] = (
+                    datetime.now(timezone.utc).isoformat(timespec="milliseconds")
+                    .replace("+00:00", "Z")
+                )
+                return self._message(
+                    message_id,
+                    "coding_pack_export_decision_result",
+                    decision,
+                ), False
             if message_type == "shutdown":
                 return self._message(message_id, "shutdown_ack", {"status": "stopping"}), True
             raise ProtocolFailure("unsupported_message_type")
@@ -435,8 +528,73 @@ def project_command_policy(tool_call: Any) -> str:
     return "allow" if valid else "block"
 
 
+def coding_pack_export_policy(tool_call: Any) -> str:
+    arguments = tool_call.arguments
+    metadata = tool_call.safe_metadata
+    valid = (
+        tool_call.tool_name == _CODING_PACK_EXPORT_ACTION
+        and set(arguments) == _CODING_PACK_EXPORT_REQUEST_KEYS
+        and arguments.get("protocolVersion") == _CODING_PACK_EXPORT_PROTOCOL
+        and bounded_identity_text(arguments.get("operationId"), 256)
+        and not absolute_path_like(arguments["operationId"])
+        and sha256(arguments.get("proposalDigest"))
+        and sha256(arguments.get("approvalEvidenceDigest"))
+        and sha256(arguments.get("candidatePathsDigest"))
+        and sha256(arguments.get("sourceFingerprint"))
+        and isinstance(arguments.get("packId"), str)
+        and bool(_PACK_ID_PATTERN.fullmatch(arguments["packId"]))
+        and sha256(arguments.get("manifestDigest"))
+        and isinstance(arguments.get("destinationBindingId"), str)
+        and bool(_DESTINATION_ID_PATTERN.fullmatch(arguments["destinationBindingId"]))
+        and sha256(arguments.get("destinationFingerprint"))
+        and arguments.get("exportFormat") == _CODING_PACK_EXPORT_FORMAT
+        and sha256(metadata.get("request_digest"))
+        and metadata.get("request_digest") == coding_pack_request_digest(arguments)
+        and metadata.get("policy_profile_id") == _CODING_PACK_EXPORT_PROFILE
+        and metadata.get("policy_digest") == _CODING_PACK_EXPORT_POLICY_DIGEST
+    )
+    return "allow" if valid else "block"
+
+
+def coding_pack_request_digest(request: Mapping[str, Any]) -> str:
+    canonical = json.dumps(
+        {"toolIdentity": _CODING_PACK_EXPORT_ACTION, "request": dict(request)},
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(",", ":"),
+    )
+    return "sha256:" + hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+
+
 def bounded_text(value: Any, maximum: int) -> bool:
     return isinstance(value, str) and bool(value.strip()) and len(value) <= maximum
+
+
+def bounded_identity_text(value: Any, maximum_bytes: int) -> bool:
+    if not isinstance(value, str) or not value:
+        return False
+    try:
+        encoded = value.encode("utf-8")
+    except UnicodeEncodeError:
+        return False
+    return (
+        len(encoded) <= maximum_bytes
+        and not any(ord(character) < 32 or 127 <= ord(character) <= 159 for character in value)
+    )
+
+
+def absolute_path_like(value: str) -> bool:
+    lowered = value.lower()
+    return (
+        value.startswith(("/", "\\"))
+        or (
+            len(value) >= 3
+            and value[0].isalpha()
+            and value[1] == ":"
+            and value[2] in {"/", "\\"}
+        )
+        or lowered.startswith("file://")
+    )
 
 
 def sha256(value: Any) -> bool:

@@ -297,7 +297,9 @@ v0.7.4.1 introduces `@qodex/coding-pack-store` as the dedicated versioned
 lifecycle owner. Tauri persists `coding_pack_operations`,
 `coding_pack_events`, and `coding_pack_destination_bindings` in the separate
 `kerniq-coding-pack.sqlite3` database under schema
-`kerniq.coding-pack.store.v1`; Session tables and events are unchanged.
+`kerniq.coding-pack.store.v2`; Session tables and events are unchanged. The
+v1-to-v2 migration preserves proposed and confirmed records without advancing
+them.
 Browser development persists only serializable lifecycle records while keeping
 the authorized directory handle in an in-memory capability map. Tauri keeps
 the absolute destination path only in the private destination-binding table;
@@ -308,10 +310,22 @@ first creation timestamp remains authoritative. Operation, event, and
 destination evidence is read as one adapter snapshot; Tauri performs that read
 inside one SQLite transaction.
 
-This slice derives state from bounded, digest-verified `PACK_PROPOSED` and
-`PACK_CONFIRMED` events. Preview confirmation remains separate from export
-approval. Durable confirmation does not evaluate policy, start export, or
-write files. Canonical identity uses deterministic UTF-8 byte ordering and
+State derives from bounded, digest-verified `PACK_PROPOSED`, `PACK_CONFIRMED`,
+and, in v0.7.4.2, exactly one `PACK_DECIDED` event. Preview confirmation
+remains separate from export approval. `@qodex/coding-pack-agentfuse` builds a
+digest-only trusted request from one live confirmed snapshot and maps canonical
+AgentFuse allow/block/failure to durable allow/deny/error evidence. Durable
+store and native boundaries recompute the request digest and require the
+evaluation start to remain inside the proposal and approval lifetime. Allow or
+deny completion must also remain in-window; late allow/block and late bridge
+failure become durable terminal error evidence with truthful completion time.
+The bridge response has exact keys, and browser/native destination capability
+is revalidated immediately before invocation without claiming a race-free
+filesystem guarantee. One process prevents concurrent calls for the same
+operation, but invocation is not exactly-once across crashes or persistence
+retries.
+Decision does not start export or write files. Canonical identity uses
+deterministic UTF-8 byte ordering and
 well-formed Unicode, proposals and approvals cannot exceed 24 hours, native
 writes independently recompute proposal and event digests and verify chronology,
 and SQLite uses WAL with `synchronous=FULL`. These are SQLite and underlying
@@ -322,13 +336,13 @@ eventually reference a verified completed artifact but is not a competing
 lifecycle owner.
 
 Read-only deterministic selection uses project capability and privacy controls
-without an AgentFuse decision. Writing/export requires explicit product
-authorization plus a separately versioned AgentFuse export-policy decision,
-durably recorded before export start. AgentFuse does not select files or judge
-content quality. Automatic discovery, `.gitignore` parsing, content secret
-scanning, physical export, Action Runtime, and AgentFuse are not connected in
-v0.7.4.1. `PACK_DECIDED`, export-start, and export-completed events do not
-exist in this slice. The v0.6.1 Project Command freeze is unchanged.
+without an AgentFuse decision. The separately versioned
+`kerniq-coding-pack-export-v1` profile sees no absolute paths, source contents,
+shell fields, or display labels and cannot select files, judge content, or
+write. Automatic discovery, `.gitignore` parsing, content secret scanning,
+physical export, Action Runtime export dispatch, `PACK_EXPORT_STARTED`, and
+`PACK_EXPORT_COMPLETED` remain absent. The v0.6.1 Project Command freeze is
+unchanged.
 
 Details:
 
