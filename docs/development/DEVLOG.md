@@ -1229,6 +1229,83 @@ ARBITRARY_SHELL_ADDED=false
 WORKFLOW_CHANGED=false
 ```
 
+### KerniQ v0.7.4.3 Native Atomic Coding Pack Export
+
+**Date:** 2026-08-02  |  **Status:** Implemented for Draft PR review
+
+v0.7.4.2 merged through exact-head merge commit
+`6d592a199d5d4ee65663f107f64dfbb91cd1d8e5`. This bounded slice migrates the
+dedicated store to `kerniq.coding-pack.store.v3` and implements the first real
+physical Coding Pack export in Tauri Desktop only.
+
+The UI exposes `Export exact Coding Pack` only for a current-session preview
+and exact confirmation bound to the current project generation, selected-path
+identity, live proposal/approval, durable AgentFuse allow, and available native
+destination capability. Recovered decisions and all browser records remain
+non-actionable; browser mode performs no physical copy.
+
+The native command accepts no absolute path. It resolves trusted private
+project and destination bindings, reconstructs the durable operation,
+revalidates the canonical manifest and exact source bytes with relative
+no-follow opens, verifies destination identity and target absence, and persists
+`PACK_EXPORT_STARTED` before creating any destination object. It writes the
+canonical `manifest.json` and exact included bytes under `sources/` to an
+unpredictable staging directory beneath the destination parent, then uses a
+platform no-overwrite directory promotion. No copy/delete or cross-filesystem
+fallback exists.
+
+Successful promotion precedes durable `PACK_EXPORT_COMPLETED`. Failures before
+promotion clean only an identifiable operation-owned staging directory and
+persist `PACK_EXPORT_INTERRUPTED`. If completion persistence fails after
+promotion, the target remains, state stays `export_started`, UI reports that
+files may have been exported, and no automatic retry occurs. Restart performs
+no export, retry, promotion, or completion.
+
+```text
+V0_7_4_2_MERGE_COMMIT=6d592a199d5d4ee65663f107f64dfbb91cd1d8e5
+CODING_PACK_STORE_SCHEMA_V3=true
+CODING_PACK_NATIVE_EXPORT_IMPLEMENTED=true
+PACK_EXPORT_STARTED_IMPLEMENTED=true
+PACK_EXPORT_COMPLETED_IMPLEMENTED=true
+PACK_EXPORT_INTERRUPTED_IMPLEMENTED=true
+START_PERSISTED_BEFORE_FIRST_WRITE=true
+ATOMIC_NO_OVERWRITE_PROMOTION=true
+CROSS_FILESYSTEM_COPY_FALLBACK=false
+BROWSER_PHYSICAL_EXPORT_IMPLEMENTED=false
+RESTART_AUTO_EXPORT=false
+RESTART_AUTO_RETRY=false
+ACTION_RUNTIME_CONNECTED=false
+SESSION_SCHEMA_CHANGED=false
+PROJECT_COMMAND_FREEZE_CHANGED=false
+PATCH_MIGRATED=false
+ARBITRARY_SHELL_ADDED=false
+WORKFLOW_CHANGED=false
+```
+
+#### Native filesystem authority correction
+
+Final review replaced destination-path mutation authority with one retained
+native destination directory handle. The staging name and a digest of the
+opened destination object identity are now bound before
+`PACK_EXPORT_STARTED`; macOS staging writes, owned cleanup, no-replace
+promotion, and destination sync are handle-relative. Destination, parent, and
+staging replacement tests prove that replacement paths receive no writes.
+Post-promotion sync failure is distinct from completion-persistence failure:
+both retain the target, leave `export_started`, and disable automatic retry.
+Windows physical export now fails closed before START with no unsafe path
+fallback, and Desktop reports that the current implementation is unavailable
+on Windows.
+
+```text
+DESTINATION_HANDLE_OPENED_BEFORE_START=true
+STAGING_NAME_BOUND_BEFORE_START=true
+MACOS_DESTINATION_MUTATIONS_HANDLE_RELATIVE=true
+OWNED_STAGING_CLEANUP_HANDLE_RELATIVE=true
+POST_PROMOTION_DESTINATION_SYNC_REQUIRED=true
+WINDOWS_PHYSICAL_EXPORT_IMPLEMENTED=false
+WINDOWS_UNSAFE_PATH_FALLBACK=false
+```
+
 ### KerniQ v0.7.4.2 AgentFuse Coding Pack Export Decision
 
 **Date:** 2026-07-30  |  **Status:** Implemented for Draft PR review

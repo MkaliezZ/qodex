@@ -18,7 +18,10 @@ import {
   type CodingPackDestinationBinding,
   type CodingPackEvent,
   type CodingPackExportApproval,
+  type CodingPackExportCompletedEventPayload,
+  type CodingPackExportInterruptedEventPayload,
   type CodingPackExportProposal,
+  type CodingPackExportStartedEventPayload,
   type CodingPackOperationRecord,
   type CodingPackPreviewConfirmationEvidence,
   type CodingPackPreviewIdentity,
@@ -110,6 +113,42 @@ const DECIDED_PAYLOAD_KEYS = [
   "reasonCode",
   "evaluationStartedAt",
   "decidedAt",
+] as const;
+
+const EXPORT_STARTED_PAYLOAD_KEYS = [
+  "exportAttemptId",
+  "exportPlanDigest",
+  "decisionId",
+  "requestDigest",
+  "proposalDigest",
+  "manifestDigest",
+  "destinationBindingId",
+  "destinationFingerprint",
+  "destinationObjectIdentityDigest",
+  "stagingName",
+  "targetName",
+  "sourceFileCount",
+  "sourceTotalBytes",
+  "startedAt",
+] as const;
+
+const EXPORT_COMPLETED_PAYLOAD_KEYS = [
+  "exportAttemptId",
+  "exportPlanDigest",
+  "manifestDigest",
+  "targetName",
+  "sourceFileCount",
+  "sourceTotalBytes",
+  "completedAt",
+] as const;
+
+const EXPORT_INTERRUPTED_PAYLOAD_KEYS = [
+  "exportAttemptId",
+  "exportPlanDigest",
+  "phaseCode",
+  "physicalState",
+  "reasonCode",
+  "interruptedAt",
 ] as const;
 
 const AGENTFUSE_EXPORT_REQUEST_KEYS = [
@@ -343,6 +382,9 @@ export function validateOperationRecord(value: unknown): CodingPackOperationReco
     && operation.state !== "decided_allow"
     && operation.state !== "decided_deny"
     && operation.state !== "decided_error"
+    && operation.state !== "export_started"
+    && operation.state !== "export_completed"
+    && operation.state !== "export_interrupted"
   ) {
     invalid();
   }
@@ -389,6 +431,9 @@ export async function validateEvent(value: unknown): Promise<CodingPackEvent> {
     event.eventType !== "PACK_PROPOSED"
     && event.eventType !== "PACK_CONFIRMED"
     && event.eventType !== "PACK_DECIDED"
+    && event.eventType !== "PACK_EXPORT_STARTED"
+    && event.eventType !== "PACK_EXPORT_COMPLETED"
+    && event.eventType !== "PACK_EXPORT_INTERRUPTED"
   ) {
     invalid();
   }
@@ -399,7 +444,13 @@ export async function validateEvent(value: unknown): Promise<CodingPackEvent> {
     ? await validateProposedPayload(event.payload)
     : event.eventType === "PACK_CONFIRMED"
       ? validateConfirmedPayload(event.payload)
-      : validateDecidedPayload(event.payload);
+      : event.eventType === "PACK_DECIDED"
+        ? validateDecidedPayload(event.payload)
+        : event.eventType === "PACK_EXPORT_STARTED"
+          ? validateExportStartedPayload(event.payload)
+          : event.eventType === "PACK_EXPORT_COMPLETED"
+            ? validateExportCompletedPayload(event.payload)
+            : validateExportInterruptedPayload(event.payload);
   if (byteLength(payload) > MAX_EVENT_PAYLOAD_BYTES) invalid();
   if (event.payloadDigest !== await createEventPayloadDigest(payload)) invalid();
   return Object.freeze({
@@ -454,6 +505,69 @@ export function validateDecidedPayload(
   });
 }
 
+export function validateExportStartedPayload(
+  value: unknown,
+): CodingPackExportStartedEventPayload {
+  const payload = exactRecord(value, EXPORT_STARTED_PAYLOAD_KEYS);
+  requireOpaqueId(payload.exportAttemptId);
+  requireDigest(payload.exportPlanDigest);
+  requireOpaqueId(payload.decisionId);
+  requireDigest(payload.requestDigest);
+  requireDigest(payload.proposalDigest);
+  requireDigest(payload.manifestDigest);
+  requireDestinationBindingId(payload.destinationBindingId);
+  requireDigest(payload.destinationFingerprint);
+  requireDigest(payload.destinationObjectIdentityDigest);
+  requireStagingName(payload.stagingName);
+  requireTargetName(payload.targetName, payload.manifestDigest);
+  requireExportCounts(payload.sourceFileCount, payload.sourceTotalBytes);
+  timestamp(payload.startedAt);
+  return Object.freeze({
+    ...(payload as unknown as CodingPackExportStartedEventPayload),
+  });
+}
+
+export function validateExportCompletedPayload(
+  value: unknown,
+): CodingPackExportCompletedEventPayload {
+  const payload = exactRecord(value, EXPORT_COMPLETED_PAYLOAD_KEYS);
+  requireOpaqueId(payload.exportAttemptId);
+  requireDigest(payload.exportPlanDigest);
+  requireDigest(payload.manifestDigest);
+  requireTargetName(payload.targetName, payload.manifestDigest);
+  requireExportCounts(payload.sourceFileCount, payload.sourceTotalBytes);
+  timestamp(payload.completedAt);
+  return Object.freeze({
+    ...(payload as unknown as CodingPackExportCompletedEventPayload),
+  });
+}
+
+export function validateExportInterruptedPayload(
+  value: unknown,
+): CodingPackExportInterruptedEventPayload {
+  const payload = exactRecord(value, EXPORT_INTERRUPTED_PAYLOAD_KEYS);
+  requireOpaqueId(payload.exportAttemptId);
+  requireDigest(payload.exportPlanDigest);
+  if (
+    payload.phaseCode !== "staging_create"
+    && payload.phaseCode !== "manifest_write"
+    && payload.phaseCode !== "source_write"
+    && payload.phaseCode !== "flush"
+    && payload.phaseCode !== "promotion"
+    && payload.phaseCode !== "cleanup"
+  ) {
+    invalid();
+  }
+  if (payload.physicalState !== "not_promoted") invalid();
+  if (typeof payload.reasonCode !== "string" || !REASON_CODE_PATTERN.test(payload.reasonCode)) {
+    invalid();
+  }
+  timestamp(payload.interruptedAt);
+  return Object.freeze({
+    ...(payload as unknown as CodingPackExportInterruptedEventPayload),
+  });
+}
+
 function exactRecord<const Keys extends readonly string[]>(
   value: unknown,
   keys: Keys,
@@ -504,6 +618,39 @@ function requireDestinationBindingId(
   fail: () => never = invalid,
 ): asserts value is string {
   if (typeof value !== "string" || !DESTINATION_BINDING_ID_PATTERN.test(value)) fail();
+}
+
+function requireTargetName(value: unknown, manifestDigest: unknown): asserts value is string {
+  if (
+    typeof value !== "string"
+    || typeof manifestDigest !== "string"
+    || !SHA256_PATTERN.test(manifestDigest)
+    || value !== `kerniq-coding-pack-${manifestDigest.slice("sha256:".length)}`
+  ) {
+    invalid();
+  }
+}
+
+function requireStagingName(value: unknown): asserts value is string {
+  if (
+    typeof value !== "string"
+    || !/^\.kerniq-coding-pack-staging-[0-9a-f]{32}$/u.test(value)
+  ) {
+    invalid();
+  }
+}
+
+function requireExportCounts(fileCount: unknown, totalBytes: unknown): void {
+  if (
+    !Number.isSafeInteger(fileCount)
+    || (fileCount as number) < 0
+    || (fileCount as number) > 500
+    || !Number.isSafeInteger(totalBytes)
+    || (totalBytes as number) < 0
+    || (totalBytes as number) > 10_485_760
+  ) {
+    invalid();
+  }
 }
 
 function requireDigest(

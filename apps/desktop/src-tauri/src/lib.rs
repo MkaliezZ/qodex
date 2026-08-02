@@ -1,4 +1,6 @@
 mod coding_pack_database;
+mod coding_pack_export;
+mod coding_pack_export_fs;
 mod managed_python;
 mod session_database;
 
@@ -6,6 +8,9 @@ use coding_pack_database::{
     CodingPackDatabase, CodingPackDestinationBinding, CodingPackStoredSnapshotData,
     ConfirmCodingPackOperationRequest, CreateCodingPackOperationRequest,
     DecideCodingPackOperationRequest, DestinationPickerRequest,
+};
+use coding_pack_export::{
+    write_atomic_bundle, NativeBundleWriteOutcome, NativeExportRequest, NativeExportResult,
 };
 use managed_python::ManagedPythonState;
 use serde::{Deserialize, Serialize};
@@ -333,6 +338,57 @@ fn coding_pack_destination_verify(
     state.verify_destination_capability(&destination_binding_id)
 }
 
+#[tauri::command]
+fn coding_pack_export_native(
+    request: NativeExportRequest,
+    coding_pack_database: tauri::State<'_, CodingPackDatabase>,
+    session_database: tauri::State<'_, SessionDatabase>,
+    command_state: tauri::State<'_, CommandRunState>,
+) -> Result<NativeExportResult, String> {
+    let project_root = session_database
+        .resolve_private_project_root(&request.project_binding_id)?
+        .ok_or_else(|| "coding_pack_project_binding_unavailable".to_string())?;
+    let authorized = command_state
+        .authorized_roots
+        .lock()
+        .map_err(|_| "coding_pack_project_binding_unavailable".to_string())?
+        .contains(&project_root);
+    if !authorized {
+        return Err("coding_pack_project_binding_unavailable".into());
+    }
+
+    let prepared = coding_pack_database.begin_native_export(&request, &project_root)?;
+    match write_atomic_bundle(&prepared) {
+        NativeBundleWriteOutcome::PromotedAndSynced => {}
+        NativeBundleWriteOutcome::PrePromotionFailure {
+            phase_code,
+            reason_code,
+        } => {
+            coding_pack_database.record_native_export_interrupted(
+                &prepared.plan,
+                phase_code,
+                reason_code,
+            )?;
+            return Err(format!("coding_pack_export_{reason_code}"));
+        }
+        NativeBundleWriteOutcome::PromotedButDurabilityUncertain { .. } => {
+            return Err("coding_pack_export_post_promotion_durability_uncertain".into());
+        }
+    }
+
+    let completed_at = coding_pack_database.record_native_export_completed(&prepared.plan)?;
+    Ok(NativeExportResult {
+        operation_id: prepared.plan.operation_id,
+        export_attempt_id: prepared.plan.export_attempt_id,
+        export_plan_digest: prepared.plan.export_plan_digest,
+        manifest_digest: prepared.plan.manifest_digest,
+        target_name: prepared.plan.target_name,
+        source_file_count: prepared.plan.source_file_count,
+        source_total_bytes: prepared.plan.source_total_bytes,
+        completed_at,
+    })
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -371,6 +427,7 @@ pub fn run() {
             coding_pack_store_operation_ids,
             coding_pack_destination_get,
             coding_pack_destination_verify,
+            coding_pack_export_native,
             managed_python::managed_python_inspect,
             managed_python::managed_python_provision,
             managed_python::managed_python_verify,

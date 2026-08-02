@@ -5,9 +5,14 @@ import {
   PackageCheck,
   RefreshCw,
   ShieldCheck,
+  Upload,
 } from "lucide-react";
+import { useEffect, useState } from "react";
 import type { CodingPackPurpose } from "@qodex/coding-pack-runtime";
-import { hasCodingPackDestinationCapability } from "../platform/codingPackDestination";
+import {
+  createCodingPackDestinationCapabilityVerifier,
+  hasCodingPackDestinationCapability,
+} from "../platform/codingPackDestination";
 import { useRuntimeContext } from "./AppShell";
 
 const PURPOSE_OPTIONS: readonly {
@@ -61,7 +66,50 @@ export function CodingPackPreviewPanel() {
     createCurrentCodingPackExportProposal,
     confirmCurrentCodingPackExportProposal,
     evaluateCurrentCodingPackExportPolicy,
+    codingPackNativeExportAvailable,
+    codingPackNativeExportAvailability,
+    codingPackNativeExportError,
+    exportCurrentCodingPack,
   } = useRuntimeContext();
+
+  const [authorityNow, setAuthorityNow] = useState(() => Date.now());
+  const [isExportDestinationVerified, setIsExportDestinationVerified] = useState(false);
+
+  useEffect(() => {
+    if (!codingPackOperation) return;
+    const interval = window.setInterval(() => setAuthorityNow(Date.now()), 1_000);
+    return () => window.clearInterval(interval);
+  }, [codingPackOperation]);
+
+  useEffect(() => {
+    let active = true;
+    let timeout: number | undefined;
+    setIsExportDestinationVerified(false);
+    if (
+      !codingPackNativeExportAvailable
+      || codingPackOperation?.operation.state !== "decided_allow"
+      || !codingPackDestination
+    ) {
+      return () => { active = false; };
+    }
+    const verifier = createCodingPackDestinationCapabilityVerifier();
+    const verify = async () => {
+      const verified = await verifier.verifyDestinationCapability(codingPackDestination)
+        .catch(() => false);
+      if (!active) return;
+      setIsExportDestinationVerified(verified);
+      timeout = window.setTimeout(() => void verify(), 2_000);
+    };
+    void verify();
+    return () => {
+      active = false;
+      if (timeout !== undefined) window.clearTimeout(timeout);
+    };
+  }, [
+    codingPackDestination,
+    codingPackNativeExportAvailable,
+    codingPackOperation?.operation.state,
+  ]);
 
   const canPreview = Boolean(projectName) && selectedFileCount > 0;
   const isConfirmed = codingPackConfirmation !== null && !codingPackPreviewStale;
@@ -69,8 +117,18 @@ export function CodingPackPreviewPanel() {
     && codingPackOperation.approval !== null
     && codingPackDestination !== null
     && hasCodingPackDestinationCapability(codingPackDestination)
-    && Date.parse(codingPackOperation.proposal.expiresAt) > Date.now()
-    && Date.parse(codingPackOperation.approval.expiresAt) > Date.now();
+    && Date.parse(codingPackOperation.proposal.expiresAt) > authorityNow
+    && Date.parse(codingPackOperation.approval.expiresAt) > authorityNow;
+  const canExport = codingPackNativeExportAvailable
+    && codingPackOperation?.operation.state === "decided_allow"
+    && codingPackOperation.approval !== null
+    && codingPackConfirmation !== null
+    && !codingPackPreviewStale
+    && codingPackDestination !== null
+    && hasCodingPackDestinationCapability(codingPackDestination)
+    && isExportDestinationVerified
+    && Date.parse(codingPackOperation.proposal.expiresAt) > authorityNow
+    && Date.parse(codingPackOperation.approval.expiresAt) > authorityNow;
 
   return (
     <section
@@ -86,7 +144,7 @@ export function CodingPackPreviewPanel() {
           </div>
           <h2 id="coding-pack-preview-heading">Coding Pack preview</h2>
           <p>
-            Preview only the files you explicitly select. Nothing is exported or written.
+            Review only the files you explicitly select before any export.
           </p>
         </div>
         <span
@@ -286,10 +344,18 @@ export function CodingPackPreviewPanel() {
                 <span className="coding-pack-export-kicker">Durable local intent</span>
                 <h3 id="coding-pack-export-heading">Export proposal</h3>
               </div>
-              <span className="coding-pack-no-write" role="status">No files written</span>
+              <span className="coding-pack-no-write" role="status">
+                {codingPackOperation?.operation.state === "export_completed"
+                  ? "Bundle written"
+                  : codingPackOperation?.operation.state === "export_started"
+                    ? "Evidence uncertain"
+                    : codingPackOperation?.operation.state === "export_interrupted"
+                      ? "No final target"
+                      : "No files written"}
+              </span>
             </header>
             <p>
-              This lifecycle records intent and policy evidence only. Export has not started.
+              {exportLifecycleCopy(codingPackOperation?.operation.state)}
             </p>
 
             <div className="coding-pack-export-actions">
@@ -398,9 +464,98 @@ export function CodingPackPreviewPanel() {
                       codingPackOperation.decision.decision,
                     )}</strong>
                     <span>{codingPackOperation.decision.reasonCode}</span>
-                    <small>Export has not started</small>
+                    <small>{decisionWriteStatus(codingPackOperation.operation.state)}</small>
                   </div>
                 ) : null}
+                {codingPackOperation.operation.state === "decided_allow" ? (
+                  codingPackNativeExportAvailable ? (
+                    <button
+                      type="button"
+                      className="qodex-button coding-pack-export-button"
+                      disabled={!canExport || isCodingPackExportLoading}
+                      onClick={() => void exportCurrentCodingPack()}
+                      aria-label="Export exact Coding Pack atomically"
+                      data-testid="coding-pack-export"
+                    >
+                      <Upload size={13} aria-hidden="true" />
+                      {isCodingPackExportLoading
+                        ? "Preparing exact export"
+                        : "Export exact Coding Pack"}
+                    </button>
+                  ) : (
+                    <p className="coding-pack-native-required" role="status">
+                      {codingPackNativeExportAvailability === "platform_unsupported"
+                        ? "Atomic Coding Pack export is unavailable on Windows in this release"
+                        : "Native Desktop required for atomic export"}
+                    </p>
+                  )
+                ) : null}
+                {isCodingPackExportLoading
+                  && codingPackOperation.operation.state === "decided_allow" ? (
+                    <ol className="coding-pack-export-progress" aria-live="polite">
+                      <li>Preparing exact export</li>
+                      <li>Verifying source bytes</li>
+                      <li>Writing atomic staging bundle</li>
+                    </ol>
+                  ) : null}
+                {codingPackOperation.operation.state === "export_completed"
+                  && codingPackOperation.exportCompleted ? (
+                    <div
+                      className="coding-pack-export-outcome is-complete"
+                      role="status"
+                      data-testid="coding-pack-export-completed"
+                    >
+                      <strong>Coding Pack exported</strong>
+                      <dl>
+                        <IdentityRow
+                          label="Manifest digest"
+                          value={codingPackOperation.exportCompleted.manifestDigest}
+                        />
+                        <div>
+                          <dt>Target</dt>
+                          <dd><code>{codingPackOperation.exportCompleted.targetName}</code></dd>
+                        </div>
+                        <div>
+                          <dt>Files</dt>
+                          <dd>{codingPackOperation.exportCompleted.sourceFileCount}</dd>
+                        </div>
+                        <div>
+                          <dt>Total bytes</dt>
+                          <dd>{formatBytes(codingPackOperation.exportCompleted.sourceTotalBytes)}</dd>
+                        </div>
+                      </dl>
+                    </div>
+                  ) : null}
+                {codingPackNativeExportError
+                  === "coding_pack_export_completion_persistence_failed"
+                  || codingPackOperation.operation.state === "export_started" ? (
+                    <div
+                      className="coding-pack-export-outcome is-uncertain"
+                      role="alert"
+                      data-testid="coding-pack-export-uncertain"
+                    >
+                      <strong>Files may have been exported</strong>
+                      <span>Completion evidence was not persisted</span>
+                      <span>Check the selected destination</span>
+                      <span>No automatic retry</span>
+                    </div>
+                  ) : null}
+                {codingPackOperation.operation.state === "export_interrupted" ? (
+                  <div className="coding-pack-export-outcome is-interrupted" role="alert">
+                    <strong>Atomic export did not complete</strong>
+                    <span>No final target was promoted</span>
+                    <span>No automatic retry</span>
+                  </div>
+                ) : null}
+                {codingPackNativeExportError
+                  && codingPackNativeExportError
+                    !== "coding_pack_export_completion_persistence_failed"
+                  && codingPackOperation.operation.state !== "export_interrupted" ? (
+                    <div className="coding-pack-error" role="alert">
+                      <AlertTriangle size={14} aria-hidden="true" />
+                      <span>{nativeExportErrorCopy(codingPackNativeExportError)}</span>
+                    </div>
+                  ) : null}
               </div>
             ) : null}
           </section>
@@ -420,11 +575,13 @@ export function CodingPackPreviewPanel() {
                 Export proposal {codingPackRecoveredOperation.operation.state}
               </h3>
             </div>
-            <span className="coding-pack-no-write">No files written</span>
+            <span className="coding-pack-no-write">
+              {recoveredWriteStatus(codingPackRecoveredOperation.operation.state)}
+            </span>
           </header>
           <p>
             This is a historical record and may belong to a different project binding.
-            No decision or export was resumed. Export has not started.
+            No decision or export was resumed automatically.
             The previous preview confirmation was not restored.
           </p>
           {codingPackRecoveredOperation.decision ? (
@@ -432,6 +589,25 @@ export function CodingPackPreviewPanel() {
               Historical decision: {policyDecisionLabel(
                 codingPackRecoveredOperation.decision.decision,
               )}. It is non-actionable after restart.
+            </p>
+          ) : null}
+          {codingPackRecoveredOperation.operation.state === "export_started" ? (
+            <div className="coding-pack-export-outcome is-uncertain" role="status">
+              <strong>Files may have been exported</strong>
+              <span>Completion evidence was not persisted</span>
+              <span>Check the selected destination</span>
+              <span>No automatic retry</span>
+            </div>
+          ) : null}
+          {codingPackRecoveredOperation.exportCompleted ? (
+            <p>
+              Historical export completed as <code>{codingPackRecoveredOperation.exportCompleted.targetName}</code>.
+              It is non-actionable after restart.
+            </p>
+          ) : null}
+          {codingPackRecoveredOperation.exportInterrupted ? (
+            <p>
+              Historical export was interrupted before promotion. No automatic retry is available.
             </p>
           ) : null}
           {!codingPackRecoveredOperation.destination.restartAvailable ? (
@@ -475,11 +651,58 @@ function operationStatus(state: string): string {
   if (state === "decided_allow") return "Policy allowed";
   if (state === "decided_deny") return "Policy denied";
   if (state === "decided_error") return "Policy evaluation error";
+  if (state === "export_started") return "Export evidence uncertain";
+  if (state === "export_completed") return "Coding Pack exported";
+  if (state === "export_interrupted") return "Atomic export interrupted";
   return "Export proposal created";
+}
+
+function exportLifecycleCopy(state: string | undefined): string {
+  if (state === "export_completed") {
+    return "The exact bundle was promoted and completion evidence was persisted.";
+  }
+  if (state === "export_started") {
+    return "The physical result is uncertain because completion evidence is unavailable.";
+  }
+  if (state === "export_interrupted") {
+    return "The attempt ended before final-target promotion. No automatic retry is available.";
+  }
+  return "This lifecycle records intent and policy evidence. Export has not started.";
 }
 
 function policyDecisionLabel(decision: "allow" | "deny" | "error"): string {
   if (decision === "allow") return "Policy allowed";
   if (decision === "deny") return "Policy denied";
   return "Policy evaluation error";
+}
+
+function decisionWriteStatus(state: string): string {
+  if (state === "decided_deny" || state === "decided_error") return "No files written";
+  if (state === "export_completed") return "Completion evidence persisted";
+  if (state === "export_interrupted") return "No final target promoted";
+  if (state === "export_started") return "Completion evidence unavailable";
+  return "Export has not started";
+}
+
+function recoveredWriteStatus(state: string): string {
+  if (state === "export_completed") return "Export completed";
+  if (state === "export_interrupted") return "No final target";
+  if (state === "export_started") return "State uncertain";
+  return "No files written";
+}
+
+function nativeExportErrorCopy(code: string): string {
+  if (code === "coding_pack_native_desktop_required") {
+    return "Native Desktop required for atomic export";
+  }
+  if (code === "coding_pack_native_atomic_export_unsupported") {
+    return "Atomic Coding Pack export is unavailable on Windows in this release";
+  }
+  if (code === "coding_pack_export_authority_invalid") {
+    return "The current preview, confirmation, destination, or approval is no longer valid.";
+  }
+  if (code === "coding_pack_export_post_promotion_durability_uncertain") {
+    return "Files were promoted, but durable destination sync could not be confirmed. No automatic retry is available.";
+  }
+  return "Atomic export failed. No completion was reported.";
 }

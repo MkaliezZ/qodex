@@ -8,8 +8,8 @@ use std::sync::Mutex;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use tauri::{AppHandle, Manager};
 
-pub const CODING_PACK_DATABASE_SCHEMA_VERSION: i64 = 2;
-pub const CODING_PACK_STORE_SCHEMA_VERSION: &str = "kerniq.coding-pack.store.v2";
+pub const CODING_PACK_DATABASE_SCHEMA_VERSION: i64 = 3;
+pub const CODING_PACK_STORE_SCHEMA_VERSION: &str = "kerniq.coding-pack.store.v3";
 const DATABASE_FILE_NAME: &str = "kerniq-coding-pack.sqlite3";
 const MAX_EVENT_PAYLOAD_BYTES: usize = 64 * 1024;
 const MAX_ID_BYTES: usize = 256;
@@ -165,6 +165,48 @@ struct DecidedPayload {
     reason_code: String,
     evaluation_started_at: String,
     decided_at: String,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct ExportStartedPayload {
+    export_attempt_id: String,
+    export_plan_digest: String,
+    decision_id: String,
+    request_digest: String,
+    proposal_digest: String,
+    manifest_digest: String,
+    destination_binding_id: String,
+    destination_fingerprint: String,
+    destination_object_identity_digest: String,
+    staging_name: String,
+    target_name: String,
+    source_file_count: usize,
+    source_total_bytes: u64,
+    started_at: String,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct ExportCompletedPayload {
+    export_attempt_id: String,
+    export_plan_digest: String,
+    manifest_digest: String,
+    target_name: String,
+    source_file_count: usize,
+    source_total_bytes: u64,
+    completed_at: String,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct ExportInterruptedPayload {
+    export_attempt_id: String,
+    export_plan_digest: String,
+    phase_code: String,
+    physical_state: String,
+    reason_code: String,
+    interrupted_at: String,
 }
 
 impl CodingPackDatabase {
@@ -464,9 +506,590 @@ impl CodingPackDatabase {
             && fingerprint == stored.binding.destination_fingerprint)
     }
 
+    pub(crate) fn begin_native_export(
+        &self,
+        request: &NativeExportRequest,
+        project_root: &Path,
+    ) -> Result<PreparedNativeExport, String> {
+        self.begin_native_export_inner(request, project_root, None, false)
+    }
+
+    fn begin_native_export_inner(
+        &self,
+        request: &NativeExportRequest,
+        project_root: &Path,
+        started_at_override: Option<&str>,
+        fail_start_persistence: bool,
+    ) -> Result<PreparedNativeExport, String> {
+        validate_opaque_id(&request.operation_id)?;
+        validate_opaque_id(&request.export_attempt_id)?;
+        validate_opaque_id(&request.project_binding_id)?;
+        let manifest = validate_manifest(&request.canonical_manifest_json)?;
+        let mut connection = self.lock().map_err(|_| export_start_failed())?;
+        let transaction = connection
+            .transaction_with_behavior(TransactionBehavior::Immediate)
+            .map_err(|_| export_start_failed())?;
+        let current = select_operation(&transaction, &request.operation_id)?
+            .ok_or_else(export_not_allowed)?;
+        let events = select_events(&transaction, &request.operation_id)?;
+        if current.state != "decided_allow"
+            || current.last_event_sequence != 3
+            || events.len() != 3
+            || current.project_binding_id != request.project_binding_id
+        {
+            return Err(export_not_allowed());
+        }
+        let proposal = validate_proposed_pair(
+            &CodingPackOperation {
+                state: "proposed".into(),
+                last_event_sequence: 1,
+                ..current.clone()
+            },
+            &events[0],
+        )?;
+        let approval = validate_confirmed_pair(
+            &CodingPackOperation {
+                state: "confirmed".into(),
+                last_event_sequence: 2,
+                ..current.clone()
+            },
+            &events[1],
+            &proposal,
+        )?;
+        let decision =
+            validate_decided_pair(&current, &events[2], &proposal, &approval, &events[1])?;
+        if decision.decision != "allow"
+            || manifest.candidate_paths_digest != current.candidate_paths_digest
+            || manifest.source_fingerprint != current.source_fingerprint
+            || manifest.pack_id != current.pack_id
+            || manifest.manifest_digest != current.manifest_digest
+        {
+            return Err(export_not_allowed());
+        }
+
+        let destination =
+            select_destination_private(&transaction, &current.destination_binding_id)?
+                .ok_or_else(destination_unavailable)?;
+        let canonical_destination =
+            canonical_destination(Path::new(&destination.private_absolute_path))?;
+        let (private_path, destination_fingerprint, destination_binding_id) =
+            destination_identity(&canonical_destination)?;
+        if private_path != destination.private_absolute_path
+            || destination_binding_id != destination.binding.destination_binding_id
+            || destination_fingerprint != destination.binding.destination_fingerprint
+            || destination_fingerprint != proposal.destination_fingerprint
+        {
+            return Err(destination_unavailable());
+        }
+
+        let sources = read_and_verify_sources(project_root, &manifest.sources)?;
+        let source_total_bytes = sources.iter().try_fold(0_u64, |total, source| {
+            total
+                .checked_add(source.bytes.len() as u64)
+                .ok_or_else(|| "coding_pack_source_changed_before_export".to_string())
+        })?;
+        let started_at = match started_at_override {
+            Some(value) => value.to_string(),
+            None => database_timestamp(&transaction).map_err(|_| export_start_failed())?,
+        };
+        let started_at_millis = parse_timestamp(&started_at).map_err(|_| export_start_failed())?;
+        if started_at_millis < parse_timestamp(&decision.decided_at)?
+            || started_at_millis >= parse_timestamp(&proposal.expires_at)?
+            || started_at_millis >= parse_timestamp(&approval.expires_at)?
+        {
+            return Err("coding_pack_export_authority_expired".into());
+        }
+        if !crate::coding_pack_export_fs::native_atomic_export_supported() {
+            return Err("coding_pack_native_atomic_export_unsupported".into());
+        }
+
+        let destination_root = crate::coding_pack_export_fs::open_verified_destination_root(
+            &canonical_destination,
+            &destination_binding_id,
+            &destination_fingerprint,
+        )?;
+        if destination_root.binding_id != destination.binding.destination_binding_id
+            || destination_root.fingerprint != destination.binding.destination_fingerprint
+        {
+            return Err(destination_unavailable());
+        }
+        let target_name = format!(
+            "kerniq-coding-pack-{}",
+            &manifest.manifest_digest["sha256:".len()..]
+        );
+        if !destination_root.target_absent(&target_name)? {
+            return Err("coding_pack_export_target_exists".into());
+        }
+        let staging_name = crate::coding_pack_export::random_staging_name()?;
+
+        let plan_without_digest = serde_json::json!({
+            "schemaVersion": crate::coding_pack_export::EXPORT_PLAN_SCHEMA,
+            "operationId": current.operation_id,
+            "exportAttemptId": request.export_attempt_id,
+            "decisionId": decision.decision_id,
+            "requestDigest": decision.request_digest,
+            "proposalDigest": proposal.proposal_digest,
+            "candidatePathsDigest": current.candidate_paths_digest,
+            "sourceFingerprint": current.source_fingerprint,
+            "packId": current.pack_id,
+            "manifestDigest": manifest.manifest_digest,
+            "destinationBindingId": destination.binding.destination_binding_id,
+            "destinationFingerprint": destination.binding.destination_fingerprint,
+            "destinationObjectIdentityDigest": destination_root.object_identity_digest,
+            "stagingName": staging_name,
+            "targetName": target_name,
+            "manifestByteCount": manifest.canonical_bytes.len(),
+            "sourceFileCount": sources.len(),
+            "sourceTotalBytes": source_total_bytes,
+            "exportStartedAt": started_at,
+        });
+        let export_plan_digest =
+            sha256_canonical(&plan_without_digest).map_err(|_| export_start_failed())?;
+        let plan = NativeExportPlan {
+            schema_version: crate::coding_pack_export::EXPORT_PLAN_SCHEMA.into(),
+            operation_id: current.operation_id.clone(),
+            export_attempt_id: request.export_attempt_id.clone(),
+            decision_id: decision.decision_id.clone(),
+            request_digest: decision.request_digest.clone(),
+            proposal_digest: proposal.proposal_digest.clone(),
+            candidate_paths_digest: current.candidate_paths_digest.clone(),
+            source_fingerprint: current.source_fingerprint.clone(),
+            pack_id: current.pack_id.clone(),
+            manifest_digest: manifest.manifest_digest.clone(),
+            destination_binding_id: destination.binding.destination_binding_id.clone(),
+            destination_fingerprint: destination.binding.destination_fingerprint.clone(),
+            destination_object_identity_digest: destination_root.object_identity_digest.clone(),
+            staging_name,
+            target_name,
+            manifest_byte_count: manifest.canonical_bytes.len(),
+            source_file_count: sources.len(),
+            source_total_bytes,
+            export_started_at: started_at.clone(),
+            export_plan_digest: export_plan_digest.clone(),
+        };
+        let payload = ExportStartedPayload {
+            export_attempt_id: plan.export_attempt_id.clone(),
+            export_plan_digest,
+            decision_id: plan.decision_id.clone(),
+            request_digest: plan.request_digest.clone(),
+            proposal_digest: plan.proposal_digest.clone(),
+            manifest_digest: plan.manifest_digest.clone(),
+            destination_binding_id: plan.destination_binding_id.clone(),
+            destination_fingerprint: plan.destination_fingerprint.clone(),
+            destination_object_identity_digest: plan.destination_object_identity_digest.clone(),
+            staging_name: plan.staging_name.clone(),
+            target_name: plan.target_name.clone(),
+            source_file_count: plan.source_file_count,
+            source_total_bytes: plan.source_total_bytes,
+            started_at: started_at.clone(),
+        };
+        let event = lifecycle_event(
+            &plan.operation_id,
+            &plan.export_attempt_id,
+            4,
+            "PACK_EXPORT_STARTED",
+            "started",
+            &started_at,
+            &payload,
+        )
+        .map_err(|_| export_start_failed())?;
+        if fail_start_persistence {
+            return Err(export_start_failed());
+        }
+        let payload_json =
+            bounded_payload_json(&event.payload).map_err(|_| export_start_failed())?;
+        insert_event(&transaction, &event, &payload_json).map_err(|_| export_start_failed())?;
+        let changed = transaction
+            .execute(
+                "UPDATE coding_pack_operations
+                 SET state = 'export_started', last_event_sequence = 4
+                 WHERE operation_id = ?1
+                   AND state = 'decided_allow'
+                   AND last_event_sequence = 3",
+                [&plan.operation_id],
+            )
+            .map_err(|_| export_start_failed())?;
+        if changed != 1 {
+            return Err(export_start_failed());
+        }
+        transaction.commit().map_err(|_| export_start_failed())?;
+
+        Ok(PreparedNativeExport {
+            plan,
+            destination_root,
+            manifest_bytes: manifest.canonical_bytes,
+            sources,
+        })
+    }
+
+    pub(crate) fn record_native_export_completed(
+        &self,
+        plan: &NativeExportPlan,
+    ) -> Result<String, String> {
+        self.record_native_export_completed_inner(plan, None, false)
+    }
+
+    fn record_native_export_completed_inner(
+        &self,
+        plan: &NativeExportPlan,
+        completed_at_override: Option<&str>,
+        fail_persistence: bool,
+    ) -> Result<String, String> {
+        let mut connection = self.lock().map_err(|_| completion_persistence_failed())?;
+        let transaction = connection
+            .transaction_with_behavior(TransactionBehavior::Immediate)
+            .map_err(|_| completion_persistence_failed())?;
+        validate_started_plan(&transaction, plan).map_err(|_| completion_persistence_failed())?;
+        let completed_at = match completed_at_override {
+            Some(value) => value.to_string(),
+            None => {
+                database_timestamp(&transaction).map_err(|_| completion_persistence_failed())?
+            }
+        };
+        if parse_timestamp(&completed_at).map_err(|_| completion_persistence_failed())?
+            < parse_timestamp(&plan.export_started_at)
+                .map_err(|_| completion_persistence_failed())?
+        {
+            return Err(completion_persistence_failed());
+        }
+        let payload = ExportCompletedPayload {
+            export_attempt_id: plan.export_attempt_id.clone(),
+            export_plan_digest: plan.export_plan_digest.clone(),
+            manifest_digest: plan.manifest_digest.clone(),
+            target_name: plan.target_name.clone(),
+            source_file_count: plan.source_file_count,
+            source_total_bytes: plan.source_total_bytes,
+            completed_at: completed_at.clone(),
+        };
+        let event = lifecycle_event(
+            &plan.operation_id,
+            &plan.export_attempt_id,
+            5,
+            "PACK_EXPORT_COMPLETED",
+            "completed",
+            &completed_at,
+            &payload,
+        )
+        .map_err(|_| completion_persistence_failed())?;
+        if fail_persistence {
+            return Err(completion_persistence_failed());
+        }
+        let payload_json =
+            bounded_payload_json(&event.payload).map_err(|_| completion_persistence_failed())?;
+        insert_event(&transaction, &event, &payload_json)
+            .map_err(|_| completion_persistence_failed())?;
+        let changed = transaction
+            .execute(
+                "UPDATE coding_pack_operations
+                 SET state = 'export_completed', last_event_sequence = 5
+                 WHERE operation_id = ?1
+                   AND state = 'export_started'
+                   AND last_event_sequence = 4",
+                [&plan.operation_id],
+            )
+            .map_err(|_| completion_persistence_failed())?;
+        if changed != 1 {
+            return Err(completion_persistence_failed());
+        }
+        transaction
+            .commit()
+            .map_err(|_| completion_persistence_failed())?;
+        Ok(completed_at)
+    }
+
+    pub(crate) fn record_native_export_interrupted(
+        &self,
+        plan: &NativeExportPlan,
+        phase_code: &str,
+        reason_code: &str,
+    ) -> Result<String, String> {
+        self.record_native_export_interrupted_inner(plan, phase_code, reason_code, None)
+    }
+
+    fn record_native_export_interrupted_inner(
+        &self,
+        plan: &NativeExportPlan,
+        phase_code: &str,
+        reason_code: &str,
+        interrupted_at_override: Option<&str>,
+    ) -> Result<String, String> {
+        if !matches!(
+            phase_code,
+            "staging_create"
+                | "manifest_write"
+                | "source_write"
+                | "flush"
+                | "promotion"
+                | "cleanup"
+        ) || !is_reason_code(reason_code)
+        {
+            return Err("coding_pack_export_interrupted_persistence_failed".into());
+        }
+        let mut connection = self
+            .lock()
+            .map_err(|_| "coding_pack_export_interrupted_persistence_failed".to_string())?;
+        let transaction = connection
+            .transaction_with_behavior(TransactionBehavior::Immediate)
+            .map_err(|_| "coding_pack_export_interrupted_persistence_failed".to_string())?;
+        validate_started_plan(&transaction, plan)
+            .map_err(|_| "coding_pack_export_interrupted_persistence_failed".to_string())?;
+        let interrupted_at = match interrupted_at_override {
+            Some(value) => value.to_string(),
+            None => database_timestamp(&transaction)
+                .map_err(|_| "coding_pack_export_interrupted_persistence_failed".to_string())?,
+        };
+        if parse_timestamp(&interrupted_at)
+            .map_err(|_| "coding_pack_export_interrupted_persistence_failed".to_string())?
+            < parse_timestamp(&plan.export_started_at)
+                .map_err(|_| "coding_pack_export_interrupted_persistence_failed".to_string())?
+        {
+            return Err("coding_pack_export_interrupted_persistence_failed".into());
+        }
+        let payload = ExportInterruptedPayload {
+            export_attempt_id: plan.export_attempt_id.clone(),
+            export_plan_digest: plan.export_plan_digest.clone(),
+            phase_code: phase_code.into(),
+            physical_state: "not_promoted".into(),
+            reason_code: reason_code.into(),
+            interrupted_at: interrupted_at.clone(),
+        };
+        let event = lifecycle_event(
+            &plan.operation_id,
+            &plan.export_attempt_id,
+            5,
+            "PACK_EXPORT_INTERRUPTED",
+            "interrupted",
+            &interrupted_at,
+            &payload,
+        )
+        .map_err(|_| "coding_pack_export_interrupted_persistence_failed".to_string())?;
+        let payload_json = bounded_payload_json(&event.payload)
+            .map_err(|_| "coding_pack_export_interrupted_persistence_failed".to_string())?;
+        insert_event(&transaction, &event, &payload_json)
+            .map_err(|_| "coding_pack_export_interrupted_persistence_failed".to_string())?;
+        let changed = transaction
+            .execute(
+                "UPDATE coding_pack_operations
+                 SET state = 'export_interrupted', last_event_sequence = 5
+                 WHERE operation_id = ?1
+                   AND state = 'export_started'
+                   AND last_event_sequence = 4",
+                [&plan.operation_id],
+            )
+            .map_err(|_| "coding_pack_export_interrupted_persistence_failed".to_string())?;
+        if changed != 1 {
+            return Err("coding_pack_export_interrupted_persistence_failed".into());
+        }
+        transaction
+            .commit()
+            .map_err(|_| "coding_pack_export_interrupted_persistence_failed".to_string())?;
+        Ok(interrupted_at)
+    }
+
+    #[cfg(test)]
+    pub(crate) fn begin_native_export_for_test(
+        &self,
+        request: &NativeExportRequest,
+        project_root: &Path,
+        started_at: &str,
+        fail_start_persistence: bool,
+    ) -> Result<PreparedNativeExport, String> {
+        self.begin_native_export_inner(
+            request,
+            project_root,
+            Some(started_at),
+            fail_start_persistence,
+        )
+    }
+
+    #[cfg(test)]
+    pub(crate) fn fail_native_completion_for_test(
+        &self,
+        plan: &NativeExportPlan,
+    ) -> Result<String, String> {
+        self.record_native_export_completed_inner(plan, Some("2099-07-30T00:00:04.000Z"), true)
+    }
+
+    #[cfg(test)]
+    pub(crate) fn record_native_completion_for_test(
+        &self,
+        plan: &NativeExportPlan,
+    ) -> Result<String, String> {
+        self.record_native_export_completed_inner(plan, Some("2099-07-30T00:00:04.000Z"), false)
+    }
+
+    #[cfg(test)]
+    pub(crate) fn record_native_interruption_for_test(
+        &self,
+        plan: &NativeExportPlan,
+        phase_code: &str,
+        reason_code: &str,
+    ) -> Result<String, String> {
+        self.record_native_export_interrupted_inner(
+            plan,
+            phase_code,
+            reason_code,
+            Some("2099-07-30T00:00:04.000Z"),
+        )
+    }
+
     fn lock(&self) -> Result<std::sync::MutexGuard<'_, Connection>, String> {
         self.connection.lock().map_err(|_| store_unavailable())
     }
+}
+
+fn database_timestamp(connection: &Connection) -> Result<String, String> {
+    let value: String = connection
+        .query_row("SELECT strftime('%Y-%m-%dT%H:%M:%fZ', 'now')", [], |row| {
+            row.get(0)
+        })
+        .map_err(|_| persistence_failed())?;
+    parse_timestamp(&value)?;
+    Ok(value)
+}
+
+fn lifecycle_event<T: Serialize>(
+    operation_id: &str,
+    export_attempt_id: &str,
+    sequence: i64,
+    event_type: &str,
+    identity_suffix: &str,
+    recorded_at: &str,
+    payload: &T,
+) -> Result<CodingPackEvent, String> {
+    let payload = serde_json::to_value(payload).map_err(|_| persistence_failed())?;
+    let payload_digest = sha256_canonical(&payload)?;
+    let mut hasher = Sha256::new();
+    hasher.update(operation_id.as_bytes());
+    hasher.update(b"\0");
+    hasher.update(export_attempt_id.as_bytes());
+    hasher.update(b"\0");
+    hasher.update(identity_suffix.as_bytes());
+    let event_identity = format!("{:x}", hasher.finalize());
+    Ok(CodingPackEvent {
+        event_id: format!("coding-pack-event-{}", &event_identity[..24]),
+        operation_id: operation_id.into(),
+        event_sequence: sequence,
+        event_type: event_type.into(),
+        event_version: 1,
+        recorded_at: recorded_at.into(),
+        payload_digest,
+        payload,
+    })
+}
+
+fn validate_started_plan(connection: &Connection, plan: &NativeExportPlan) -> Result<(), String> {
+    let operation = select_operation(connection, &plan.operation_id)?
+        .ok_or_else(completion_persistence_failed)?;
+    let events = select_events(connection, &plan.operation_id)?;
+    if operation.state != "export_started"
+        || operation.last_event_sequence != 4
+        || events.len() != 4
+        || events[3].event_type != "PACK_EXPORT_STARTED"
+        || events[3].event_sequence != 4
+    {
+        return Err(completion_persistence_failed());
+    }
+    let proposal = validate_proposed_pair(
+        &CodingPackOperation {
+            state: "proposed".into(),
+            last_event_sequence: 1,
+            ..operation.clone()
+        },
+        &events[0],
+    )
+    .map_err(|_| completion_persistence_failed())?;
+    let approval = validate_confirmed_pair(
+        &CodingPackOperation {
+            state: "confirmed".into(),
+            last_event_sequence: 2,
+            ..operation.clone()
+        },
+        &events[1],
+        &proposal,
+    )
+    .map_err(|_| completion_persistence_failed())?;
+    let decision = validate_decided_pair(
+        &CodingPackOperation {
+            state: "decided_allow".into(),
+            last_event_sequence: 3,
+            ..operation.clone()
+        },
+        &events[2],
+        &proposal,
+        &approval,
+        &events[1],
+    )
+    .map_err(|_| completion_persistence_failed())?;
+    validate_event_envelope(&events[3]).map_err(|_| completion_persistence_failed())?;
+    let started: ExportStartedPayload = serde_json::from_value(events[3].payload.clone())
+        .map_err(|_| completion_persistence_failed())?;
+    if decision.decision != "allow"
+        || events[3].operation_id != operation.operation_id
+        || events[3].event_version != 1
+        || events[3].recorded_at != started.started_at
+        || events[3].payload_digest != sha256_canonical(&events[3].payload)?
+        || plan.schema_version != crate::coding_pack_export::EXPORT_PLAN_SCHEMA
+        || plan.operation_id != operation.operation_id
+        || plan.decision_id != decision.decision_id
+        || plan.request_digest != decision.request_digest
+        || plan.proposal_digest != proposal.proposal_digest
+        || plan.candidate_paths_digest != proposal.candidate_paths_digest
+        || plan.source_fingerprint != proposal.source_fingerprint
+        || plan.pack_id != proposal.pack_id
+        || plan.manifest_digest != proposal.manifest_digest
+        || plan.destination_binding_id != proposal.destination_binding_id
+        || plan.destination_fingerprint != proposal.destination_fingerprint
+        || started.export_attempt_id != plan.export_attempt_id
+        || started.export_plan_digest != plan.export_plan_digest
+        || started.decision_id != plan.decision_id
+        || started.request_digest != plan.request_digest
+        || started.proposal_digest != plan.proposal_digest
+        || started.manifest_digest != plan.manifest_digest
+        || started.destination_binding_id != plan.destination_binding_id
+        || started.destination_fingerprint != plan.destination_fingerprint
+        || started.destination_object_identity_digest != plan.destination_object_identity_digest
+        || started.staging_name != plan.staging_name
+        || started.target_name != plan.target_name
+        || started.source_file_count != plan.source_file_count
+        || started.source_total_bytes != plan.source_total_bytes
+        || started.started_at != plan.export_started_at
+        || parse_timestamp(&started.started_at)? < parse_timestamp(&decision.decided_at)?
+        || parse_timestamp(&started.started_at)? >= parse_timestamp(&proposal.expires_at)?
+        || parse_timestamp(&started.started_at)? >= parse_timestamp(&approval.expires_at)?
+    {
+        return Err(completion_persistence_failed());
+    }
+    let mut plan_value = serde_json::to_value(plan).map_err(|_| completion_persistence_failed())?;
+    plan_value
+        .as_object_mut()
+        .ok_or_else(completion_persistence_failed)?
+        .remove("exportPlanDigest");
+    if sha256_canonical(&plan_value)? != plan.export_plan_digest {
+        return Err(completion_persistence_failed());
+    }
+    Ok(())
+}
+
+fn is_reason_code(value: &str) -> bool {
+    !value.is_empty()
+        && value.len() <= 64
+        && value.bytes().enumerate().all(|(index, byte)| {
+            matches!(byte, b'a'..=b'z' | b'0'..=b'9' | b'_')
+                && (index > 0 || byte.is_ascii_lowercase())
+        })
+}
+
+fn export_not_allowed() -> String {
+    "coding_pack_export_not_allowed".into()
+}
+
+fn export_start_failed() -> String {
+    "coding_pack_export_start_persistence_failed".into()
+}
+
+fn completion_persistence_failed() -> String {
+    "coding_pack_export_completion_persistence_failed".into()
 }
 
 fn configure_connection(connection: &Connection) -> Result<(), String> {
@@ -537,22 +1160,27 @@ pub fn migrate_database(connection: &Connection) -> Result<(), String> {
                  CREATE INDEX IF NOT EXISTS idx_coding_pack_events_operation_sequence
                     ON coding_pack_events(operation_id, event_sequence);
                  INSERT INTO coding_pack_store_metadata(schema_version)
-                    VALUES ('kerniq.coding-pack.store.v2');
-                 PRAGMA user_version = 2;",
+                    VALUES ('kerniq.coding-pack.store.v3');
+                 PRAGMA user_version = 3;",
             )
             .map_err(|_| persistence_failed())?;
         transaction.commit().map_err(|_| persistence_failed())?;
     }
-    if version == 1 {
+    if version == 1 || version == 2 {
+        let previous_schema = if version == 1 {
+            "kerniq.coding-pack.store.v1"
+        } else {
+            "kerniq.coding-pack.store.v2"
+        };
         let transaction = connection
             .unchecked_transaction()
             .map_err(|_| persistence_failed())?;
         transaction
             .execute(
                 "UPDATE coding_pack_store_metadata
-                 SET schema_version = 'kerniq.coding-pack.store.v2'
-                 WHERE schema_version = 'kerniq.coding-pack.store.v1'",
-                [],
+                 SET schema_version = 'kerniq.coding-pack.store.v3'
+                 WHERE schema_version = ?1",
+                [previous_schema],
             )
             .map_err(|_| persistence_failed())
             .and_then(|changed| {
@@ -563,7 +1191,7 @@ pub fn migrate_database(connection: &Connection) -> Result<(), String> {
                 }
             })?;
         transaction
-            .execute_batch("PRAGMA user_version = 2;")
+            .execute_batch("PRAGMA user_version = 3;")
             .map_err(|_| persistence_failed())?;
         transaction.commit().map_err(|_| persistence_failed())?;
     }
@@ -893,7 +1521,14 @@ fn validate_operation(operation: &CodingPackOperation) -> Result<(), String> {
     validate_opaque_id(&operation.project_binding_id)?;
     if !matches!(
         operation.state.as_str(),
-        "proposed" | "confirmed" | "decided_allow" | "decided_deny" | "decided_error"
+        "proposed"
+            | "confirmed"
+            | "decided_allow"
+            | "decided_deny"
+            | "decided_error"
+            | "export_started"
+            | "export_completed"
+            | "export_interrupted"
     ) {
         return Err(persistence_failed());
     }
@@ -1070,14 +1705,14 @@ fn coding_pack_agentfuse_request_digest(
     }))
 }
 
-fn sha256_canonical(value: &Value) -> Result<String, String> {
+pub(crate) fn sha256_canonical(value: &Value) -> Result<String, String> {
     let canonical = canonical_json(value)?;
     let mut hasher = Sha256::new();
     hasher.update(canonical.as_bytes());
     Ok(format!("sha256:{:x}", hasher.finalize()))
 }
 
-fn canonical_json(value: &Value) -> Result<String, String> {
+pub(crate) fn canonical_json(value: &Value) -> Result<String, String> {
     match value {
         Value::Null => Ok("null".into()),
         Value::Bool(boolean) => Ok(boolean.to_string()),
@@ -1130,7 +1765,7 @@ fn validate_lifetime(created_at: &str, expires_at: &str, maximum: i64) -> Result
     Ok(())
 }
 
-fn parse_timestamp(value: &str) -> Result<i64, String> {
+pub(crate) fn parse_timestamp(value: &str) -> Result<i64, String> {
     validate_external_string(value, 64, false)?;
     let bytes = value.as_bytes();
     if bytes.len() != 24
@@ -1304,6 +1939,9 @@ fn persistence_failed() -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::coding_pack_export::{
+        write_atomic_bundle, write_atomic_bundle_with_fault, ExportFault, NativeBundleWriteOutcome,
+    };
 
     #[test]
     fn fresh_schema_creation_and_migration_are_idempotent() {
@@ -1311,7 +1949,7 @@ mod tests {
         configure_connection(&connection).unwrap();
         migrate_database(&connection).unwrap();
         migrate_database(&connection).unwrap();
-        assert_eq!(schema_version(&connection), 2);
+        assert_eq!(schema_version(&connection), 3);
         assert!(table_exists(&connection, "coding_pack_operations"));
         assert!(table_exists(&connection, "coding_pack_events"));
         assert!(table_exists(
@@ -1333,10 +1971,13 @@ mod tests {
     }
 
     #[test]
-    fn v1_proposed_and_confirmed_records_migrate_without_automatic_decision() {
+    fn v1_and_v2_records_migrate_without_automatic_export() {
         let root = test_root();
-        for confirmed in [false, true] {
-            let suffix = if confirmed { "confirmed" } else { "proposed" };
+        for (version, confirmed) in [(1, false), (1, true), (2, true)] {
+            let suffix = format!(
+                "v{version}-{}",
+                if confirmed { "confirmed" } else { "proposed" }
+            );
             let destination = root.join(format!("exports-{suffix}"));
             fs::create_dir_all(&destination).unwrap();
             let database_path = root.join(format!("{suffix}.sqlite3"));
@@ -1358,11 +1999,13 @@ mod tests {
             legacy
                 .execute(
                     "UPDATE coding_pack_store_metadata
-                     SET schema_version = 'kerniq.coding-pack.store.v1'",
-                    [],
+                         SET schema_version = ?1",
+                    [format!("kerniq.coding-pack.store.v{version}")],
                 )
                 .unwrap();
-            legacy.execute_batch("PRAGMA user_version = 1;").unwrap();
+            legacy
+                .execute_batch(&format!("PRAGMA user_version = {version};"))
+                .unwrap();
             drop(legacy);
 
             let migrated = CodingPackDatabase::open_path(&database_path).unwrap();
@@ -1375,8 +2018,12 @@ mod tests {
                 if confirmed { "confirmed" } else { "proposed" }
             );
             assert_eq!(snapshot.events.len(), if confirmed { 2 } else { 1 });
+            assert!(snapshot
+                .events
+                .iter()
+                .all(|event| !event.event_type.starts_with("PACK_EXPORT_")));
             let connection = migrated.lock().unwrap();
-            assert_eq!(schema_version(&connection), 2);
+            assert_eq!(schema_version(&connection), 3);
             let schema: String = connection
                 .query_row(
                     "SELECT schema_version FROM coding_pack_store_metadata",
@@ -1450,6 +2097,37 @@ mod tests {
             serde_json::from_value(proposal).unwrap();
         absolute_operation.operation_id = "/private/export".into();
         assert!(coding_pack_agentfuse_request_digest(&absolute_operation, &digest('b')).is_err());
+    }
+
+    #[test]
+    fn native_manifest_rejects_portable_project_labels_that_look_absolute() {
+        let root = test_root();
+        let project = root.join("project");
+        fs::create_dir_all(project.join("src")).unwrap();
+        fs::write(
+            project.join("src/main.ts"),
+            b"export const kerniq = true;\n",
+        )
+        .unwrap();
+
+        for label in [
+            "/Users/private/project",
+            r"C:\Users\private\project",
+            r"\\server\private\project",
+            "file:///Users/private/project",
+        ] {
+            let mut manifest: Value = serde_json::from_str(&manifest_fixture(&project)).unwrap();
+            manifest["project"] = serde_json::json!({ "projectLabel": label });
+            manifest.as_object_mut().unwrap().remove("manifestDigest");
+            let manifest_digest = sha256_canonical(&manifest).unwrap();
+            manifest["manifestDigest"] = manifest_digest.into();
+            assert_eq!(
+                validate_manifest(&canonical_json(&manifest).unwrap()).unwrap_err(),
+                "coding_pack_manifest_mismatch"
+            );
+        }
+
+        fs::remove_dir_all(root).unwrap();
     }
 
     #[test]
@@ -1824,6 +2502,540 @@ mod tests {
         .is_err());
     }
 
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn native_export_persists_start_before_writes_and_completes_exact_bundle() {
+        let root = test_root();
+        let (database, project, destination, request, manifest_json) = export_fixture(&root);
+
+        let prepared = database
+            .begin_native_export_for_test(&request, &project, "2099-07-30T00:00:03.000Z", false)
+            .unwrap();
+        let started = database
+            .get_operation_snapshot_data(&request.operation_id)
+            .unwrap()
+            .unwrap();
+        assert_eq!(started.operation.state, "export_started");
+        assert_eq!(started.events.len(), 4);
+        assert_eq!(started.events[3].event_type, "PACK_EXPORT_STARTED");
+        assert_eq!(
+            started.events[3].payload["destinationObjectIdentityDigest"],
+            prepared.plan.destination_object_identity_digest
+        );
+        assert_eq!(
+            started.events[3].payload["stagingName"],
+            prepared.plan.staging_name
+        );
+        assert_eq!(fs::read_dir(&destination).unwrap().count(), 0);
+
+        assert_eq!(
+            write_atomic_bundle(&prepared),
+            NativeBundleWriteOutcome::PromotedAndSynced
+        );
+        let target = destination.join(&prepared.plan.target_name);
+        assert_eq!(
+            fs::read(target.join("manifest.json")).unwrap(),
+            manifest_json.as_bytes()
+        );
+        assert_eq!(
+            fs::read(target.join("sources/src/main.ts")).unwrap(),
+            fs::read(project.join("src/main.ts")).unwrap()
+        );
+        assert!(!target.join("sources/notes.bin").exists());
+        let portable = fs::read_to_string(target.join("manifest.json")).unwrap();
+        for private_key in [
+            "operationId",
+            "projectBindingId",
+            "destinationBindingId",
+            "destinationObjectIdentityDigest",
+            "stagingName",
+            "privateRootPath",
+            "approvalEvidenceDigest",
+        ] {
+            assert!(!portable.contains(private_key));
+        }
+
+        database
+            .record_native_completion_for_test(&prepared.plan)
+            .unwrap();
+        let completed = database
+            .get_operation_snapshot_data(&request.operation_id)
+            .unwrap()
+            .unwrap();
+        assert_eq!(completed.operation.state, "export_completed");
+        assert_eq!(completed.events.len(), 5);
+        assert_eq!(completed.events[4].event_type, "PACK_EXPORT_COMPLETED");
+        assert!(database
+            .record_native_completion_for_test(&prepared.plan)
+            .is_err());
+        assert!(database
+            .begin_native_export_for_test(&request, &project, "2099-07-30T00:00:03.001Z", false,)
+            .is_err());
+        assert!(fs::read_dir(&destination).unwrap().all(|entry| !entry
+            .unwrap()
+            .file_name()
+            .to_string_lossy()
+            .starts_with(".kerniq-coding-pack-staging-")));
+
+        drop(database);
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn native_export_revalidation_failures_write_nothing_and_do_not_start() {
+        for case in [
+            "changed",
+            "missing",
+            "manifest",
+            "destination",
+            "destination_fingerprint",
+            "target",
+        ] {
+            let root = test_root().join(case);
+            fs::create_dir_all(&root).unwrap();
+            let (database, project, destination, mut request, _) = export_fixture(&root);
+            match case {
+                "changed" => fs::write(project.join("src/main.ts"), b"changed\n").unwrap(),
+                "missing" => fs::remove_file(project.join("src/main.ts")).unwrap(),
+                "manifest" => request.canonical_manifest_json.push(' '),
+                "destination" => fs::remove_dir_all(&destination).unwrap(),
+                "destination_fingerprint" => {
+                    database
+                        .lock()
+                        .unwrap()
+                        .execute(
+                            "UPDATE coding_pack_destination_bindings
+                             SET destination_fingerprint = ?1",
+                            [digest('f')],
+                        )
+                        .unwrap();
+                }
+                "target" => {
+                    let manifest = validate_manifest(&request.canonical_manifest_json).unwrap();
+                    let target = destination.join(format!(
+                        "kerniq-coding-pack-{}",
+                        &manifest.manifest_digest["sha256:".len()..]
+                    ));
+                    fs::create_dir(&target).unwrap();
+                    fs::write(target.join("untouched"), b"existing").unwrap();
+                }
+                _ => unreachable!(),
+            }
+
+            assert!(
+                database
+                    .begin_native_export_for_test(
+                        &request,
+                        &project,
+                        "2099-07-30T00:00:03.000Z",
+                        false,
+                    )
+                    .is_err()
+            );
+            let snapshot = database
+                .get_operation_snapshot_data(&request.operation_id)
+                .unwrap()
+                .unwrap();
+            assert_eq!(snapshot.operation.state, "decided_allow");
+            assert_eq!(snapshot.events.len(), 3);
+            if case == "target" {
+                let marker = fs::read_dir(&destination)
+                    .unwrap()
+                    .next()
+                    .unwrap()
+                    .unwrap()
+                    .path()
+                    .join("untouched");
+                assert_eq!(fs::read(marker).unwrap(), b"existing");
+            } else if destination.exists() {
+                assert_eq!(fs::read_dir(&destination).unwrap().count(), 0);
+            }
+            drop(database);
+            fs::remove_dir_all(&root).unwrap();
+        }
+    }
+
+    #[test]
+    fn non_allow_and_expired_authority_never_start_or_write() {
+        for decision in ["deny", "error"] {
+            let root = test_root().join(decision);
+            fs::create_dir_all(&root).unwrap();
+            let (database, project, destination, request, _) =
+                export_fixture_with_decision(&root, decision);
+            assert!(
+                database
+                    .begin_native_export_for_test(
+                        &request,
+                        &project,
+                        "2099-07-30T00:00:03.000Z",
+                        false,
+                    )
+                    .is_err()
+            );
+            assert_eq!(fs::read_dir(&destination).unwrap().count(), 0);
+            let snapshot = database
+                .get_operation_snapshot_data(&request.operation_id)
+                .unwrap()
+                .unwrap();
+            assert_eq!(snapshot.operation.state, format!("decided_{decision}"));
+            assert_eq!(snapshot.events.len(), 3);
+            drop(database);
+            fs::remove_dir_all(root).unwrap();
+        }
+
+        let root = test_root().join("confirmed");
+        fs::create_dir_all(&root).unwrap();
+        let (database, project, destination, request, _) = export_fixture(&root);
+        {
+            let connection = database.lock().unwrap();
+            connection
+                .execute(
+                    "DELETE FROM coding_pack_events
+                     WHERE operation_id = ?1 AND event_sequence = 3",
+                    [&request.operation_id],
+                )
+                .unwrap();
+            connection
+                .execute(
+                    "UPDATE coding_pack_operations
+                     SET state = 'confirmed', last_event_sequence = 2
+                     WHERE operation_id = ?1",
+                    [&request.operation_id],
+                )
+                .unwrap();
+        }
+        assert!(database
+            .begin_native_export_for_test(&request, &project, "2099-07-30T00:00:03.000Z", false,)
+            .is_err());
+        assert_eq!(fs::read_dir(&destination).unwrap().count(), 0);
+        let snapshot = database
+            .get_operation_snapshot_data(&request.operation_id)
+            .unwrap()
+            .unwrap();
+        assert_eq!(snapshot.operation.state, "confirmed");
+        assert_eq!(snapshot.events.len(), 2);
+        drop(database);
+        fs::remove_dir_all(root).unwrap();
+
+        for (case, started_at) in [
+            ("approval_expired", "2099-07-30T00:05:00.000Z"),
+            ("proposal_expired", "2099-07-30T00:10:00.000Z"),
+        ] {
+            let root = test_root().join(case);
+            fs::create_dir_all(&root).unwrap();
+            let (database, project, destination, request, _) = export_fixture(&root);
+            assert_eq!(
+                database
+                    .begin_native_export_for_test(&request, &project, started_at, false)
+                    .unwrap_err(),
+                "coding_pack_export_authority_expired"
+            );
+            assert_eq!(fs::read_dir(&destination).unwrap().count(), 0);
+            let snapshot = database
+                .get_operation_snapshot_data(&request.operation_id)
+                .unwrap()
+                .unwrap();
+            assert_eq!(snapshot.operation.state, "decided_allow");
+            assert_eq!(snapshot.events.len(), 3);
+            drop(database);
+            fs::remove_dir_all(root).unwrap();
+        }
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn native_export_rejects_source_symlink_before_start() {
+        use std::os::unix::fs::symlink;
+        let root = test_root();
+        let (database, project, destination, request, _) = export_fixture(&root);
+        let source = project.join("src/main.ts");
+        fs::remove_file(&source).unwrap();
+        fs::write(
+            project.join("outside.ts"),
+            b"export const outside = true;\n",
+        )
+        .unwrap();
+        symlink(project.join("outside.ts"), source).unwrap();
+
+        assert!(database
+            .begin_native_export_for_test(&request, &project, "2099-07-30T00:00:03.000Z", false,)
+            .is_err());
+        assert_eq!(fs::read_dir(&destination).unwrap().count(), 0);
+        assert_eq!(
+            database
+                .get_operation_snapshot_data(&request.operation_id)
+                .unwrap()
+                .unwrap()
+                .operation
+                .state,
+            "decided_allow"
+        );
+
+        drop(database);
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn start_persistence_failure_performs_zero_destination_writes() {
+        let root = test_root();
+        let (database, project, destination, request, _) = export_fixture(&root);
+        assert_eq!(
+            database
+                .begin_native_export_for_test(&request, &project, "2099-07-30T00:00:03.000Z", true,)
+                .unwrap_err(),
+            "coding_pack_export_start_persistence_failed"
+        );
+        assert_eq!(fs::read_dir(&destination).unwrap().count(), 0);
+        let snapshot = database
+            .get_operation_snapshot_data(&request.operation_id)
+            .unwrap()
+            .unwrap();
+        assert_eq!(snapshot.operation.state, "decided_allow");
+        assert_eq!(snapshot.events.len(), 3);
+        drop(database);
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn staged_failures_persist_interruption_and_clean_only_owned_staging() {
+        for fault in [
+            ExportFault::StagingCreate,
+            ExportFault::ManifestWrite,
+            ExportFault::SourceWrite,
+            ExportFault::Flush,
+            ExportFault::Promotion,
+        ] {
+            let root = test_root().join(format!("{fault:?}"));
+            fs::create_dir_all(&root).unwrap();
+            let (database, project, destination, request, _) = export_fixture(&root);
+            fs::write(destination.join("unrelated"), b"keep").unwrap();
+            let prepared = database
+                .begin_native_export_for_test(&request, &project, "2099-07-30T00:00:03.000Z", false)
+                .unwrap();
+            let NativeBundleWriteOutcome::PrePromotionFailure {
+                phase_code,
+                reason_code,
+            } = write_atomic_bundle_with_fault(&prepared, fault)
+            else {
+                panic!("fault must fail before promotion");
+            };
+            database
+                .record_native_interruption_for_test(&prepared.plan, phase_code, reason_code)
+                .unwrap();
+            let snapshot = database
+                .get_operation_snapshot_data(&request.operation_id)
+                .unwrap()
+                .unwrap();
+            assert_eq!(snapshot.operation.state, "export_interrupted");
+            assert_eq!(snapshot.events[4].event_type, "PACK_EXPORT_INTERRUPTED");
+            assert_eq!(fs::read(destination.join("unrelated")).unwrap(), b"keep");
+            assert!(!destination.join(&prepared.plan.target_name).exists());
+            assert!(fs::read_dir(&destination).unwrap().all(|entry| {
+                !entry
+                    .unwrap()
+                    .file_name()
+                    .to_string_lossy()
+                    .starts_with(".kerniq-coding-pack-staging-")
+            }));
+            drop(database);
+            fs::remove_dir_all(&root).unwrap();
+        }
+    }
+
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn concurrent_target_is_never_overwritten() {
+        let root = test_root();
+        let (database, project, destination, request, _) = export_fixture(&root);
+        let prepared = database
+            .begin_native_export_for_test(&request, &project, "2099-07-30T00:00:03.000Z", false)
+            .unwrap();
+        let target = destination.join(&prepared.plan.target_name);
+        fs::create_dir(&target).unwrap();
+        fs::write(target.join("untouched"), b"concurrent").unwrap();
+
+        let NativeBundleWriteOutcome::PrePromotionFailure {
+            phase_code,
+            reason_code,
+        } = write_atomic_bundle(&prepared)
+        else {
+            panic!("concurrent target must prevent promotion");
+        };
+        assert_eq!(phase_code, "promotion");
+        database
+            .record_native_interruption_for_test(&prepared.plan, phase_code, reason_code)
+            .unwrap();
+        assert_eq!(fs::read(target.join("untouched")).unwrap(), b"concurrent");
+        assert_eq!(
+            database
+                .get_operation_snapshot_data(&request.operation_id)
+                .unwrap()
+                .unwrap()
+                .operation
+                .state,
+            "export_interrupted"
+        );
+        drop(database);
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn completion_persistence_failure_keeps_promoted_target_and_started_state() {
+        let root = test_root();
+        let (database, project, destination, request, _) = export_fixture(&root);
+        let prepared = database
+            .begin_native_export_for_test(&request, &project, "2099-07-30T00:00:03.000Z", false)
+            .unwrap();
+        assert_eq!(
+            write_atomic_bundle(&prepared),
+            NativeBundleWriteOutcome::PromotedAndSynced
+        );
+        let target = destination.join(&prepared.plan.target_name);
+        assert!(target.is_dir());
+
+        assert_eq!(
+            database
+                .fail_native_completion_for_test(&prepared.plan)
+                .unwrap_err(),
+            "coding_pack_export_completion_persistence_failed"
+        );
+        assert!(target.is_dir());
+        let snapshot = database
+            .get_operation_snapshot_data(&request.operation_id)
+            .unwrap()
+            .unwrap();
+        assert_eq!(snapshot.operation.state, "export_started");
+        assert_eq!(snapshot.events.len(), 4);
+        assert!(database
+            .begin_native_export_for_test(&request, &project, "2099-07-30T00:00:03.001Z", false,)
+            .is_err());
+        drop(database);
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn destination_path_replacement_after_start_never_redirects_writes() {
+        let root = test_root();
+        let (database, project, destination, request, _) = export_fixture(&root);
+        let prepared = database
+            .begin_native_export_for_test(&request, &project, "2099-07-30T00:00:03.000Z", false)
+            .unwrap();
+        let moved_destination = root.join("destination-moved");
+        fs::rename(&destination, &moved_destination).unwrap();
+        fs::create_dir(&destination).unwrap();
+
+        assert_eq!(
+            write_atomic_bundle(&prepared),
+            NativeBundleWriteOutcome::PromotedAndSynced
+        );
+        assert!(moved_destination.join(&prepared.plan.target_name).is_dir());
+        assert_eq!(fs::read_dir(&destination).unwrap().count(), 0);
+
+        drop(database);
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn destination_parent_replacement_after_start_never_redirects_writes() {
+        let root = test_root();
+        let (database, project, destination, request, _) = export_fixture(&root);
+        let prepared = database
+            .begin_native_export_for_test(&request, &project, "2099-07-30T00:00:03.000Z", false)
+            .unwrap();
+        let moved_root = root.with_extension("moved");
+        let _ = fs::remove_dir_all(&moved_root);
+        fs::rename(&root, &moved_root).unwrap();
+        fs::create_dir(&root).unwrap();
+        let destination_name = destination.file_name().unwrap();
+        fs::create_dir(root.join(destination_name)).unwrap();
+
+        assert_eq!(
+            write_atomic_bundle(&prepared),
+            NativeBundleWriteOutcome::PromotedAndSynced
+        );
+        assert!(moved_root
+            .join(destination_name)
+            .join(&prepared.plan.target_name)
+            .is_dir());
+        assert_eq!(
+            fs::read_dir(root.join(destination_name)).unwrap().count(),
+            0
+        );
+
+        drop(database);
+        fs::remove_dir_all(root).unwrap();
+        fs::remove_dir_all(moved_root).unwrap();
+    }
+
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn staging_entry_replacement_never_redirects_file_writes_or_cleanup() {
+        let root = test_root();
+        let (database, project, destination, request, _) = export_fixture(&root);
+        let prepared = database
+            .begin_native_export_for_test(&request, &project, "2099-07-30T00:00:03.000Z", false)
+            .unwrap();
+
+        assert_eq!(
+            write_atomic_bundle_with_fault(&prepared, ExportFault::StagingRebind),
+            NativeBundleWriteOutcome::PrePromotionFailure {
+                phase_code: "cleanup",
+                reason_code: "cleanup_failed",
+            }
+        );
+        let replacement = destination.join(format!("{}-replacement", prepared.plan.staging_name));
+        assert_eq!(fs::read_dir(&replacement).unwrap().count(), 0);
+        assert!(!destination.join(&prepared.plan.target_name).exists());
+
+        database
+            .record_native_interruption_for_test(&prepared.plan, "cleanup", "cleanup_failed")
+            .unwrap();
+        let snapshot = database
+            .get_operation_snapshot_data(&request.operation_id)
+            .unwrap()
+            .unwrap();
+        assert_eq!(snapshot.operation.state, "export_interrupted");
+
+        drop(database);
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn post_promotion_sync_failure_retains_target_and_started_uncertainty() {
+        let root = test_root();
+        let (database, project, destination, request, _) = export_fixture(&root);
+        let prepared = database
+            .begin_native_export_for_test(&request, &project, "2099-07-30T00:00:03.000Z", false)
+            .unwrap();
+
+        assert_eq!(
+            write_atomic_bundle_with_fault(&prepared, ExportFault::DestinationSync),
+            NativeBundleWriteOutcome::PromotedButDurabilityUncertain {
+                reason_code: "post_promotion_durability_uncertain",
+            }
+        );
+        assert!(destination.join(&prepared.plan.target_name).is_dir());
+        let snapshot = database
+            .get_operation_snapshot_data(&request.operation_id)
+            .unwrap()
+            .unwrap();
+        assert_eq!(snapshot.operation.state, "export_started");
+        assert_eq!(snapshot.events.len(), 4);
+        assert_ne!(
+            "coding_pack_export_post_promotion_durability_uncertain",
+            "coding_pack_export_completion_persistence_failed"
+        );
+
+        drop(database);
+        fs::remove_dir_all(root).unwrap();
+    }
+
     fn proposed_request(
         binding: &CodingPackDestinationBinding,
     ) -> CreateCodingPackOperationRequest {
@@ -1879,6 +3091,129 @@ mod tests {
         }
     }
 
+    fn export_fixture(
+        root: &Path,
+    ) -> (
+        CodingPackDatabase,
+        PathBuf,
+        PathBuf,
+        NativeExportRequest,
+        String,
+    ) {
+        export_fixture_with_decision(root, "allow")
+    }
+
+    fn export_fixture_with_decision(
+        root: &Path,
+        decision: &str,
+    ) -> (
+        CodingPackDatabase,
+        PathBuf,
+        PathBuf,
+        NativeExportRequest,
+        String,
+    ) {
+        let project = root.join("project");
+        let destination = root.join("exports");
+        fs::create_dir_all(project.join("src")).unwrap();
+        fs::create_dir_all(&destination).unwrap();
+        fs::write(
+            project.join("src/main.ts"),
+            b"export const kerniq = true;\n",
+        )
+        .unwrap();
+        let manifest_json = manifest_fixture(&project);
+        let manifest = validate_manifest(&manifest_json).unwrap();
+        let database = CodingPackDatabase::open_path(&root.join("store.sqlite3")).unwrap();
+        let binding = database
+            .bind_destination(&destination, "2099-07-30T00:00:00.000Z".into())
+            .unwrap();
+        let mut proposed = proposed_request(&binding);
+        let mut payload: ProposedPayload =
+            serde_json::from_value(proposed.proposed_event.payload.clone()).unwrap();
+        payload.proposal.candidate_paths_digest = manifest.candidate_paths_digest.clone();
+        payload.proposal.source_fingerprint = manifest.source_fingerprint.clone();
+        payload.proposal.pack_id = manifest.pack_id.clone();
+        payload.proposal.manifest_digest = manifest.manifest_digest.clone();
+        payload.proposal.proposal_digest = proposal_digest(&payload.proposal).unwrap();
+        proposed.operation.candidate_paths_digest = manifest.candidate_paths_digest;
+        proposed.operation.source_fingerprint = manifest.source_fingerprint;
+        proposed.operation.pack_id = manifest.pack_id;
+        proposed.operation.manifest_digest = manifest.manifest_digest;
+        proposed.operation.proposal_digest = payload.proposal.proposal_digest.clone();
+        proposed.proposed_event.payload = serde_json::to_value(payload).unwrap();
+        proposed.proposed_event.payload_digest =
+            sha256_canonical(&proposed.proposed_event.payload).unwrap();
+        database.create_operation(proposed.clone()).unwrap();
+        database
+            .append_confirmation(confirmation_request(&proposed))
+            .unwrap();
+        let confirmed = database
+            .get_operation_snapshot_data(&proposed.operation.operation_id)
+            .unwrap()
+            .unwrap();
+        database
+            .append_decision(decision_request_with_result(&confirmed, decision))
+            .unwrap();
+        let request = NativeExportRequest {
+            operation_id: proposed.operation.operation_id,
+            export_attempt_id: "export-attempt-1".into(),
+            canonical_manifest_json: manifest_json.clone(),
+            project_binding_id: proposed.operation.project_binding_id,
+        };
+        (database, project, destination, request, manifest_json)
+    }
+
+    fn manifest_fixture(project: &Path) -> String {
+        let source_bytes = fs::read(project.join("src/main.ts")).unwrap();
+        let source = serde_json::json!({
+            "relativePath": "src/main.ts",
+            "sourceDigest": bytes_digest(&source_bytes),
+            "byteCount": source_bytes.len(),
+            "encoding": "utf-8",
+            "inclusionReasonCode": "explicit_selection",
+        });
+        let exclusion = serde_json::json!({
+            "relativePath": "notes.bin",
+            "reasonCode": "binary_like_extension",
+        });
+        let identity = serde_json::json!({
+            "schemaVersion": "kerniq.coding-pack.manifest.v1",
+            "packVersion": "0.7",
+            "purpose": "task_context",
+            "selectionRulesVersion": "kerniq-coding-pack-selection-v1",
+            "sources": [source.clone()],
+            "exclusions": [exclusion.clone()],
+        });
+        let source_fingerprint = sha256_canonical(&identity).unwrap();
+        let pack_id = format!("pack-{}", &source_fingerprint["sha256:".len()..]);
+        let without_digest = serde_json::json!({
+            "schemaVersion": "kerniq.coding-pack.manifest.v1",
+            "packVersion": "0.7",
+            "packId": pack_id,
+            "purpose": "task_context",
+            "project": {},
+            "selectionRulesVersion": "kerniq-coding-pack-selection-v1",
+            "sources": [source],
+            "exclusions": [exclusion],
+            "sourceFingerprint": source_fingerprint,
+            "generatedAt": "2099-07-30T00:00:00.000Z",
+        });
+        let manifest_digest = sha256_canonical(&without_digest).unwrap();
+        let mut manifest = without_digest;
+        manifest
+            .as_object_mut()
+            .unwrap()
+            .insert("manifestDigest".into(), manifest_digest.into());
+        canonical_json(&manifest).unwrap()
+    }
+
+    fn bytes_digest(bytes: &[u8]) -> String {
+        let mut hasher = Sha256::new();
+        hasher.update(bytes);
+        format!("sha256:{:x}", hasher.finalize())
+    }
+
     fn confirmation_request(
         proposed: &CreateCodingPackOperationRequest,
     ) -> ConfirmCodingPackOperationRequest {
@@ -1916,6 +3251,19 @@ mod tests {
     fn decision_request(
         confirmed: &CodingPackStoredSnapshotData,
     ) -> DecideCodingPackOperationRequest {
+        decision_request_with_result(confirmed, "allow")
+    }
+
+    fn decision_request_with_result(
+        confirmed: &CodingPackStoredSnapshotData,
+        decision: &str,
+    ) -> DecideCodingPackOperationRequest {
+        let (state, reason_code) = match decision {
+            "allow" => ("decided_allow", "policy_allowed"),
+            "deny" => ("decided_deny", "policy_blocked"),
+            "error" => ("decided_error", "bridge_protocol_error"),
+            _ => panic!("unsupported test decision"),
+        };
         let confirmed_event = &confirmed.events[1];
         let proposed_payload: ProposedPayload =
             serde_json::from_value(confirmed.events[0].payload.clone()).unwrap();
@@ -1933,14 +3281,14 @@ mod tests {
             bridge_protocol: AGENTFUSE_BRIDGE_PROTOCOL.into(),
             policy_id: CODING_PACK_EXPORT_POLICY_ID.into(),
             policy_digest: CODING_PACK_EXPORT_POLICY_DIGEST.into(),
-            decision: "allow".into(),
-            reason_code: "policy_allowed".into(),
+            decision: decision.into(),
+            reason_code: reason_code.into(),
             evaluation_started_at: "2099-07-30T00:00:01.000Z".into(),
             decided_at: "2099-07-30T00:00:02.000Z".into(),
         };
         let payload = serde_json::to_value(payload).unwrap();
         let mut operation = confirmed.operation.clone();
-        operation.state = "decided_allow".into();
+        operation.state = state.into();
         operation.last_event_sequence = 3;
         DecideCodingPackOperationRequest {
             operation,
@@ -2006,3 +3354,7 @@ mod tests {
         root
     }
 }
+use crate::coding_pack_export::{
+    read_and_verify_sources, validate_manifest, NativeExportPlan, NativeExportRequest,
+    PreparedNativeExport,
+};

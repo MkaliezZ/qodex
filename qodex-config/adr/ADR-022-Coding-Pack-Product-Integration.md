@@ -147,6 +147,51 @@ SESSION_SCHEMA_CHANGED=false
 PROJECT_COMMAND_FREEZE_CHANGED=false
 ```
 
+## v0.7.4.3 Native Atomic Export Boundary
+
+v0.7.4.2 merged through exact-head merge commit
+`6d592a199d5d4ee65663f107f64dfbb91cd1d8e5`. This bounded slice migrates
+the dedicated store to `kerniq.coding-pack.store.v3` and implements physical
+export only in Tauri Desktop. Browser mode performs no physical write and
+reports `Native Desktop required for atomic export`.
+
+The native command accepts only operation ID, export-attempt ID, canonical
+portable manifest JSON, and opaque project-binding ID. Trusted local databases
+resolve project and destination roots privately. Before the first destination
+write, native code reconstructs durable allow evidence, requires live proposal
+and approval, revalidates destination identity, parses and rehashes the
+manifest, and reads every included source with relative no-follow semantics.
+It then persists `PACK_EXPORT_STARTED`, stages under the destination parent,
+writes exact manifest/source bytes with create-new semantics relative to held
+directory handles, and promotes the complete directory on macOS with
+handle-relative rename-exclusive semantics. The staging name and opened
+destination object-identity digest are bound before START. Windows physical
+export fails closed before START because no reviewed handle-relative Windows
+promotion primitive is included; no path-based, copy/delete, or
+cross-filesystem fallback exists.
+
+Completion is persisted only after promotion. Failure before promotion cleans
+only an identifiable operation-owned staging directory through held handles
+and records `PACK_EXPORT_INTERRUPTED`. macOS destination-directory sync is
+mandatory after promotion. If that sync or subsequent completion persistence
+fails, the target is retained, the operation remains `export_started`, and the
+UI reports the corresponding uncertainty with no automatic retry. Restart never
+exports, retries, promotes, completes, or makes historical allow actionable.
+
+```text
+CODING_PACK_NATIVE_EXPORT_IMPLEMENTED=true
+PACK_EXPORT_STARTED_IMPLEMENTED=true
+PACK_EXPORT_COMPLETED_IMPLEMENTED=true
+PACK_EXPORT_INTERRUPTED_IMPLEMENTED=true
+BROWSER_PHYSICAL_EXPORT_IMPLEMENTED=false
+CROSS_FILESYSTEM_COPY_FALLBACK=false
+RESTART_AUTO_EXPORT=false
+RESTART_AUTO_RETRY=false
+ACTION_RUNTIME_CONNECTED=false
+SESSION_SCHEMA_CHANGED=false
+PROJECT_COMMAND_FREEZE_CHANGED=false
+```
+
 ## Persistence
 
 The authoritative future operation sequence is:

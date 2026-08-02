@@ -87,7 +87,9 @@ v0.7.2 deterministic selection and path-based privacy core merged in
 exact ephemeral confirmation merged in
 `5d5152ca25c0fc2772cec730dd6229dd44aa88cb`; v0.7.4.1 durable store and export
 proposal contracts merged in `c3f7c9cef73cb9660f9b4d39c325dc8c4e3f5170`;
-v0.7.4.2 AgentFuse export decision implemented for Draft PR review
+v0.7.4.2 AgentFuse export decision merged in
+`6d592a199d5d4ee65663f107f64dfbb91cd1d8e5`; v0.7.4.3 Tauri-only native
+atomic export implemented for Draft PR review
 
 The source audit found authorized project reads, selected-file context
 assembly, project binding, action contracts, and Session persistence, but no
@@ -148,9 +150,14 @@ keys, revalidates the observed destination capability, and distinguishes one
 durable decision from non-crash-safe bridge invocation. Recovered decisions
 remain historical.
 
-Automatic discovery, `.gitignore` parsing, content secret scanning, physical
-export, `PACK_EXPORT_STARTED`, `PACK_EXPORT_COMPLETED`, and Action Runtime
-export dispatch remain unimplemented.
+v0.7.4.3 migrates the store to `kerniq.coding-pack.store.v3` and implements
+Tauri-only `PACK_EXPORT_STARTED`, `PACK_EXPORT_COMPLETED`, and
+`PACK_EXPORT_INTERRUPTED`. Native export revalidates trusted bindings,
+canonical manifest identity, and exact source bytes before STARTED; stages on
+the destination filesystem; and performs platform no-overwrite atomic
+promotion. Completion-persistence failure remains an explicit uncertain
+`export_started` state. Browser export, cross-filesystem fallback, automatic
+restart replay/retry, and Action Runtime export dispatch remain unimplemented.
 
 ### v0.8 - Product Packaging and Closed Beta
 

@@ -282,7 +282,8 @@ UTF-8 byte canonical identity, exact pack/destination formats, 24-hour proposal
 and approval limits, immutable destination bindings, atomic operation
 snapshots, native digest and chronology validation before persistence, and
 SQLite WAL with `synchronous=FULL`. Recovered operations remain non-actionable
-historical records. The v0.7.4.2 Draft adds the independent
+historical records. v0.7.4.2 merged through
+`6d592a199d5d4ee65663f107f64dfbb91cd1d8e5` and adds the independent
 `kerniq-coding-pack-export-v1` AgentFuse profile and a trusted digest-only
 request. It durably records exactly one `PACK_DECIDED` allow, deny, or error
 event in store schema v2. Each attempt binds `evaluationStartedAt`; a late
@@ -291,15 +292,29 @@ recorded after expiry when evaluation began in-window. Responses use exact-key
 validation and the destination capability is revalidated immediately before
 evaluation. The durable event is at-most-once, while AgentFuse invocation is
 guarded only within the current process and is not claimed exactly-once across
-crashes. The UI reports the policy result while continuing to
-show “No files written” and “Export has not started.” Recovered decisions are
-historical and non-actionable. The
+crashes. v0.7.4.3 adds the first Tauri-only physical export. A current preview
+and confirmation, live proposal and approval, durable policy allow, trusted
+private project/destination bindings, and native exact-source revalidation are
+required before `PACK_EXPORT_STARTED`. The command stages the canonical
+`manifest.json` and included source bytes relative to one retained destination
+directory handle, uses macOS handle-relative rename-exclusive promotion, and
+then durably syncs that destination before persisting
+`PACK_EXPORT_COMPLETED`; pre-promotion failure records
+`PACK_EXPORT_INTERRUPTED`. Completion-persistence failure keeps the promoted
+target and reports an uncertain `export_started` state without automatic
+retry. A post-promotion destination-sync failure also remains
+`export_started`, with a distinct uncertainty error and no automatic retry.
+Windows physical export fails closed before START because this release does
+not provide a reviewed handle-relative Windows promotion primitive; the UI
+states that limitation. Browser mode reports “Native Desktop required for
+atomic export.”
+Recovered records remain historical and non-actionable. The
 [v0.7 plan](docs/development/kerniq_v0_7_coding_pack_product_integration_planning.md)
 and [ADR-022](qodex-config/adr/ADR-022-Coding-Pack-Product-Integration.md)
-define the remaining durable export lifecycle. Automatic repository discovery,
-`.gitignore` parsing, content secret scanning, physical export, export-start
-and export-completed events, and Action Runtime export dispatch are not
-implemented.
+define the lifecycle. Automatic repository discovery, `.gitignore` parsing,
+content secret scanning, browser physical export, restart replay, and Action
+Runtime export dispatch are not implemented. There is no cross-filesystem copy
+fallback.
 The v0.6.1 Project Command freeze is unchanged.
 
 ---
@@ -313,9 +328,10 @@ foundation. The bounded native Desktop Project Command path is implemented and
 its v0.6.1.6 implementation, real proof, and final freeze seal are merged. The
 v0.6.1 Project Command scope is frozen. Coding Pack v0.7.3 is merged through
 `5d5152ca25c0fc2772cec730dd6229dd44aa88cb`; v0.7.4.1 merged through
-`c3f7c9cef73cb9660f9b4d39c325dc8c4e3f5170`; and the v0.7.4.2 AgentFuse
-export-decision slice is implemented for Draft PR review. Patch remains
-outside this scope.
+`c3f7c9cef73cb9660f9b4d39c325dc8c4e3f5170`; v0.7.4.2 merged through
+`6d592a199d5d4ee65663f107f64dfbb91cd1d8e5`; and v0.7.4.3 Tauri-only native
+atomic export is implemented for Draft PR review. Patch remains outside this
+scope.
 Installer work is planned for v0.8, and the Stage 2 namespace-wide rename
 remains explicitly deferred.
 

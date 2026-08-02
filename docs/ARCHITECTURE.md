@@ -296,10 +296,10 @@ refresh; there is no watcher.
 v0.7.4.1 introduces `@qodex/coding-pack-store` as the dedicated versioned
 lifecycle owner. Tauri persists `coding_pack_operations`,
 `coding_pack_events`, and `coding_pack_destination_bindings` in the separate
-`kerniq-coding-pack.sqlite3` database under schema
-`kerniq.coding-pack.store.v2`; Session tables and events are unchanged. The
-v1-to-v2 migration preserves proposed and confirmed records without advancing
-them.
+`kerniq-coding-pack.sqlite3` database. v0.7.4.3 uses schema
+`kerniq.coding-pack.store.v3`; migrations preserve v1 proposed/confirmed and
+v2 decided records without advancing, retrying, or exporting them. Session
+tables and events are unchanged.
 Browser development persists only serializable lifecycle records while keeping
 the authorized directory handle in an in-memory capability map. Tauri keeps
 the absolute destination path only in the private destination-binding table;
@@ -324,25 +324,43 @@ is revalidated immediately before invocation without claiming a race-free
 filesystem guarantee. One process prevents concurrent calls for the same
 operation, but invocation is not exactly-once across crashes or persistence
 retries.
-Decision does not start export or write files. Canonical identity uses
+Decision alone does not start export or write files. Canonical identity uses
 deterministic UTF-8 byte ordering and
 well-formed Unicode, proposals and approvals cannot exceed 24 hours, native
 writes independently recompute proposal and event digests and verify chronology,
 and SQLite uses WAL with `synchronous=FULL`. These are SQLite and underlying
-filesystem durability guarantees, not hardware-level persistence claims. A
-later narrow native adapter may own staged, no-overwrite
-physical export only after a durable AgentFuse decision. Session Runtime may
-eventually reference a verified completed artifact but is not a competing
-lifecycle owner.
+filesystem durability guarantees, not hardware-level persistence claims.
+
+The v0.7.4.3 Tauri command resolves project and destination roots through
+trusted private bindings and accepts no absolute path from React. It requires a
+current preview and confirmation in Desktop plus a live proposal, live
+approval, and durable allow in native storage. Before the first destination
+write it parses and rehashes the canonical manifest, opens included sources
+component-by-component without following observed links/reparse points,
+verifies exact bytes, revalidates destination identity, checks target absence,
+and durably records `PACK_EXPORT_STARTED`. It writes `manifest.json` and
+`sources/<relative path>` through retained destination/staging directory
+handles. The staging name and a digest of the opened destination object
+identity are bound into the local export plan before START. macOS uses
+handle-relative `renameatx_np(..., RENAME_EXCL)` and requires a successful
+destination-directory sync before completion is eligible. There is no
+cross-filesystem copy/delete fallback. Pre-promotion failure performs bounded
+handle-relative owned cleanup and records `PACK_EXPORT_INTERRUPTED`.
+Post-promotion sync failure and completion-persistence failure retain the
+target and truthfully leave the operation `export_started`, with distinct
+uncertainty errors and no automatic retry. Windows physical export fails
+closed before START because no reviewed handle-relative Windows promotion is
+provided in this release; no path-based fallback remains.
 
 Read-only deterministic selection uses project capability and privacy controls
 without an AgentFuse decision. The separately versioned
 `kerniq-coding-pack-export-v1` profile sees no absolute paths, source contents,
 shell fields, or display labels and cannot select files, judge content, or
 write. Automatic discovery, `.gitignore` parsing, content secret scanning,
-physical export, Action Runtime export dispatch, `PACK_EXPORT_STARTED`, and
-`PACK_EXPORT_COMPLETED` remain absent. The v0.6.1 Project Command freeze is
-unchanged.
+browser physical export, Action Runtime export dispatch, restart replay, and
+automatic retry remain absent. Filesystem guarantees are limited to the
+reviewed platform primitives and observed bindings; identical durability on
+all filesystems is not claimed. The v0.6.1 Project Command freeze is unchanged.
 
 Details:
 

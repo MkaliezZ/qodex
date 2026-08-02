@@ -31,7 +31,10 @@ import {
   evaluateCodingPackExportPolicy,
   type CodingPackAgentFuseBridgeClient,
 } from "@qodex/coding-pack-agentfuse";
-import type { CodingPackPurpose } from "@qodex/coding-pack-runtime";
+import {
+  serializeCodingPackManifest,
+  type CodingPackPurpose,
+} from "@qodex/coding-pack-runtime";
 import {
   CodingPackStoreError,
   type CodingPackDestinationBinding,
@@ -63,6 +66,14 @@ import {
   getCodingPackStore,
 } from "../platform/codingPackStore";
 import { createManagedPythonBridge } from "../platform/managedPythonBridge";
+import {
+  CodingPackNativeExportError,
+  codingPackNativeExportAvailability,
+  exportCodingPackNative,
+  isCodingPackNativeExportAvailable,
+  type CodingPackNativeExportErrorCode,
+  type CodingPackNativeExportResult,
+} from "../platform/codingPackNativeExport";
 import { projectBindingIdentity, type OpenProjectBindingIdentity } from "../platform/projectBinding";
 import { ProjectAccessError, type ProjectAccessSource } from "../platform/types";
 import { AgentSessionLedgerRecorder } from "../session/agentSessionRecorder";
@@ -142,6 +153,10 @@ export function useRuntime() {
     useState<CodingPackOperationSnapshot | null>(null);
   const [codingPackStoreError, setCodingPackStoreError] =
     useState<CodingPackStoreErrorCode | null>(null);
+  const [codingPackNativeExportResult, setCodingPackNativeExportResult] =
+    useState<CodingPackNativeExportResult | null>(null);
+  const [codingPackNativeExportError, setCodingPackNativeExportError] =
+    useState<CodingPackNativeExportErrorCode | null>(null);
   const [isCodingPackExportLoading, setIsCodingPackExportLoading] = useState(false);
 
   const [lastBundle, setLastBundle] = useState<ContextBundle | null>(null);
@@ -317,6 +332,8 @@ export function useRuntime() {
       setCodingPackDestination(null);
       setCodingPackOperation(null);
       setCodingPackStoreError(null);
+      setCodingPackNativeExportResult(null);
+      setCodingPackNativeExportError(null);
       setIsCodingPackExportLoading(false);
       setProposalState(null, null);
       setProposalNotice(null);
@@ -356,6 +373,8 @@ export function useRuntime() {
     setCodingPackPreviewError(null);
     setCodingPackOperation(null);
     setCodingPackStoreError(null);
+    setCodingPackNativeExportResult(null);
+    setCodingPackNativeExportError(null);
     let totalSize = 0;
     for (const selectedPath of selectedPaths) {
       const entry = project.index?.files.find((file) => file.path === selectedPath);
@@ -379,6 +398,8 @@ export function useRuntime() {
     setCodingPackPreviewError(null);
     setCodingPackOperation(null);
     setCodingPackStoreError(null);
+    setCodingPackNativeExportResult(null);
+    setCodingPackNativeExportError(null);
   }, []);
 
   const refreshCodingPackPreview = useCallback(async () => {
@@ -402,6 +423,8 @@ export function useRuntime() {
     setCodingPackConfirmation(null);
     setCodingPackOperation(null);
     setCodingPackStoreError(null);
+    setCodingPackNativeExportResult(null);
+    setCodingPackNativeExportError(null);
     try {
       const preview = await createSelectedFileCodingPackPreview({
         projectBindingId: binding.bindingId,
@@ -456,6 +479,8 @@ export function useRuntime() {
       setCodingPackOperation(null);
       setCodingPackStoreError(null);
       setCodingPackPreviewError(null);
+      setCodingPackNativeExportResult(null);
+      setCodingPackNativeExportError(null);
     } catch (error) {
       setCodingPackConfirmation(null);
       setCodingPackPreviewError(
@@ -479,6 +504,8 @@ export function useRuntime() {
       if (destination) {
         setCodingPackDestination(destination);
         setCodingPackOperation(null);
+        setCodingPackNativeExportResult(null);
+        setCodingPackNativeExportError(null);
       }
     } catch (error) {
       setCodingPackStoreError(codingPackStoreErrorCode(
@@ -636,6 +663,114 @@ export function useRuntime() {
       setIsCodingPackExportLoading(false);
     }
   }, [codingPackDestination, codingPackOperation]);
+
+  const exportCurrentCodingPack = useCallback(async () => {
+    const snapshot = codingPackOperation;
+    const preview = codingPackPreview;
+    const confirmation = codingPackConfirmation;
+    const destination = codingPackDestination;
+    const binding = projectBindingRef.current;
+    const now = Date.now();
+    const currentBinding = binding && preview && confirmation && selectedPathsDigest !== null
+      && projectRef.current !== null
+      && snapshot?.operation.state === "decided_allow"
+      && snapshot.decision?.decision === "allow"
+      && snapshot.approval !== null
+      && snapshot.exportStarted === null
+      && snapshot.exportCompleted === null
+      && snapshot.exportInterrupted === null
+      && preview.projectBindingId === binding.bindingId
+      && preview.projectGeneration === projectGenerationRef.current
+      && preview.selectedPathsDigest === selectedPathsDigest
+      && confirmation.projectBindingId === preview.projectBindingId
+      && confirmation.projectGeneration === preview.projectGeneration
+      && confirmation.selectedPathsDigest === preview.selectedPathsDigest
+      && confirmation.sourceFingerprint === preview.selection.sourceFingerprint
+      && confirmation.packId === preview.selection.packId
+      && confirmation.manifestDigest === preview.manifest.manifestDigest
+      && snapshot.operation.projectBindingId === preview.projectBindingId
+      && snapshot.operation.projectGeneration === preview.projectGeneration
+      && snapshot.operation.candidatePathsDigest === preview.selection.candidatePathsDigest
+      && snapshot.operation.sourceFingerprint === preview.selection.sourceFingerprint
+      && snapshot.operation.packId === preview.selection.packId
+      && snapshot.operation.manifestDigest === preview.manifest.manifestDigest
+      && destination?.destinationBindingId === snapshot.operation.destinationBindingId
+      && destination.destinationFingerprint === snapshot.destination.destinationFingerprint
+      && Date.parse(snapshot.proposal.expiresAt) > now
+      && Date.parse(snapshot.approval.expiresAt) > now
+      && !isCodingPackPreviewStale(preview, {
+        projectBindingId: binding.bindingId,
+        projectGeneration: projectGenerationRef.current,
+        selectedPathsDigest,
+        purpose: codingPackPurposeRef.current,
+        selectionRulesVersion: codingPackSelectionRulesVersion,
+      });
+
+    if (!isCodingPackNativeExportAvailable()) {
+      setCodingPackNativeExportError(
+        codingPackNativeExportAvailability() === "platform_unsupported"
+          ? "coding_pack_native_atomic_export_unsupported"
+          : "coding_pack_native_desktop_required",
+      );
+      return;
+    }
+    if (!currentBinding || !snapshot || !preview || !confirmation || !destination || !binding) {
+      setCodingPackNativeExportError("coding_pack_export_authority_invalid");
+      return;
+    }
+
+    setIsCodingPackExportLoading(true);
+    setCodingPackStoreError(null);
+    setCodingPackNativeExportResult(null);
+    setCodingPackNativeExportError(null);
+    try {
+      await verifyCodingPackPreviewConfirmation(confirmation, preview);
+      const destinationAvailable = await createCodingPackDestinationCapabilityVerifier()
+        .verifyDestinationCapability(destination);
+      if (!destinationAvailable) {
+        throw new CodingPackNativeExportError("coding_pack_export_authority_invalid");
+      }
+      const result = await exportCodingPackNative({
+        operationId: snapshot.operation.operationId,
+        exportAttemptId: `coding-pack-export-${crypto.randomUUID()}`,
+        canonicalManifestJson: serializeCodingPackManifest(preview.manifest),
+        projectBindingId: binding.bindingId,
+      });
+      setCodingPackNativeExportResult(result);
+      const completed = await codingPackStoreRef.current.getCodingPackOperation(
+        snapshot.operation.operationId,
+      );
+      if (completed) {
+        setCodingPackOperation(completed);
+        setCodingPackRecoveredOperation(completed);
+      }
+    } catch (error) {
+      setCodingPackNativeExportError(
+        error instanceof CodingPackNativeExportError
+          ? error.code
+          : "coding_pack_export_failed",
+      );
+      try {
+        const current = await codingPackStoreRef.current.getCodingPackOperation(
+          snapshot.operation.operationId,
+        );
+        if (current) {
+          setCodingPackOperation(current);
+          setCodingPackRecoveredOperation(current);
+        }
+      } catch {
+        setCodingPackStoreError("coding_pack_store_unavailable");
+      }
+    } finally {
+      setIsCodingPackExportLoading(false);
+    }
+  }, [
+    codingPackConfirmation,
+    codingPackDestination,
+    codingPackOperation,
+    codingPackPreview,
+    selectedPathsDigest,
+  ]);
 
   const createPatchAdapter = useCallback((project: ProjectRuntime): AgentPatchAdapter => ({
     prepare: async (response, taskId) => {
@@ -1032,6 +1167,11 @@ export function useRuntime() {
     createCurrentCodingPackExportProposal,
     confirmCurrentCodingPackExportProposal,
     evaluateCurrentCodingPackExportPolicy,
+    codingPackNativeExportAvailable: isCodingPackNativeExportAvailable(),
+    codingPackNativeExportAvailability: codingPackNativeExportAvailability(),
+    codingPackNativeExportResult,
+    codingPackNativeExportError,
+    exportCurrentCodingPack,
     lastBundle,
     estimatedTokens,
     pendingProposal,
