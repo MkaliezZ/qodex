@@ -1,7 +1,7 @@
 # KerniQ v0.7 Coding Pack Product Integration Planning
 
 **Date:** 2026-07-29
-**Status:** Living plan; v0.7.4.2 merged and v0.7.4.3 implemented for Draft PR
+**Status:** v0.7.4.3 merged; controlled v0.7.4.4 proof passed; v0.7 frozen
 **Planning base:** `0486704d613ea203672d75bee455346cceafb225`
 **v0.6.1 freeze activation merge:** `0486704d613ea203672d75bee455346cceafb225`
 **v0.6.1 freeze activation post-merge CI:** `30432376199`
@@ -1259,4 +1259,35 @@ RESTART_AUTO_RETRY=false
 ACTION_RUNTIME_CONNECTED=false
 SESSION_SCHEMA_CHANGED=false
 PROJECT_COMMAND_FREEZE_CHANGED=false
+```
+
+## v0.7.4.4 Controlled Real Proof And Freeze
+
+v0.7.4.3 merged through exact-head merge commit
+`4b0379e051a15cf49a6a9134f5b73d9f8171231b`. The controlled proof uses the
+real Runtime read plan and manifest, real SQLite store, pinned managed
+AgentFuse, and production macOS native writer against deterministic temporary
+fixture bytes. It proves the five-event allow/export lifecycle, exact bundle
+bytes, bounded negative cases, retained destination-handle authority, and the
+truthful non-retry uncertainty states.
+
+This closes the planned v0.7 implementation boundary. Deferred ideas in this
+planning history remain non-capabilities; the freeze does not silently promote
+them into implementation.
+
+```text
+V0_7_CODING_PACK_IMPLEMENTATION_COMPLETE=true
+V0_7_CONTROLLED_REAL_NATIVE_PROOF=true
+V0_7_CODING_PACK_FROZEN=true
+V0_7_NEW_FEATURE_DEVELOPMENT_PAUSED=true
+BROWSER_PHYSICAL_EXPORT=false
+AUTOMATIC_REPOSITORY_DISCOVERY=false
+CONTENT_SECRET_SCANNING=false
+ACTION_RUNTIME_CONNECTED=false
+SESSION_SCHEMA_CHANGED=false
+AUTOMATIC_UNCERTAIN_EXPORT_RECONCILIATION=false
+PROJECT_COMMAND_FREEZE_CHANGED=false
+PATCH_MIGRATED=false
+ARBITRARY_SHELL_ADDED=false
+WORKFLOW_CHANGED=false
 ```

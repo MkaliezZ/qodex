@@ -362,9 +362,18 @@ automatic retry remain absent. Filesystem guarantees are limited to the
 reviewed platform primitives and observed bindings; identical durability on
 all filesystems is not claimed. The v0.6.1 Project Command freeze is unchanged.
 
+The controlled v0.7.4.4 proof ran the merged path on macOS with real fixture
+bytes, real SQLite, the pinned managed AgentFuse bridge, retained destination
+authority, staging, rename-exclusive promotion, destination sync, and durable
+completion. v0.7 is frozen at that bounded platform and product boundary. It
+does not add browser or Windows physical export, automatic discovery, content
+scanning, Action Runtime dispatch, Session events, or uncertain-export replay.
+
 Details:
 
 - [`kerniq_v0_7_coding_pack_product_integration_planning.md`](development/kerniq_v0_7_coding_pack_product_integration_planning.md)
+- [`kerniq_v0_7_4_4_native_export_proof.md`](development/kerniq_v0_7_4_4_native_export_proof.md)
+- [`kerniq_v0_7_coding_pack_result_review_and_freeze.md`](development/kerniq_v0_7_coding_pack_result_review_and_freeze.md)
 - [`ADR-022`](../qodex-config/adr/ADR-022-Coding-Pack-Product-Integration.md)
 
 ### 5. Diff Engine (`packages/diff-engine`)

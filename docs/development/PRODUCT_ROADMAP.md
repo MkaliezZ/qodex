@@ -89,7 +89,8 @@ exact ephemeral confirmation merged in
 proposal contracts merged in `c3f7c9cef73cb9660f9b4d39c325dc8c4e3f5170`;
 v0.7.4.2 AgentFuse export decision merged in
 `6d592a199d5d4ee65663f107f64dfbb91cd1d8e5`; v0.7.4.3 Tauri-only native
-atomic export implemented for Draft PR review
+atomic export merged in `4b0379e051a15cf49a6a9134f5b73d9f8171231b`; controlled
+v0.7.4.4 real native proof passed; v0.7 Coding Pack frozen
 
 The source audit found authorized project reads, selected-file context
 assembly, project binding, action contracts, and Session persistence, but no
@@ -158,6 +159,12 @@ the destination filesystem; and performs platform no-overwrite atomic
 promotion. Completion-persistence failure remains an explicit uncertain
 `export_started` state. Browser export, cross-filesystem fallback, automatic
 restart replay/retry, and Action Runtime export dispatch remain unimplemented.
+
+v0.7.4.4 adds no product feature. It records a controlled real macOS proof of
+the merged path with deterministic fixture bytes, real SQLite, pinned
+AgentFuse, native handle-relative export, bounded negative cases, and explicit
+uncertainty fault cases. The v0.7 line is frozen. Only security, proof,
+installation, compatibility, and real-user-feedback defects may reopen it.
 
 ### v0.8 - Product Packaging and Closed Beta
 
