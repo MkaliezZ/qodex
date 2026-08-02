@@ -1,0 +1,341 @@
+{
+  "schema_version": "kerniq.codewhale.tool-surface-receipt.v1",
+  "kerniq_repository_commit": "2aa335dd21453ecf5d3ad44c2279b2c9362bef9f",
+  "codewhale": {
+    "repository": "https://github.com/Hmbown/CodeWhale",
+    "source_commit": "4f2c97b0d75c039a9b6069ebcf210cc499583376",
+    "source_archive_sha256": "sha256:61b6c3ed704b732085fc7d7fe7c60e6061b97296ddc6d923e19270a5ca465f69",
+    "executable_sha256": "sha256:88b9dc2f82e6aa55fe8c168b7ad7573e834d7af164960835f1ccda7a4559189f",
+    "executable_version": "codewhale-tui 0.9.3 (4f2c97b0d75c)",
+    "executable_platform": "darwin-x86_64-proof-build",
+    "transport": "authenticated_loopback_http_sse",
+    "runtime_identity": {
+      "version": "0.9.3",
+      "capabilities": {
+        "threads": true,
+        "turns": true,
+        "turn_steer": true,
+        "turn_interrupt": true,
+        "event_replay": true,
+        "external_tools": true,
+        "environments": false,
+        "worker_runtime": true
+      }
+    }
+  },
+  "managed_profile": {
+    "schemaVersion": "kerniq.codewhale.managed-profile.v1",
+    "mode": "plan",
+    "allowShell": false,
+    "approvalPolicy": "never",
+    "sandboxMode": "read-only",
+    "autoApprove": false,
+    "trustMode": false,
+    "projectConfig": "disabled",
+    "bindHost": "127.0.0.1",
+    "runtimeEntrypoint": "serve --http",
+    "mcp": "disabled",
+    "plugins": "disabled",
+    "externalTools": "disabled",
+    "fleet": "disabled",
+    "tasks": "disabled",
+    "automations": "disabled",
+    "execEntrypoint": "disabled",
+    "tui": "disabled",
+    "webUi": "disabled",
+    "acpServer": "disabled",
+    "mcpServer": "disabled",
+    "backgroundShell": "disabled",
+    "subagents": "disabled",
+    "updateChecks": "disabled",
+    "memoryWrites": "disabled"
+  },
+  "managed_profile_digest": "sha256:513aead3b2c82d693835e6dff8d82c9027bb0de3a50f7ea2e01f2ce120e220cc",
+  "dynamic_tool_schema_digest": "sha256:e7108a8f3767dd0e2f75d82a465a0e7a1e712ccdd6f11a89f1955aebc499f72a",
+  "thread_id_digest": "sha256:e40fd5953fcc86cf13e34038d9a8d8b769a5b5da66d7decf268cbb207505f787",
+  "turn_id_digest": "sha256:ecec78e8df1edfa22b7567294d17b41b1405a61ca643ffa76831d77a82cdd8f9",
+  "model_request_count": 2,
+  "initial_model_visible_tools": [
+    "File",
+    "Git",
+    "tasks",
+    "work_update",
+    "tool_search"
+  ],
+  "tool_search_invoked": true,
+  "tool_search_arguments": {
+    "query": ".*",
+    "match": "regex",
+    "max_results": 100
+  },
+  "tool_surface_digest": "sha256:a2102f95eba7383a5df9a160cce4806ae43bf032fd0f252cef72bf0caf1e0e48",
+  "model_visible_tool_count": 21,
+  "read_only_tool_count": 0,
+  "side_effect_tool_count": 20,
+  "unknown_tool_count": 13,
+  "prohibited_tool_callable_count": 20,
+  "tools": [
+    {
+      "tool_name": "automation",
+      "source": "codewhale_native",
+      "native_or_dynamic": "native",
+      "read_only": false,
+      "side_effect_capable": true,
+      "classification_reason": "Unknown or unclassified tools are side-effect-capable by policy.",
+      "enabled": true,
+      "callable": true,
+      "observed_schema_digest": "sha256:834568ff37acca3dee5b49064a550d2ec55cd797c275f16e75e666679f68c588"
+    },
+    {
+      "tool_name": "create_goal",
+      "source": "codewhale_native",
+      "native_or_dynamic": "native",
+      "read_only": false,
+      "side_effect_capable": true,
+      "classification_reason": "Unknown or unclassified tools are side-effect-capable by policy.",
+      "enabled": true,
+      "callable": true,
+      "observed_schema_digest": "sha256:2348e5f9787daf633190702cbb581ff54a640943aef9be7d88f1351214b44de3"
+    },
+    {
+      "tool_name": "diagnostics",
+      "source": "codewhale_native",
+      "native_or_dynamic": "native",
+      "read_only": false,
+      "side_effect_capable": true,
+      "classification_reason": "Unknown or unclassified tools are side-effect-capable by policy.",
+      "enabled": true,
+      "callable": true,
+      "observed_schema_digest": "sha256:99334726611ccf58a148b0814696bfa6fe08c1b2d027e946beccf5a74331c9aa"
+    },
+    {
+      "tool_name": "File",
+      "source": "codewhale_native",
+      "native_or_dynamic": "native",
+      "read_only": false,
+      "side_effect_capable": true,
+      "classification_reason": "Aggregates filesystem reads and mutations in one callable tool.",
+      "enabled": true,
+      "callable": true,
+      "observed_schema_digest": "sha256:598610c71c38945ba6a0c1543f00387f9cd41747f10afc1bbc4b5556ec88a44f"
+    },
+    {
+      "tool_name": "get_goal",
+      "source": "codewhale_native",
+      "native_or_dynamic": "native",
+      "read_only": false,
+      "side_effect_capable": true,
+      "classification_reason": "Unknown or unclassified tools are side-effect-capable by policy.",
+      "enabled": true,
+      "callable": true,
+      "observed_schema_digest": "sha256:99334726611ccf58a148b0814696bfa6fe08c1b2d027e946beccf5a74331c9aa"
+    },
+    {
+      "tool_name": "Git",
+      "source": "codewhale_native",
+      "native_or_dynamic": "native",
+      "read_only": false,
+      "side_effect_capable": true,
+      "classification_reason": "Aggregates read and Git mutation operations.",
+      "enabled": true,
+      "callable": true,
+      "observed_schema_digest": "sha256:e37eaa6df574519a98d0c5ce2706e8998264ab05c5aff5c6ede47eb2f34c07b1"
+    },
+    {
+      "tool_name": "github",
+      "source": "codewhale_native",
+      "native_or_dynamic": "native",
+      "read_only": false,
+      "side_effect_capable": true,
+      "classification_reason": "Unknown or unclassified tools are side-effect-capable by policy.",
+      "enabled": true,
+      "callable": true,
+      "observed_schema_digest": "sha256:4127fdb1250e2c02667626ec11c4aa31edc35208ed0bb2b68280f65c7222f9e6"
+    },
+    {
+      "tool_name": "handle_read",
+      "source": "codewhale_native",
+      "native_or_dynamic": "native",
+      "read_only": false,
+      "side_effect_capable": true,
+      "classification_reason": "Unknown or unclassified tools are side-effect-capable by policy.",
+      "enabled": true,
+      "callable": true,
+      "observed_schema_digest": "sha256:95dd15efba3d99e85ac3780cc7b4e4b218c2ab9f42732937ccc17918d2bdab69"
+    },
+    {
+      "tool_name": "load_skill",
+      "source": "codewhale_native",
+      "native_or_dynamic": "native",
+      "read_only": false,
+      "side_effect_capable": true,
+      "classification_reason": "Unknown or unclassified tools are side-effect-capable by policy.",
+      "enabled": true,
+      "callable": true,
+      "observed_schema_digest": "sha256:7c10272dabf8450b8cd278cc1e82af2cb52897e36f190a40d5ec8fe324d1858c"
+    },
+    {
+      "tool_name": "notify",
+      "source": "codewhale_native",
+      "native_or_dynamic": "native",
+      "read_only": false,
+      "side_effect_capable": true,
+      "classification_reason": "Unknown or unclassified tools are side-effect-capable by policy.",
+      "enabled": true,
+      "callable": true,
+      "observed_schema_digest": "sha256:3cd2a5c7ce121815c2a3148b2b77b6ed583dbb4f19d7e0cad8c1e66eb1f835e9"
+    },
+    {
+      "tool_name": "propose_project_command",
+      "source": "kerniq_dynamic",
+      "native_or_dynamic": "dynamic",
+      "read_only": false,
+      "side_effect_capable": false,
+      "classification_reason": "Creates a bounded KerniQ intent only; it has no physical execution path.",
+      "enabled": true,
+      "callable": true,
+      "observed_schema_digest": "sha256:dd250d25be84db1473ea3722842dbfceb612d9d2572efc50ceda6a2b822f3fe1"
+    },
+    {
+      "tool_name": "request_user_input",
+      "source": "codewhale_native",
+      "native_or_dynamic": "native",
+      "read_only": false,
+      "side_effect_capable": true,
+      "classification_reason": "Creates an external interactive control request.",
+      "enabled": true,
+      "callable": true,
+      "observed_schema_digest": "sha256:e9a37e67bcd607c242b43441202c1ba173b1ca8c2281afa0baad335c941fd7bc"
+    },
+    {
+      "tool_name": "retrieve_tool_result",
+      "source": "codewhale_native",
+      "native_or_dynamic": "native",
+      "read_only": false,
+      "side_effect_capable": true,
+      "classification_reason": "Unknown or unclassified tools are side-effect-capable by policy.",
+      "enabled": true,
+      "callable": true,
+      "observed_schema_digest": "sha256:c8b87ca98d76c7aa2a6cd4f0108632d651773146ba615c5ef6ca55b0732c2a74"
+    },
+    {
+      "tool_name": "review",
+      "source": "codewhale_native",
+      "native_or_dynamic": "native",
+      "read_only": false,
+      "side_effect_capable": true,
+      "classification_reason": "Unknown or unclassified tools are side-effect-capable by policy.",
+      "enabled": true,
+      "callable": true,
+      "observed_schema_digest": "sha256:9a4af1d8b2ad19c9173eab90d8634f6769507f24d8b770a7384086a1497963e9"
+    },
+    {
+      "tool_name": "tasks",
+      "source": "codewhale_native",
+      "native_or_dynamic": "native",
+      "read_only": false,
+      "side_effect_capable": true,
+      "classification_reason": "Creates or mutates durable task state.",
+      "enabled": true,
+      "callable": true,
+      "observed_schema_digest": "sha256:69ca4ab81caffb52d5605b6b0adfdb8c8ff0ee6a267b3bbcd8399bd7aa1d786a"
+    },
+    {
+      "tool_name": "tool_search",
+      "source": "codewhale_native",
+      "native_or_dynamic": "native",
+      "read_only": false,
+      "side_effect_capable": true,
+      "classification_reason": "Can hydrate deferred side-effect tools into the callable model surface.",
+      "enabled": true,
+      "callable": true,
+      "observed_schema_digest": "sha256:95d65adea8abede2f7bc6439aaf9148c52e46f0bbc06e7067fe7fa5afc0fe781"
+    },
+    {
+      "tool_name": "update_goal",
+      "source": "codewhale_native",
+      "native_or_dynamic": "native",
+      "read_only": false,
+      "side_effect_capable": true,
+      "classification_reason": "Unknown or unclassified tools are side-effect-capable by policy.",
+      "enabled": true,
+      "callable": true,
+      "observed_schema_digest": "sha256:67a431fe43e70f630e9c33d5f35fd13d3f774a23ee5e6afc9c54cd4917322158"
+    },
+    {
+      "tool_name": "validate_data",
+      "source": "codewhale_native",
+      "native_or_dynamic": "native",
+      "read_only": false,
+      "side_effect_capable": true,
+      "classification_reason": "Unknown or unclassified tools are side-effect-capable by policy.",
+      "enabled": true,
+      "callable": true,
+      "observed_schema_digest": "sha256:002eb70167429e841ce3bef6c6f05acca5cee4fb78a47c3a12adca025b2b0ea2"
+    },
+    {
+      "tool_name": "Web",
+      "source": "codewhale_native",
+      "native_or_dynamic": "native",
+      "read_only": false,
+      "side_effect_capable": true,
+      "classification_reason": "May perform network requests and is not proven read-only.",
+      "enabled": true,
+      "callable": true,
+      "observed_schema_digest": "sha256:cf56c605a48ca7eeb566859b172385ba1f0b8e5e6cae64a1a680130ba103ad4d"
+    },
+    {
+      "tool_name": "web-x00002E-run",
+      "source": "codewhale_native",
+      "native_or_dynamic": "native",
+      "read_only": false,
+      "side_effect_capable": true,
+      "classification_reason": "Unknown or unclassified tools are side-effect-capable by policy.",
+      "enabled": true,
+      "callable": true,
+      "observed_schema_digest": "sha256:45795a8de6a7c6287e8d8416074f78b2b22dd727c019ae312a17261b6d99a4f4"
+    },
+    {
+      "tool_name": "work_update",
+      "source": "codewhale_native",
+      "native_or_dynamic": "native",
+      "read_only": false,
+      "side_effect_capable": true,
+      "classification_reason": "Mutates CodeWhale Work state.",
+      "enabled": true,
+      "callable": true,
+      "observed_schema_digest": "sha256:00cd74f5a783baf53f291f8da420867b5c94c3aa8e39ad3cff7c2c52c79d5af5"
+    }
+  ],
+  "runtime_turn_status": "completed",
+  "fixture_before_digest": "sha256:d78b94093880a66b0b40adadb767d1c08dcd848ee60592631ce514974b1fc4b7",
+  "fixture_after_digest": "sha256:5ecacbcc2cefe30b27607d05630dc7302563378bcee28ca36ef666b273c218e8",
+  "fixture_mutations": [
+    {
+      "kind": "added_or_changed",
+      "entry": "d:.codewhale"
+    },
+    {
+      "kind": "added_or_changed",
+      "entry": "d:.codewhale/state"
+    },
+    {
+      "kind": "added_or_changed",
+      "entry": "f:.codewhale/state/subagents.v1.lock:420:sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    }
+  ],
+  "codewhale_direct_fixture_writes": 1,
+  "writes_before_kerniq_start": 1,
+  "project_command_execution_count": 0,
+  "agentfuse_invocation_count": 0,
+  "builtin_side_effect_tool_execution_count": 0,
+  "mcp_side_effect_tool_execution_count": 0,
+  "plugin_side_effect_tool_execution_count": 0,
+  "subagent_side_effect_execution_count": 0,
+  "product_side_effect_connected": false,
+  "dynamic_tool_request_event": "NOT_RUN_BY_SAFETY_GATE",
+  "dynamic_tool_resolution_event": "NOT_RUN_BY_SAFETY_GATE",
+  "call_id_digest": null,
+  "safety_gate": "stopped_after_real_model-visible-tool-enumeration",
+  "outcome": "THIN_FORK_REQUIRED"
+}

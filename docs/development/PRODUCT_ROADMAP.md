@@ -168,8 +168,27 @@ installation, compatibility, and real-user-feedback defects may reopen it.
 
 ### v0.8 - Product Packaging and Closed Beta
 
-Windows installer as the primary distribution target, macOS unsigned technical
-preview, onboarding, credential storage, and managed-Python bootstrap.
+**Engine boundary spike:** `THIN_FORK_REQUIRED`
+
+The exact CodeWhale v0.8.0 spike added an isolated KerniQ-owned Agent Engine
+protocol, pinned provisioning, managed supervisor contracts, and a real
+machine-readable model tool-surface receipt. Adapter-only integration did not
+pass: the Runtime API supplies `allowed_tools: None`, deferred `tool_search`
+expanded to prohibited callable tools, and the process wrote a subagent lock
+inside the read-only fixture. CodeWhale remains experimental and is not the
+default product engine. No product side-effect path is connected.
+
+Next engine work is limited to review of the minimal governed-dispatch thin
+fork described by ADR-023. The fork must prove exact structural allowlisting,
+zero direct fixture writes, and the real KerniQ-controlled round trip before
+product enablement. Patch Runtime and multi-engine support remain unimplemented.
+
+Product packaging remains planned: Windows installer as the primary
+distribution target, macOS unsigned technical preview, onboarding, credential
+storage, and managed-Python bootstrap.
+
+- [v0.8.0 CodeWhale spike](kerniq_v0_8_0_codewhale_governed_engine_spike.md)
+- [ADR-023](../../qodex-config/adr/ADR-023-CodeWhale-Governed-Engine-Boundary.md)
 
 ### v0.9 - Research Pack and Office Pack
 
