@@ -1,5 +1,6 @@
 mod coding_pack_database;
 mod coding_pack_export;
+mod coding_pack_export_fs;
 mod managed_python;
 mod session_database;
 
@@ -9,7 +10,7 @@ use coding_pack_database::{
     DecideCodingPackOperationRequest, DestinationPickerRequest,
 };
 use coding_pack_export::{
-    safely_remove_owned_staging, write_atomic_bundle, NativeExportRequest, NativeExportResult,
+    write_atomic_bundle, NativeBundleWriteOutcome, NativeExportRequest, NativeExportResult,
 };
 use managed_python::ManagedPythonState;
 use serde::{Deserialize, Serialize};
@@ -357,22 +358,22 @@ fn coding_pack_export_native(
     }
 
     let prepared = coding_pack_database.begin_native_export(&request, &project_root)?;
-    if let Err(failure) = write_atomic_bundle(&prepared) {
-        let (phase_code, reason_code) = if let Some(staging_path) = failure.staging_path {
-            if safely_remove_owned_staging(&prepared.destination_root, &staging_path).is_err() {
-                ("cleanup", "cleanup_failed")
-            } else {
-                (failure.phase_code, failure.reason_code)
-            }
-        } else {
-            (failure.phase_code, failure.reason_code)
-        };
-        coding_pack_database.record_native_export_interrupted(
-            &prepared.plan,
+    match write_atomic_bundle(&prepared) {
+        NativeBundleWriteOutcome::PromotedAndSynced => {}
+        NativeBundleWriteOutcome::PrePromotionFailure {
             phase_code,
             reason_code,
-        )?;
-        return Err(format!("coding_pack_export_{reason_code}"));
+        } => {
+            coding_pack_database.record_native_export_interrupted(
+                &prepared.plan,
+                phase_code,
+                reason_code,
+            )?;
+            return Err(format!("coding_pack_export_{reason_code}"));
+        }
+        NativeBundleWriteOutcome::PromotedButDurabilityUncertain { .. } => {
+            return Err("coding_pack_export_post_promotion_durability_uncertain".into());
+        }
     }
 
     let completed_at = coding_pack_database.record_native_export_completed(&prepared.plan)?;

@@ -68,6 +68,7 @@ import {
 import { createManagedPythonBridge } from "../platform/managedPythonBridge";
 import {
   CodingPackNativeExportError,
+  codingPackNativeExportAvailability,
   exportCodingPackNative,
   isCodingPackNativeExportAvailable,
   type CodingPackNativeExportErrorCode,
@@ -706,7 +707,11 @@ export function useRuntime() {
       });
 
     if (!isCodingPackNativeExportAvailable()) {
-      setCodingPackNativeExportError("coding_pack_native_desktop_required");
+      setCodingPackNativeExportError(
+        codingPackNativeExportAvailability() === "platform_unsupported"
+          ? "coding_pack_native_atomic_export_unsupported"
+          : "coding_pack_native_desktop_required",
+      );
       return;
     }
     if (!currentBinding || !snapshot || !preview || !confirmation || !destination || !binding) {
@@ -1163,6 +1168,7 @@ export function useRuntime() {
     confirmCurrentCodingPackExportProposal,
     evaluateCurrentCodingPackExportPolicy,
     codingPackNativeExportAvailable: isCodingPackNativeExportAvailable(),
+    codingPackNativeExportAvailability: codingPackNativeExportAvailability(),
     codingPackNativeExportResult,
     codingPackNativeExportError,
     exportCurrentCodingPack,

@@ -339,13 +339,18 @@ write it parses and rehashes the canonical manifest, opens included sources
 component-by-component without following observed links/reparse points,
 verifies exact bytes, revalidates destination identity, checks target absence,
 and durably records `PACK_EXPORT_STARTED`. It writes `manifest.json` and
-`sources/<relative path>` to an unpredictable staging directory under the
-destination parent, flushes files, and uses macOS rename-exclusive or Windows
-no-replace directory move. There is no cross-filesystem copy/delete fallback.
-Completion is recorded only after promotion; pre-promotion failure records
-`PACK_EXPORT_INTERRUPTED`. If completion persistence fails after promotion,
-the target remains and the operation truthfully stays `export_started` with no
-automatic retry.
+`sources/<relative path>` through retained destination/staging directory
+handles. The staging name and a digest of the opened destination object
+identity are bound into the local export plan before START. macOS uses
+handle-relative `renameatx_np(..., RENAME_EXCL)` and requires a successful
+destination-directory sync before completion is eligible. There is no
+cross-filesystem copy/delete fallback. Pre-promotion failure performs bounded
+handle-relative owned cleanup and records `PACK_EXPORT_INTERRUPTED`.
+Post-promotion sync failure and completion-persistence failure retain the
+target and truthfully leave the operation `export_started`, with distinct
+uncertainty errors and no automatic retry. Windows physical export fails
+closed before START because no reviewed handle-relative Windows promotion is
+provided in this release; no path-based fallback remains.
 
 Read-only deterministic selection uses project capability and privacy controls
 without an AgentFuse decision. The separately versioned

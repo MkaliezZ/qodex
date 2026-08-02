@@ -124,6 +124,8 @@ const EXPORT_STARTED_PAYLOAD_KEYS = [
   "manifestDigest",
   "destinationBindingId",
   "destinationFingerprint",
+  "destinationObjectIdentityDigest",
+  "stagingName",
   "targetName",
   "sourceFileCount",
   "sourceTotalBytes",
@@ -515,6 +517,8 @@ export function validateExportStartedPayload(
   requireDigest(payload.manifestDigest);
   requireDestinationBindingId(payload.destinationBindingId);
   requireDigest(payload.destinationFingerprint);
+  requireDigest(payload.destinationObjectIdentityDigest);
+  requireStagingName(payload.stagingName);
   requireTargetName(payload.targetName, payload.manifestDigest);
   requireExportCounts(payload.sourceFileCount, payload.sourceTotalBytes);
   timestamp(payload.startedAt);
@@ -622,6 +626,15 @@ function requireTargetName(value: unknown, manifestDigest: unknown): asserts val
     || typeof manifestDigest !== "string"
     || !SHA256_PATTERN.test(manifestDigest)
     || value !== `kerniq-coding-pack-${manifestDigest.slice("sha256:".length)}`
+  ) {
+    invalid();
+  }
+}
+
+function requireStagingName(value: unknown): asserts value is string {
+  if (
+    typeof value !== "string"
+    || !/^\.kerniq-coding-pack-staging-[0-9a-f]{32}$/u.test(value)
   ) {
     invalid();
   }

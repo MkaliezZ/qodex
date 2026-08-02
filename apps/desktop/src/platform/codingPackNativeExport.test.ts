@@ -12,6 +12,7 @@ vi.mock("@tauri-apps/api/core", () => ({
 
 import {
   CodingPackNativeExportError,
+  codingPackNativeExportAvailability,
   exportCodingPackNative,
   isCodingPackNativeExportAvailable,
 } from "./codingPackNativeExport";
@@ -25,8 +26,19 @@ const request = {
 
 describe("native Coding Pack export boundary", () => {
   beforeEach(() => {
+    vi.unstubAllGlobals();
     tauri.available = false;
     tauri.invoke.mockReset();
+  });
+
+  it("fails Windows native export closed without invoking the command", async () => {
+    tauri.available = true;
+    vi.stubGlobal("navigator", { userAgent: "Mozilla/5.0 (Windows NT 10.0)" });
+    expect(codingPackNativeExportAvailability()).toBe("platform_unsupported");
+    await expect(exportCodingPackNative(request)).rejects.toMatchObject({
+      code: "coding_pack_native_atomic_export_unsupported",
+    });
+    expect(tauri.invoke).not.toHaveBeenCalled();
   });
 
   it("fails browser export closed without invoking any write command", async () => {
@@ -63,6 +75,16 @@ describe("native Coding Pack export boundary", () => {
     tauri.invoke.mockRejectedValue("coding_pack_export_completion_persistence_failed");
     await expect(exportCodingPackNative(request)).rejects.toMatchObject({
       code: "coding_pack_export_completion_persistence_failed",
+    });
+  });
+
+  it("preserves post-promotion durability uncertainty", async () => {
+    tauri.available = true;
+    tauri.invoke.mockRejectedValue(
+      "coding_pack_export_post_promotion_durability_uncertain",
+    );
+    await expect(exportCodingPackNative(request)).rejects.toMatchObject({
+      code: "coding_pack_export_post_promotion_durability_uncertain",
     });
   });
 });

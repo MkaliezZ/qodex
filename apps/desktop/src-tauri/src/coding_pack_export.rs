@@ -1,12 +1,15 @@
 use crate::coding_pack_database::{canonical_json, parse_timestamp, sha256_canonical};
+pub(crate) use crate::coding_pack_export_fs::NativeBundleWriteOutcome;
+#[cfg(test)]
+pub(crate) use crate::coding_pack_export_fs::NativeExportFault as ExportFault;
+use crate::coding_pack_export_fs::{NativeExportFaultInternal, VerifiedDestinationRoot};
 use getrandom::getrandom;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
-use std::collections::BTreeSet;
-use std::fs::{self, File, OpenOptions};
-use std::io::{Read, Write};
-use std::path::{Path, PathBuf};
+use std::fs::File;
+use std::io::Read;
+use std::path::Path;
 
 pub(crate) const EXPORT_PLAN_SCHEMA: &str = "kerniq.coding-pack.export-plan.v1";
 const MANIFEST_SCHEMA: &str = "kerniq.coding-pack.manifest.v1";
@@ -55,6 +58,8 @@ pub(crate) struct NativeExportPlan {
     pub manifest_digest: String,
     pub destination_binding_id: String,
     pub destination_fingerprint: String,
+    pub destination_object_identity_digest: String,
+    pub staging_name: String,
     pub target_name: String,
     pub manifest_byte_count: usize,
     pub source_file_count: usize,
@@ -66,7 +71,7 @@ pub(crate) struct NativeExportPlan {
 #[derive(Debug)]
 pub(crate) struct PreparedNativeExport {
     pub plan: NativeExportPlan,
-    pub destination_root: PathBuf,
+    pub destination_root: VerifiedDestinationRoot,
     pub manifest_bytes: Vec<u8>,
     pub sources: Vec<VerifiedSource>,
 }
@@ -127,23 +132,6 @@ struct PortableManifest {
     source_fingerprint: String,
     generated_at: String,
     manifest_digest: String,
-}
-
-#[derive(Debug)]
-pub(crate) struct ExportWriteFailure {
-    pub phase_code: &'static str,
-    pub reason_code: &'static str,
-    pub staging_path: Option<PathBuf>,
-}
-
-#[cfg(test)]
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum ExportFault {
-    StagingCreate,
-    ManifestWrite,
-    SourceWrite,
-    Flush,
-    Promotion,
 }
 
 pub(crate) fn validate_manifest(input: &str) -> Result<ValidatedManifest, String> {
@@ -316,208 +304,34 @@ pub(crate) fn random_staging_name() -> Result<String, String> {
     ))
 }
 
-pub(crate) fn write_atomic_bundle(
-    prepared: &PreparedNativeExport,
-) -> Result<(), ExportWriteFailure> {
-    write_atomic_bundle_inner(prepared, ExportFaultInternal::None)
+pub(crate) fn write_atomic_bundle(prepared: &PreparedNativeExport) -> NativeBundleWriteOutcome {
+    write_atomic_bundle_inner(prepared, NativeExportFaultInternal::None)
 }
 
 #[cfg(test)]
 pub(crate) fn write_atomic_bundle_with_fault(
     prepared: &PreparedNativeExport,
     fault: ExportFault,
-) -> Result<(), ExportWriteFailure> {
-    write_atomic_bundle_inner(prepared, ExportFaultInternal::from(fault))
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum ExportFaultInternal {
-    None,
-    StagingCreate,
-    ManifestWrite,
-    SourceWrite,
-    Flush,
-    Promotion,
-}
-
-#[cfg(test)]
-impl From<ExportFault> for ExportFaultInternal {
-    fn from(value: ExportFault) -> Self {
-        match value {
-            ExportFault::StagingCreate => Self::StagingCreate,
-            ExportFault::ManifestWrite => Self::ManifestWrite,
-            ExportFault::SourceWrite => Self::SourceWrite,
-            ExportFault::Flush => Self::Flush,
-            ExportFault::Promotion => Self::Promotion,
-        }
-    }
+) -> NativeBundleWriteOutcome {
+    write_atomic_bundle_inner(prepared, NativeExportFaultInternal::from(fault))
 }
 
 fn write_atomic_bundle_inner(
     prepared: &PreparedNativeExport,
-    fault: ExportFaultInternal,
-) -> Result<(), ExportWriteFailure> {
-    let staging_name = random_staging_name().map_err(|_| ExportWriteFailure {
-        phase_code: "staging_create",
-        reason_code: "staging_name_unavailable",
-        staging_path: None,
-    })?;
-    let staging = prepared.destination_root.join(staging_name);
-    if fault == ExportFaultInternal::StagingCreate || fs::create_dir(&staging).is_err() {
-        return Err(ExportWriteFailure {
-            phase_code: "staging_create",
-            reason_code: "staging_create_failed",
-            staging_path: None,
-        });
-    }
-    let fail = |phase_code, reason_code| ExportWriteFailure {
-        phase_code,
-        reason_code,
-        staging_path: Some(staging.clone()),
-    };
-
-    if fault == ExportFaultInternal::ManifestWrite
-        || write_new_file(&staging.join("manifest.json"), &prepared.manifest_bytes).is_err()
-    {
-        return Err(fail("manifest_write", "manifest_write_failed"));
-    }
-    let sources_root = staging.join("sources");
-    if fs::create_dir(&sources_root).is_err() {
-        return Err(fail("source_write", "source_directory_create_failed"));
-    }
-
-    let mut directories = BTreeSet::new();
-    for source in &prepared.sources {
-        let relative = Path::new(&source.relative_path);
-        let parent = relative.parent().unwrap_or_else(|| Path::new(""));
-        let mut current = PathBuf::new();
-        for component in parent.components() {
-            current.push(component.as_os_str());
-            directories.insert(current.clone());
-        }
-    }
-    for directory in &directories {
-        if fs::create_dir(sources_root.join(directory)).is_err() {
-            return Err(fail("source_write", "source_directory_create_failed"));
-        }
-    }
-    for (index, source) in prepared.sources.iter().enumerate() {
-        if (fault == ExportFaultInternal::SourceWrite && index == 0)
-            || write_new_file(&sources_root.join(&source.relative_path), &source.bytes).is_err()
-        {
-            return Err(fail("source_write", "source_write_failed"));
-        }
-    }
-    if fault == ExportFaultInternal::Flush
-        || sync_export_directories(&staging, &sources_root, &directories).is_err()
-    {
-        return Err(fail("flush", "directory_sync_failed"));
-    }
-
-    let final_target = prepared.destination_root.join(&prepared.plan.target_name);
-    if fault == ExportFaultInternal::Promotion
-        || promote_no_replace(&staging, &final_target).is_err()
-    {
-        return Err(fail("promotion", "atomic_promotion_failed"));
-    }
-    let _ = sync_directory(&prepared.destination_root);
-    Ok(())
-}
-
-fn write_new_file(path: &Path, bytes: &[u8]) -> std::io::Result<()> {
-    let mut file = OpenOptions::new().write(true).create_new(true).open(path)?;
-    file.write_all(bytes)?;
-    file.flush()?;
-    file.sync_all()
-}
-
-fn sync_export_directories(
-    staging: &Path,
-    sources_root: &Path,
-    directories: &BTreeSet<PathBuf>,
-) -> std::io::Result<()> {
-    for directory in directories.iter().rev() {
-        sync_directory(&sources_root.join(directory))?;
-    }
-    sync_directory(sources_root)?;
-    sync_directory(staging)
-}
-
-#[cfg(unix)]
-fn sync_directory(path: &Path) -> std::io::Result<()> {
-    File::open(path)?.sync_all()
-}
-
-#[cfg(windows)]
-fn sync_directory(_path: &Path) -> std::io::Result<()> {
-    // Windows does not expose portable directory flush semantics through std.
-    Ok(())
-}
-
-#[cfg(target_os = "macos")]
-fn promote_no_replace(staging: &Path, target: &Path) -> std::io::Result<()> {
-    use std::ffi::CString;
-    use std::os::unix::ffi::OsStrExt;
-    let staging = CString::new(staging.as_os_str().as_bytes())?;
-    let target = CString::new(target.as_os_str().as_bytes())?;
-    let result = unsafe {
-        libc::renameatx_np(
-            libc::AT_FDCWD,
-            staging.as_ptr(),
-            libc::AT_FDCWD,
-            target.as_ptr(),
-            libc::RENAME_EXCL,
-        )
-    };
-    if result == 0 {
-        Ok(())
-    } else {
-        Err(std::io::Error::last_os_error())
-    }
-}
-
-#[cfg(windows)]
-fn promote_no_replace(staging: &Path, target: &Path) -> std::io::Result<()> {
-    use std::os::windows::ffi::OsStrExt;
-    let mut staging = staging.as_os_str().encode_wide().collect::<Vec<_>>();
-    let mut target = target.as_os_str().encode_wide().collect::<Vec<_>>();
-    staging.push(0);
-    target.push(0);
-    let result = unsafe { MoveFileExW(staging.as_ptr(), target.as_ptr(), 0x0000_0008) };
-    if result != 0 {
-        Ok(())
-    } else {
-        Err(std::io::Error::last_os_error())
-    }
-}
-
-#[cfg(not(any(target_os = "macos", windows)))]
-fn promote_no_replace(_staging: &Path, _target: &Path) -> std::io::Result<()> {
-    Err(std::io::Error::new(
-        std::io::ErrorKind::Unsupported,
-        "atomic no-replace promotion is unavailable",
-    ))
-}
-
-pub(crate) fn safely_remove_owned_staging(
-    destination_root: &Path,
-    staging: &Path,
-) -> Result<(), String> {
-    let Some(name) = staging.file_name().and_then(|value| value.to_str()) else {
-        return Err("coding_pack_export_cleanup_failed".into());
-    };
-    if staging.parent() != Some(destination_root)
-        || !name.starts_with(".kerniq-coding-pack-staging-")
-        || name.len() != ".kerniq-coding-pack-staging-".len() + 32
-    {
-        return Err("coding_pack_export_cleanup_failed".into());
-    }
-    let metadata = fs::symlink_metadata(staging)
-        .map_err(|_| "coding_pack_export_cleanup_failed".to_string())?;
-    if !metadata.is_dir() || metadata.file_type().is_symlink() {
-        return Err("coding_pack_export_cleanup_failed".into());
-    }
-    fs::remove_dir_all(staging).map_err(|_| "coding_pack_export_cleanup_failed".into())
+    fault: NativeExportFaultInternal,
+) -> NativeBundleWriteOutcome {
+    let sources = prepared
+        .sources
+        .iter()
+        .map(|source| (source.relative_path.as_str(), source.bytes.as_slice()))
+        .collect::<Vec<_>>();
+    prepared.destination_root.write_atomic_bundle(
+        &prepared.plan.staging_name,
+        &prepared.plan.target_name,
+        &prepared.manifest_bytes,
+        &sources,
+        fault,
+    )
 }
 
 fn validate_portable_path(path: &str) -> Result<(), String> {
@@ -946,7 +760,6 @@ extern "system" {
         information: *mut std::ffi::c_void,
         buffer_size: u32,
     ) -> i32;
-    fn MoveFileExW(existing: *const u16, new: *const u16, flags: u32) -> i32;
 }
 
 #[cfg(windows)]

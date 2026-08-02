@@ -542,6 +542,8 @@ describe("CodingPackStore event integrity", () => {
       manifestDigest: decided.proposal.manifestDigest,
       destinationBindingId: decided.destination.destinationBindingId,
       destinationFingerprint: decided.destination.destinationFingerprint,
+      destinationObjectIdentityDigest: digest("b"),
+      stagingName: `.kerniq-coding-pack-staging-${"c".repeat(32)}`,
       targetName: `kerniq-coding-pack-${"4".repeat(64)}`,
       sourceFileCount: 1,
       sourceTotalBytes: 27,

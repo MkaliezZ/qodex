@@ -135,6 +135,8 @@ export interface CodingPackNativeExportPlan {
   readonly manifestDigest: string;
   readonly destinationBindingId: string;
   readonly destinationFingerprint: string;
+  readonly destinationObjectIdentityDigest: string;
+  readonly stagingName: string;
   readonly targetName: string;
   readonly manifestByteCount: number;
   readonly sourceFileCount: number;
@@ -152,6 +154,8 @@ export interface CodingPackExportStartedEventPayload {
   readonly manifestDigest: string;
   readonly destinationBindingId: string;
   readonly destinationFingerprint: string;
+  readonly destinationObjectIdentityDigest: string;
+  readonly stagingName: string;
   readonly targetName: string;
   readonly sourceFileCount: number;
   readonly sourceTotalBytes: number;

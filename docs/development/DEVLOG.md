@@ -1282,6 +1282,30 @@ ARBITRARY_SHELL_ADDED=false
 WORKFLOW_CHANGED=false
 ```
 
+#### Native filesystem authority correction
+
+Final review replaced destination-path mutation authority with one retained
+native destination directory handle. The staging name and a digest of the
+opened destination object identity are now bound before
+`PACK_EXPORT_STARTED`; macOS staging writes, owned cleanup, no-replace
+promotion, and destination sync are handle-relative. Destination, parent, and
+staging replacement tests prove that replacement paths receive no writes.
+Post-promotion sync failure is distinct from completion-persistence failure:
+both retain the target, leave `export_started`, and disable automatic retry.
+Windows physical export now fails closed before START with no unsafe path
+fallback, and Desktop reports that the current implementation is unavailable
+on Windows.
+
+```text
+DESTINATION_HANDLE_OPENED_BEFORE_START=true
+STAGING_NAME_BOUND_BEFORE_START=true
+MACOS_DESTINATION_MUTATIONS_HANDLE_RELATIVE=true
+OWNED_STAGING_CLEANUP_HANDLE_RELATIVE=true
+POST_PROMOTION_DESTINATION_SYNC_REQUIRED=true
+WINDOWS_PHYSICAL_EXPORT_IMPLEMENTED=false
+WINDOWS_UNSAFE_PATH_FALLBACK=false
+```
+
 ### KerniQ v0.7.4.2 AgentFuse Coding Pack Export Decision
 
 **Date:** 2026-07-30  |  **Status:** Implemented for Draft PR review

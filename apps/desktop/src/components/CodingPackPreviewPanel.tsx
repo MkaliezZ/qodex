@@ -67,6 +67,7 @@ export function CodingPackPreviewPanel() {
     confirmCurrentCodingPackExportProposal,
     evaluateCurrentCodingPackExportPolicy,
     codingPackNativeExportAvailable,
+    codingPackNativeExportAvailability,
     codingPackNativeExportError,
     exportCurrentCodingPack,
   } = useRuntimeContext();
@@ -483,7 +484,9 @@ export function CodingPackPreviewPanel() {
                     </button>
                   ) : (
                     <p className="coding-pack-native-required" role="status">
-                      Native Desktop required for atomic export
+                      {codingPackNativeExportAvailability === "platform_unsupported"
+                        ? "Atomic Coding Pack export is unavailable on Windows in this release"
+                        : "Native Desktop required for atomic export"}
                     </p>
                   )
                 ) : null}
@@ -692,8 +695,14 @@ function nativeExportErrorCopy(code: string): string {
   if (code === "coding_pack_native_desktop_required") {
     return "Native Desktop required for atomic export";
   }
+  if (code === "coding_pack_native_atomic_export_unsupported") {
+    return "Atomic Coding Pack export is unavailable on Windows in this release";
+  }
   if (code === "coding_pack_export_authority_invalid") {
     return "The current preview, confirmation, destination, or approval is no longer valid.";
+  }
+  if (code === "coding_pack_export_post_promotion_durability_uncertain") {
+    return "Files were promoted, but durable destination sync could not be confirmed. No automatic retry is available.";
   }
   return "Atomic export failed. No completion was reported.";
 }

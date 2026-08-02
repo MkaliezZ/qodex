@@ -2,9 +2,16 @@ import { invoke, isTauri } from "@tauri-apps/api/core";
 
 export type CodingPackNativeExportErrorCode =
   | "coding_pack_native_desktop_required"
+  | "coding_pack_native_atomic_export_unsupported"
   | "coding_pack_export_authority_invalid"
   | "coding_pack_export_completion_persistence_failed"
+  | "coding_pack_export_post_promotion_durability_uncertain"
   | "coding_pack_export_failed";
+
+export type CodingPackNativeExportAvailability =
+  | "available"
+  | "desktop_required"
+  | "platform_unsupported";
 
 export class CodingPackNativeExportError extends Error {
   constructor(readonly code: CodingPackNativeExportErrorCode) {
@@ -32,14 +39,30 @@ export interface CodingPackNativeExportResult {
 }
 
 export function isCodingPackNativeExportAvailable(): boolean {
-  return isTauri();
+  return codingPackNativeExportAvailability() === "available";
+}
+
+export function codingPackNativeExportAvailability(): CodingPackNativeExportAvailability {
+  if (!isTauri()) return "desktop_required";
+  if (
+    typeof navigator !== "undefined"
+    && /Windows/u.test(navigator.userAgent)
+  ) {
+    return "platform_unsupported";
+  }
+  return "available";
 }
 
 export async function exportCodingPackNative(
   request: CodingPackNativeExportRequest,
 ): Promise<CodingPackNativeExportResult> {
-  if (!isCodingPackNativeExportAvailable()) {
-    throw new CodingPackNativeExportError("coding_pack_native_desktop_required");
+  const availability = codingPackNativeExportAvailability();
+  if (availability !== "available") {
+    throw new CodingPackNativeExportError(
+      availability === "platform_unsupported"
+        ? "coding_pack_native_atomic_export_unsupported"
+        : "coding_pack_native_desktop_required",
+    );
   }
   try {
     return await invoke<CodingPackNativeExportResult>("coding_pack_export_native", { request });
@@ -52,6 +75,16 @@ export async function exportCodingPackNative(
     if (message.includes("coding_pack_export_completion_persistence_failed")) {
       throw new CodingPackNativeExportError(
         "coding_pack_export_completion_persistence_failed",
+      );
+    }
+    if (message.includes("coding_pack_export_post_promotion_durability_uncertain")) {
+      throw new CodingPackNativeExportError(
+        "coding_pack_export_post_promotion_durability_uncertain",
+      );
+    }
+    if (message.includes("coding_pack_native_atomic_export_unsupported")) {
+      throw new CodingPackNativeExportError(
+        "coding_pack_native_atomic_export_unsupported",
       );
     }
     throw new CodingPackNativeExportError("coding_pack_export_failed");

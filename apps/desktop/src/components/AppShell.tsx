@@ -33,6 +33,7 @@ import type {
   CodingPackPreviewErrorCode,
 } from "../codingPack/preview";
 import type {
+  CodingPackNativeExportAvailability,
   CodingPackNativeExportErrorCode,
   CodingPackNativeExportResult,
 } from "../platform/codingPackNativeExport";
@@ -77,6 +78,7 @@ interface RuntimeContextValue {
   confirmCurrentCodingPackExportProposal: () => Promise<void>;
   evaluateCurrentCodingPackExportPolicy: () => Promise<void>;
   codingPackNativeExportAvailable: boolean;
+  codingPackNativeExportAvailability: CodingPackNativeExportAvailability;
   codingPackNativeExportResult: CodingPackNativeExportResult | null;
   codingPackNativeExportError: CodingPackNativeExportErrorCode | null;
   exportCurrentCodingPack: () => Promise<void>;

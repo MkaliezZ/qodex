@@ -1233,9 +1233,13 @@ v0.7.4.2 merged through exact-head merge commit
 v0.7.4.3 implements the planned write boundary in Tauri Desktop only. A current
 preview and confirmation are required in memory; durable historical allow is
 never independently actionable. Native code resolves only trusted local
-bindings, revalidates manifest/source/destination identity before STARTED,
-stages under the destination parent, and uses platform no-overwrite directory
-promotion. The portable bundle contains only canonical `manifest.json` and
+bindings, opens and retains the exact destination directory object,
+revalidates manifest/source/destination identity before STARTED, and binds the
+staging name before START. macOS staging, cleanup, and no-overwrite promotion
+remain relative to held directory handles. Windows physical export fails
+closed before START because this release has no reviewed handle-relative
+promotion primitive and no path fallback. The portable bundle contains only
+canonical `manifest.json` and
 exact included bytes beneath `sources/`. Browser export, Action Runtime,
 automatic restart replay/retry, and cross-filesystem fallback remain disabled.
 
@@ -1245,6 +1249,9 @@ PACK_EXPORT_STARTED_IMPLEMENTED=true
 PACK_EXPORT_COMPLETED_IMPLEMENTED=true
 PACK_EXPORT_INTERRUPTED_IMPLEMENTED=true
 CODING_PACK_NATIVE_EXPORT_IMPLEMENTED=true
+MACOS_PHYSICAL_EXPORT_IMPLEMENTED=true
+WINDOWS_PHYSICAL_EXPORT_IMPLEMENTED=false
+WINDOWS_UNSAFE_PATH_FALLBACK=false
 BROWSER_PHYSICAL_EXPORT_IMPLEMENTED=false
 CROSS_FILESYSTEM_COPY_FALLBACK=false
 RESTART_AUTO_EXPORT=false

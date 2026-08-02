@@ -296,12 +296,18 @@ crashes. v0.7.4.3 adds the first Tauri-only physical export. A current preview
 and confirmation, live proposal and approval, durable policy allow, trusted
 private project/destination bindings, and native exact-source revalidation are
 required before `PACK_EXPORT_STARTED`. The command stages the canonical
-`manifest.json` and included source bytes under the destination parent, uses a
-platform no-overwrite directory promotion, and then persists
+`manifest.json` and included source bytes relative to one retained destination
+directory handle, uses macOS handle-relative rename-exclusive promotion, and
+then durably syncs that destination before persisting
 `PACK_EXPORT_COMPLETED`; pre-promotion failure records
 `PACK_EXPORT_INTERRUPTED`. Completion-persistence failure keeps the promoted
 target and reports an uncertain `export_started` state without automatic
-retry. Browser mode reports “Native Desktop required for atomic export.”
+retry. A post-promotion destination-sync failure also remains
+`export_started`, with a distinct uncertainty error and no automatic retry.
+Windows physical export fails closed before START because this release does
+not provide a reviewed handle-relative Windows promotion primitive; the UI
+states that limitation. Browser mode reports “Native Desktop required for
+atomic export.”
 Recovered records remain historical and non-actionable. The
 [v0.7 plan](docs/development/kerniq_v0_7_coding_pack_product_integration_planning.md)
 and [ADR-022](qodex-config/adr/ADR-022-Coding-Pack-Product-Integration.md)

@@ -178,6 +178,8 @@ struct ExportStartedPayload {
     manifest_digest: String,
     destination_binding_id: String,
     destination_fingerprint: String,
+    destination_object_identity_digest: String,
+    staging_name: String,
     target_name: String,
     source_file_count: usize,
     source_total_bytes: u64,
@@ -580,17 +582,6 @@ impl CodingPackDatabase {
             return Err(destination_unavailable());
         }
 
-        let target_name = format!(
-            "kerniq-coding-pack-{}",
-            &manifest.manifest_digest["sha256:".len()..]
-        );
-        let target_path = canonical_destination.join(&target_name);
-        match fs::symlink_metadata(&target_path) {
-            Ok(_) => return Err("coding_pack_export_target_exists".into()),
-            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
-            Err(_) => return Err(destination_unavailable()),
-        }
-
         let sources = read_and_verify_sources(project_root, &manifest.sources)?;
         let source_total_bytes = sources.iter().try_fold(0_u64, |total, source| {
             total
@@ -608,6 +599,28 @@ impl CodingPackDatabase {
         {
             return Err("coding_pack_export_authority_expired".into());
         }
+        if !crate::coding_pack_export_fs::native_atomic_export_supported() {
+            return Err("coding_pack_native_atomic_export_unsupported".into());
+        }
+
+        let destination_root = crate::coding_pack_export_fs::open_verified_destination_root(
+            &canonical_destination,
+            &destination_binding_id,
+            &destination_fingerprint,
+        )?;
+        if destination_root.binding_id != destination.binding.destination_binding_id
+            || destination_root.fingerprint != destination.binding.destination_fingerprint
+        {
+            return Err(destination_unavailable());
+        }
+        let target_name = format!(
+            "kerniq-coding-pack-{}",
+            &manifest.manifest_digest["sha256:".len()..]
+        );
+        if !destination_root.target_absent(&target_name)? {
+            return Err("coding_pack_export_target_exists".into());
+        }
+        let staging_name = crate::coding_pack_export::random_staging_name()?;
 
         let plan_without_digest = serde_json::json!({
             "schemaVersion": crate::coding_pack_export::EXPORT_PLAN_SCHEMA,
@@ -622,6 +635,8 @@ impl CodingPackDatabase {
             "manifestDigest": manifest.manifest_digest,
             "destinationBindingId": destination.binding.destination_binding_id,
             "destinationFingerprint": destination.binding.destination_fingerprint,
+            "destinationObjectIdentityDigest": destination_root.object_identity_digest,
+            "stagingName": staging_name,
             "targetName": target_name,
             "manifestByteCount": manifest.canonical_bytes.len(),
             "sourceFileCount": sources.len(),
@@ -643,6 +658,8 @@ impl CodingPackDatabase {
             manifest_digest: manifest.manifest_digest.clone(),
             destination_binding_id: destination.binding.destination_binding_id.clone(),
             destination_fingerprint: destination.binding.destination_fingerprint.clone(),
+            destination_object_identity_digest: destination_root.object_identity_digest.clone(),
+            staging_name,
             target_name,
             manifest_byte_count: manifest.canonical_bytes.len(),
             source_file_count: sources.len(),
@@ -659,6 +676,8 @@ impl CodingPackDatabase {
             manifest_digest: plan.manifest_digest.clone(),
             destination_binding_id: plan.destination_binding_id.clone(),
             destination_fingerprint: plan.destination_fingerprint.clone(),
+            destination_object_identity_digest: plan.destination_object_identity_digest.clone(),
+            staging_name: plan.staging_name.clone(),
             target_name: plan.target_name.clone(),
             source_file_count: plan.source_file_count,
             source_total_bytes: plan.source_total_bytes,
@@ -697,7 +716,7 @@ impl CodingPackDatabase {
 
         Ok(PreparedNativeExport {
             plan,
-            destination_root: canonical_destination,
+            destination_root,
             manifest_bytes: manifest.canonical_bytes,
             sources,
         })
@@ -1029,6 +1048,8 @@ fn validate_started_plan(connection: &Connection, plan: &NativeExportPlan) -> Re
         || started.manifest_digest != plan.manifest_digest
         || started.destination_binding_id != plan.destination_binding_id
         || started.destination_fingerprint != plan.destination_fingerprint
+        || started.destination_object_identity_digest != plan.destination_object_identity_digest
+        || started.staging_name != plan.staging_name
         || started.target_name != plan.target_name
         || started.source_file_count != plan.source_file_count
         || started.source_total_bytes != plan.source_total_bytes
@@ -1919,8 +1940,7 @@ fn persistence_failed() -> String {
 mod tests {
     use super::*;
     use crate::coding_pack_export::{
-        safely_remove_owned_staging, write_atomic_bundle, write_atomic_bundle_with_fault,
-        ExportFault,
+        write_atomic_bundle, write_atomic_bundle_with_fault, ExportFault, NativeBundleWriteOutcome,
     };
 
     #[test]
@@ -2482,6 +2502,7 @@ mod tests {
         .is_err());
     }
 
+    #[cfg(target_os = "macos")]
     #[test]
     fn native_export_persists_start_before_writes_and_completes_exact_bundle() {
         let root = test_root();
@@ -2497,9 +2518,20 @@ mod tests {
         assert_eq!(started.operation.state, "export_started");
         assert_eq!(started.events.len(), 4);
         assert_eq!(started.events[3].event_type, "PACK_EXPORT_STARTED");
+        assert_eq!(
+            started.events[3].payload["destinationObjectIdentityDigest"],
+            prepared.plan.destination_object_identity_digest
+        );
+        assert_eq!(
+            started.events[3].payload["stagingName"],
+            prepared.plan.staging_name
+        );
         assert_eq!(fs::read_dir(&destination).unwrap().count(), 0);
 
-        write_atomic_bundle(&prepared).unwrap();
+        assert_eq!(
+            write_atomic_bundle(&prepared),
+            NativeBundleWriteOutcome::PromotedAndSynced
+        );
         let target = destination.join(&prepared.plan.target_name);
         assert_eq!(
             fs::read(target.join("manifest.json")).unwrap(),
@@ -2515,6 +2547,8 @@ mod tests {
             "operationId",
             "projectBindingId",
             "destinationBindingId",
+            "destinationObjectIdentityDigest",
+            "stagingName",
             "privateRootPath",
             "approvalEvidenceDigest",
         ] {
@@ -2741,6 +2775,7 @@ mod tests {
         fs::remove_dir_all(root).unwrap();
     }
 
+    #[cfg(target_os = "macos")]
     #[test]
     fn start_persistence_failure_performs_zero_destination_writes() {
         let root = test_root();
@@ -2762,6 +2797,7 @@ mod tests {
         fs::remove_dir_all(root).unwrap();
     }
 
+    #[cfg(target_os = "macos")]
     #[test]
     fn staged_failures_persist_interruption_and_clean_only_owned_staging() {
         for fault in [
@@ -2778,16 +2814,15 @@ mod tests {
             let prepared = database
                 .begin_native_export_for_test(&request, &project, "2099-07-30T00:00:03.000Z", false)
                 .unwrap();
-            let failure = write_atomic_bundle_with_fault(&prepared, fault).unwrap_err();
-            if let Some(staging) = &failure.staging_path {
-                safely_remove_owned_staging(&prepared.destination_root, staging).unwrap();
-            }
+            let NativeBundleWriteOutcome::PrePromotionFailure {
+                phase_code,
+                reason_code,
+            } = write_atomic_bundle_with_fault(&prepared, fault)
+            else {
+                panic!("fault must fail before promotion");
+            };
             database
-                .record_native_interruption_for_test(
-                    &prepared.plan,
-                    failure.phase_code,
-                    failure.reason_code,
-                )
+                .record_native_interruption_for_test(&prepared.plan, phase_code, reason_code)
                 .unwrap();
             let snapshot = database
                 .get_operation_snapshot_data(&request.operation_id)
@@ -2809,6 +2844,7 @@ mod tests {
         }
     }
 
+    #[cfg(target_os = "macos")]
     #[test]
     fn concurrent_target_is_never_overwritten() {
         let root = test_root();
@@ -2820,19 +2856,16 @@ mod tests {
         fs::create_dir(&target).unwrap();
         fs::write(target.join("untouched"), b"concurrent").unwrap();
 
-        let failure = write_atomic_bundle(&prepared).unwrap_err();
-        assert_eq!(failure.phase_code, "promotion");
-        safely_remove_owned_staging(
-            &prepared.destination_root,
-            failure.staging_path.as_ref().unwrap(),
-        )
-        .unwrap();
+        let NativeBundleWriteOutcome::PrePromotionFailure {
+            phase_code,
+            reason_code,
+        } = write_atomic_bundle(&prepared)
+        else {
+            panic!("concurrent target must prevent promotion");
+        };
+        assert_eq!(phase_code, "promotion");
         database
-            .record_native_interruption_for_test(
-                &prepared.plan,
-                failure.phase_code,
-                failure.reason_code,
-            )
+            .record_native_interruption_for_test(&prepared.plan, phase_code, reason_code)
             .unwrap();
         assert_eq!(fs::read(target.join("untouched")).unwrap(), b"concurrent");
         assert_eq!(
@@ -2848,6 +2881,7 @@ mod tests {
         fs::remove_dir_all(root).unwrap();
     }
 
+    #[cfg(target_os = "macos")]
     #[test]
     fn completion_persistence_failure_keeps_promoted_target_and_started_state() {
         let root = test_root();
@@ -2855,7 +2889,10 @@ mod tests {
         let prepared = database
             .begin_native_export_for_test(&request, &project, "2099-07-30T00:00:03.000Z", false)
             .unwrap();
-        write_atomic_bundle(&prepared).unwrap();
+        assert_eq!(
+            write_atomic_bundle(&prepared),
+            NativeBundleWriteOutcome::PromotedAndSynced
+        );
         let target = destination.join(&prepared.plan.target_name);
         assert!(target.is_dir());
 
@@ -2875,6 +2912,126 @@ mod tests {
         assert!(database
             .begin_native_export_for_test(&request, &project, "2099-07-30T00:00:03.001Z", false,)
             .is_err());
+        drop(database);
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn destination_path_replacement_after_start_never_redirects_writes() {
+        let root = test_root();
+        let (database, project, destination, request, _) = export_fixture(&root);
+        let prepared = database
+            .begin_native_export_for_test(&request, &project, "2099-07-30T00:00:03.000Z", false)
+            .unwrap();
+        let moved_destination = root.join("destination-moved");
+        fs::rename(&destination, &moved_destination).unwrap();
+        fs::create_dir(&destination).unwrap();
+
+        assert_eq!(
+            write_atomic_bundle(&prepared),
+            NativeBundleWriteOutcome::PromotedAndSynced
+        );
+        assert!(moved_destination.join(&prepared.plan.target_name).is_dir());
+        assert_eq!(fs::read_dir(&destination).unwrap().count(), 0);
+
+        drop(database);
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn destination_parent_replacement_after_start_never_redirects_writes() {
+        let root = test_root();
+        let (database, project, destination, request, _) = export_fixture(&root);
+        let prepared = database
+            .begin_native_export_for_test(&request, &project, "2099-07-30T00:00:03.000Z", false)
+            .unwrap();
+        let moved_root = root.with_extension("moved");
+        let _ = fs::remove_dir_all(&moved_root);
+        fs::rename(&root, &moved_root).unwrap();
+        fs::create_dir(&root).unwrap();
+        let destination_name = destination.file_name().unwrap();
+        fs::create_dir(root.join(destination_name)).unwrap();
+
+        assert_eq!(
+            write_atomic_bundle(&prepared),
+            NativeBundleWriteOutcome::PromotedAndSynced
+        );
+        assert!(moved_root
+            .join(destination_name)
+            .join(&prepared.plan.target_name)
+            .is_dir());
+        assert_eq!(
+            fs::read_dir(root.join(destination_name)).unwrap().count(),
+            0
+        );
+
+        drop(database);
+        fs::remove_dir_all(root).unwrap();
+        fs::remove_dir_all(moved_root).unwrap();
+    }
+
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn staging_entry_replacement_never_redirects_file_writes_or_cleanup() {
+        let root = test_root();
+        let (database, project, destination, request, _) = export_fixture(&root);
+        let prepared = database
+            .begin_native_export_for_test(&request, &project, "2099-07-30T00:00:03.000Z", false)
+            .unwrap();
+
+        assert_eq!(
+            write_atomic_bundle_with_fault(&prepared, ExportFault::StagingRebind),
+            NativeBundleWriteOutcome::PrePromotionFailure {
+                phase_code: "cleanup",
+                reason_code: "cleanup_failed",
+            }
+        );
+        let replacement = destination.join(format!("{}-replacement", prepared.plan.staging_name));
+        assert_eq!(fs::read_dir(&replacement).unwrap().count(), 0);
+        assert!(!destination.join(&prepared.plan.target_name).exists());
+
+        database
+            .record_native_interruption_for_test(&prepared.plan, "cleanup", "cleanup_failed")
+            .unwrap();
+        let snapshot = database
+            .get_operation_snapshot_data(&request.operation_id)
+            .unwrap()
+            .unwrap();
+        assert_eq!(snapshot.operation.state, "export_interrupted");
+
+        drop(database);
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn post_promotion_sync_failure_retains_target_and_started_uncertainty() {
+        let root = test_root();
+        let (database, project, destination, request, _) = export_fixture(&root);
+        let prepared = database
+            .begin_native_export_for_test(&request, &project, "2099-07-30T00:00:03.000Z", false)
+            .unwrap();
+
+        assert_eq!(
+            write_atomic_bundle_with_fault(&prepared, ExportFault::DestinationSync),
+            NativeBundleWriteOutcome::PromotedButDurabilityUncertain {
+                reason_code: "post_promotion_durability_uncertain",
+            }
+        );
+        assert!(destination.join(&prepared.plan.target_name).is_dir());
+        let snapshot = database
+            .get_operation_snapshot_data(&request.operation_id)
+            .unwrap()
+            .unwrap();
+        assert_eq!(snapshot.operation.state, "export_started");
+        assert_eq!(snapshot.events.len(), 4);
+        assert_ne!(
+            "coding_pack_export_post_promotion_durability_uncertain",
+            "coding_pack_export_completion_persistence_failed"
+        );
+
         drop(database);
         fs::remove_dir_all(root).unwrap();
     }

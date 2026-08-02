@@ -162,15 +162,20 @@ write, native code reconstructs durable allow evidence, requires live proposal
 and approval, revalidates destination identity, parses and rehashes the
 manifest, and reads every included source with relative no-follow semantics.
 It then persists `PACK_EXPORT_STARTED`, stages under the destination parent,
-writes exact manifest/source bytes with create-new semantics, and promotes the
-complete directory with a platform no-overwrite primitive. There is no copy/
-delete or cross-filesystem fallback.
+writes exact manifest/source bytes with create-new semantics relative to held
+directory handles, and promotes the complete directory on macOS with
+handle-relative rename-exclusive semantics. The staging name and opened
+destination object-identity digest are bound before START. Windows physical
+export fails closed before START because no reviewed handle-relative Windows
+promotion primitive is included; no path-based, copy/delete, or
+cross-filesystem fallback exists.
 
 Completion is persisted only after promotion. Failure before promotion cleans
-only an identifiable operation-owned staging directory and records
-`PACK_EXPORT_INTERRUPTED`. If promotion succeeds but completion persistence
+only an identifiable operation-owned staging directory through held handles
+and records `PACK_EXPORT_INTERRUPTED`. macOS destination-directory sync is
+mandatory after promotion. If that sync or subsequent completion persistence
 fails, the target is retained, the operation remains `export_started`, and the
-UI reports uncertain completion with no automatic retry. Restart never
+UI reports the corresponding uncertainty with no automatic retry. Restart never
 exports, retries, promotes, completes, or makes historical allow actionable.
 
 ```text
