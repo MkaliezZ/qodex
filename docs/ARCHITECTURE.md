@@ -376,6 +376,38 @@ Details:
 - [`kerniq_v0_7_coding_pack_result_review_and_freeze.md`](development/kerniq_v0_7_coding_pack_result_review_and_freeze.md)
 - [`ADR-022`](../qodex-config/adr/ADR-022-Coding-Pack-Product-Integration.md)
 
+### Experimental Agent Engine Boundary v0.8
+
+`@qodex/codewhale-engine-adapter` defines the smallest KerniQ-owned
+`AgentEngine` protocol and one isolated CodeWhale mapping. The adapter is not
+imported by Desktop or a production runtime. It pins the exact CodeWhale source
+and proof executable, uses an external managed home and authenticated loopback
+HTTP/SSE, clears inherited environment authority, and refuses to launch when a
+tool-surface receipt contains a prohibited callable tool.
+
+The v0.8.0 spike classified the exact upstream commit as
+`THIN_FORK_REQUIRED`. The Runtime API hard-codes external turns to
+`allowed_tools: None`; the real process exposed five initial tools and 21 after
+its own deferred `tool_search`. Exact schema and source review proved the
+Plan-mode `File` and canonical `Git` tools read-only; six tools had proven
+side effects and twelve remained unclassified and fail-closed, leaving 18
+prohibited callable tools. The process also created a workspace-local subagent
+coordination lock despite the managed profile disabling subagents. Plan mode
+and approvals are not structural tool removal.
+
+CodeWhale remains a candidate intelligence engine only. KerniQ/DHMS remains
+the sole side-effect authority, and the existing Project Command and AgentFuse
+boundaries are unchanged. No CodeWhale product side effect, Patch runtime,
+multi-engine runtime, or default engine selection is implemented. A reviewed
+thin fork must enforce one mandatory allowlist across the Runtime request,
+model catalog, deferred search, canonical dispatch, executable registry, and
+workspace-state initialization before any product integration can proceed.
+
+Details:
+
+- [`kerniq_v0_8_0_codewhale_governed_engine_spike.md`](development/kerniq_v0_8_0_codewhale_governed_engine_spike.md)
+- [`ADR-023`](../qodex-config/adr/ADR-023-CodeWhale-Governed-Engine-Boundary.md)
+
 ### 5. Diff Engine (`packages/diff-engine`)
 
 **Purpose:** Safe code modifications through patch proposals.

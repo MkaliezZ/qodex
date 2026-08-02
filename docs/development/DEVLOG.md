@@ -1229,6 +1229,58 @@ ARBITRARY_SHELL_ADDED=false
 WORKFLOW_CHANGED=false
 ```
 
+### KerniQ v0.8.0 CodeWhale Governed Engine Boundary Spike
+
+**Date:** 2026-08-02  |  **Status:** `THIN_FORK_REQUIRED`
+
+PR #24 was merged at exact reviewed head
+`c81f0cfc66c2698bfa5e6cff279c9543377240cc` through merge commit
+`2aa335dd21453ecf5d3ad44c2279b2c9362bef9f`. All five post-merge CI jobs passed
+before the v0.8 branch was created, freezing the v0.7 Coding Pack line.
+
+The bounded CodeWhale spike pinned source commit
+`4f2c97b0d75c039a9b6069ebcf210cc499583376`, generated and verified an external
+source archive, built and verified the exact proof executable, and ran a real
+authenticated loopback HTTP/SSE process against an isolated fixture and local
+deterministic provider.
+
+The initial model request exposed five tools. CodeWhale's real `tool_search`
+expanded the model-visible surface to 21 tools; only the KerniQ
+`propose_project_command` dynamic intent and two reviewed native read-only
+tools met the accepted boundary. The captured Plan-mode `File` schema exposed
+only `read`, `list`, `search_name`, and `search_content`; canonical `Git`
+exposed only `status`, `diff`, `log`, `show`, and `blame`. Six other tools had
+proven side effects and twelve remained unclassified and fail-closed, leaving
+18 prohibited callable tools. Runtime turns hard-code `allowed_tools: None`,
+so Plan and approval settings cannot provide structural removal. The process
+also created `.codewhale/state/subagents.v1.lock` in the fixture while
+subagents were disabled.
+
+The new adapter package is isolated from Desktop and production runtimes. Its
+supervisor fails before launch when supplied the observed unsafe receipt. The
+spike did not call Project Command or AgentFuse, did not persist START, and did
+not connect a CodeWhale product side effect. ADR-023 records the minimal
+governed-dispatch thin fork required before integration may continue.
+
+```text
+V0_7_CODING_PACK_FROZEN=true
+CODEWHALE_SOURCE_COMMIT=4f2c97b0d75c039a9b6069ebcf210cc499583376
+CODEWHALE_TRANSPORT=authenticated_loopback_http_sse
+MODEL_VISIBLE_TOOL_COUNT=21
+PROVEN_READ_ONLY_TOOL_COUNT=2
+PROVEN_SIDE_EFFECT_TOOL_COUNT=6
+UNCLASSIFIED_TOOL_COUNT=12
+PROHIBITED_TOOL_CALLABLE_COUNT=18
+CODEWHALE_DIRECT_FIXTURE_WRITES=1
+PROJECT_COMMAND_EXECUTION_COUNT=0
+AGENTFUSE_INVOCATION_COUNT=0
+CODEWHALE_DEFAULT_PRODUCT_ENGINE=false
+CODEWHALE_INTEGRATION_EXPERIMENTAL=true
+PATCH_RUNTIME_IMPLEMENTED=false
+MULTI_ENGINE_IMPLEMENTED=false
+OUTCOME=THIN_FORK_REQUIRED
+```
+
 ### KerniQ v0.7.4.4 Controlled Real Native Export Proof And Freeze
 
 **Date:** 2026-08-02  |  **Status:** Proof passed; Draft freeze review
