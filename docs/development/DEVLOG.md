@@ -1229,6 +1229,44 @@ ARBITRARY_SHELL_ADDED=false
 WORKFLOW_CHANGED=false
 ```
 
+### KerniQ v0.7.4.4 Controlled Real Native Export Proof And Freeze
+
+**Date:** 2026-08-02  |  **Status:** Proof passed; Draft freeze review
+
+PR #23 merged through exact-head merge commit
+`4b0379e051a15cf49a6a9134f5b73d9f8171231b`. A controlled macOS proof then
+used deterministic temporary project bytes, a real `kerniq-coding-pack.sqlite3`
+lifecycle, the verified managed Python profile, pinned AgentFuse source commit
+`ec4b5842339dccfba0db62df7541920759203bc9`, and the production native writer.
+
+The positive flow persisted `PACK_PROPOSED`, `PACK_CONFIRMED`, `PACK_DECIDED`,
+`PACK_EXPORT_STARTED`, and `PACK_EXPORT_COMPLETED`, then verified exact
+manifest/source bytes and no staging residue. Existing-target, source-drift,
+destination-unavailable, and destination-rebind cases produced no overwrite or
+redirect. Controlled completion-persistence and post-promotion-sync faults
+retained the target, left `export_started`, emitted no false terminal event,
+and did not retry. The committed evidence is privacy-scanned and contains no
+absolute local path or private authority.
+
+The v0.7 Coding Pack line is frozen. Browser and Windows physical export,
+automatic discovery, content-secret scanning, Action Runtime dispatch, Session
+schema changes, and automatic uncertain-export reconciliation remain absent.
+The v0.6.1 Project Command freeze is unchanged.
+
+```text
+V0_7_4_3_MERGE_COMMIT=4b0379e051a15cf49a6a9134f5b73d9f8171231b
+V0_7_CODING_PACK_IMPLEMENTATION_COMPLETE=true
+V0_7_CONTROLLED_REAL_NATIVE_PROOF=true
+V0_7_CODING_PACK_FROZEN=true
+V0_7_NEW_FEATURE_DEVELOPMENT_PAUSED=true
+BROWSER_PHYSICAL_EXPORT=false
+WINDOWS_PHYSICAL_EXPORT=false
+ACTION_RUNTIME_CONNECTED=false
+SESSION_SCHEMA_CHANGED=false
+PROJECT_COMMAND_FREEZE_CHANGED=false
+WORKFLOW_CHANGED=false
+```
+
 ### KerniQ v0.7.4.3 Native Atomic Coding Pack Export
 
 **Date:** 2026-08-02  |  **Status:** Implemented for Draft PR review

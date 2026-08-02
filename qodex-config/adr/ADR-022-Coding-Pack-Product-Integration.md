@@ -529,3 +529,31 @@ AGENTFUSE_CONNECTED=false
 SESSION_SCHEMA_CHANGED=false
 PROJECT_COMMAND_FREEZE_CHANGED=false
 ```
+
+## v0.7.4.4 Proof And Freeze Record
+
+The v0.7.4.3 native boundary merged through
+`4b0379e051a15cf49a6a9134f5b73d9f8171231b`. The controlled v0.7.4.4 proof
+exercised deterministic fixture selection, real SQLite lifecycle evidence, the
+pinned AgentFuse bridge, retained macOS destination authority, native staging,
+rename-exclusive promotion, destination sync, and durable completion. It also
+covered bounded no-overwrite, source-drift, destination availability/rebinding,
+and uncertainty cases without broadening this ADR's product boundary.
+
+The v0.7 Coding Pack line is frozen. Post-freeze changes are limited to
+security defects, proof defects, installation defects, compatibility defects,
+and real user feedback. Browser and Windows physical export, automatic
+discovery, content-secret scanning, Action Runtime dispatch, Session schema
+changes, automatic uncertain-export reconciliation, Patch migration, arbitrary
+shell, workflow changes, and v0.8 implementation remain outside this record.
+
+```text
+V0_7_CODING_PACK_IMPLEMENTATION_COMPLETE=true
+V0_7_CONTROLLED_REAL_NATIVE_PROOF=true
+V0_7_CODING_PACK_FROZEN=true
+V0_7_NEW_FEATURE_DEVELOPMENT_PAUSED=true
+PROJECT_COMMAND_POLICY_CHANGED=false
+PROJECT_COMMAND_POLICY_DIGEST_CHANGED=false
+PROJECT_COMMAND_NATIVE_PATH_CHANGED=false
+PROJECT_COMMAND_FREEZE_CHANGED=false
+```

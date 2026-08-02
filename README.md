@@ -317,6 +317,14 @@ Runtime export dispatch are not implemented. There is no cross-filesystem copy
 fallback.
 The v0.6.1 Project Command freeze is unchanged.
 
+v0.7.4.3 merged through `4b0379e051a15cf49a6a9134f5b73d9f8171231b`.
+The [controlled real native proof](docs/development/kerniq_v0_7_4_4_native_export_proof.md)
+passed on macOS with real SQLite, pinned AgentFuse, and real native filesystem
+promotion. The
+[v0.7 result review](docs/development/kerniq_v0_7_coding_pack_result_review_and_freeze.md)
+freezes this bounded Coding Pack line. Post-freeze changes are limited to
+security, proof, installation, compatibility, and real-user-feedback defects.
+
 ---
 
 ## Roadmap
@@ -330,8 +338,9 @@ v0.6.1 Project Command scope is frozen. Coding Pack v0.7.3 is merged through
 `5d5152ca25c0fc2772cec730dd6229dd44aa88cb`; v0.7.4.1 merged through
 `c3f7c9cef73cb9660f9b4d39c325dc8c4e3f5170`; v0.7.4.2 merged through
 `6d592a199d5d4ee65663f107f64dfbb91cd1d8e5`; and v0.7.4.3 Tauri-only native
-atomic export is implemented for Draft PR review. Patch remains outside this
-scope.
+atomic export merged through `4b0379e051a15cf49a6a9134f5b73d9f8171231b`.
+The controlled v0.7.4.4 real proof passed and the v0.7 Coding Pack boundary is
+frozen. Patch remains outside this scope.
 Installer work is planned for v0.8, and the Stage 2 namespace-wide rename
 remains explicitly deferred.
 
