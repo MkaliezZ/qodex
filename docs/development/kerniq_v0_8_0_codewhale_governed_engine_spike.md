@@ -138,20 +138,30 @@ schema digest are recorded in
 
 ```text
 CODEWHALE_MANAGED_PROFILE_DIGEST=sha256:513aead3b2c82d693835e6dff8d82c9027bb0de3a50f7ea2e01f2ce120e220cc
-CODEWHALE_TOOL_SURFACE_DIGEST=sha256:a2102f95eba7383a5df9a160cce4806ae43bf032fd0f252cef72bf0caf1e0e48
+CODEWHALE_TOOL_SURFACE_DIGEST=sha256:e387c2b0aa78766ed74988b1ed8c19b00a7c161bd7d6c15e6a2b72ffe9d64c4e
 DYNAMIC_TOOL_SCHEMA_DIGEST=sha256:e7108a8f3767dd0e2f75d82a465a0e7a1e712ccdd6f11a89f1955aebc499f72a
 MODEL_VISIBLE_TOOL_COUNT=21
-READ_ONLY_TOOL_COUNT=0
-SIDE_EFFECT_TOOL_COUNT=20
-UNKNOWN_TOOL_COUNT=13
-PROHIBITED_TOOL_CALLABLE_COUNT=20
+READ_ONLY_TOOL_COUNT=2
+KERNIQ_INTENT_ONLY_TOOL_COUNT=1
+PROVEN_SIDE_EFFECT_TOOL_COUNT=6
+UNCLASSIFIED_TOOL_COUNT=12
+PROHIBITED_TOOL_CALLABLE_COUNT=18
 ```
 
-The zero read-only count is deliberately conservative. A native tool is not
-declared read-only merely from its name or Plan-mode description. Unknown,
-unclassified, plugin, and MCP tools are side-effect-capable until an exact
-implementation and dispatch boundary proves otherwise. The one excluded tool
-is the KerniQ dynamic intent tool, which performs no physical side effect.
+The classifier now distinguishes four states: `proven_read_only`,
+`proven_side_effect`, `unclassified_fail_closed`, and `kerniq_intent_only`.
+Unknown, incompletely reviewed, plugin, and MCP tools remain prohibited without
+being mislabeled as proven physical side effects.
+
+The captured Plan-mode `File` schema's action enum is exactly `read`, `list`,
+`search_name`, and `search_content`. Pinned source constructs
+`FileTool::read_only("File")`, declares only read-only capabilities for that
+instance, and rejects `write`, `edit`, and `patch` before mutation handlers.
+Canonical `Git` advertises and dispatches only `status`, `diff`, `log`, `show`,
+and `blame`; its implementation declares every action read-only. These two
+tools are therefore proven read-only. Six other tools have reviewed state or
+control side effects, twelve remain unclassified and fail-closed, and the
+KerniQ dynamic intent performs no physical side effect.
 
 ## Fixture Write Finding
 

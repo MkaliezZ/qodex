@@ -43,10 +43,18 @@ or a full dynamic-tool/event stdio entrypoint.
 The real pinned process was run in Plan mode with shell, trust, auto approval,
 MCP, project config, and subagents disabled. Its first provider request exposed
 `File`, `Git`, `tasks`, `work_update`, and `tool_search`. A deterministic call
-to the real `tool_search` expanded the request to 21 callable tools. Only the
-registered `propose_project_command` dynamic tool met the intent-only KerniQ
-contract. The other 20 tools were side-effect-capable or unclassified under
-the required fail-closed policy.
+to the real `tool_search` expanded the request to 21 callable tools. Exact
+schema and pinned-source review proved the Plan-mode `File` tool and canonical
+`Git` tool read-only. The registered `propose_project_command` dynamic tool met
+the intent-only KerniQ contract. Six tools had proven side effects and twelve
+remained unclassified and fail-closed, leaving 18 prohibited callable tools.
+
+Canonical `Git` is not a mutation tool at this pinned commit: its only actions
+are `status`, `diff`, `log`, `show`, and `blame`, its capabilities are declared
+read-only, and its dispatcher contains no mutation action. Plan-mode `File`
+advertises only `read`, `list`, `search_name`, and `search_content`; its
+registered read-only instance rejects `write`, `edit`, and `patch` before those
+handlers run.
 
 The runtime API does not accept `allowed_tools`. `StartTurnRequest` omits that
 field and `runtime_threads.rs` constructs `Op::SendMessage` with

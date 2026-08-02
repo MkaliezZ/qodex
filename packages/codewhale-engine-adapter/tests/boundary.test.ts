@@ -126,6 +126,10 @@ describe("model-visible tool surface", () => {
     expect(assessment).toMatchObject({
       outcome: "ADAPTER_ONLY_PASS",
       modelVisibleToolCount: 1,
+      provenReadOnlyToolCount: 0,
+      kerniqIntentOnlyToolCount: 1,
+      provenSideEffectToolCount: 0,
+      unclassifiedToolCount: 0,
       readOnlyToolCount: 0,
       sideEffectToolCount: 0,
       unknownToolCount: 0,
@@ -145,6 +149,54 @@ describe("model-visible tool surface", () => {
     },
   );
 
+  it("proves the exact pinned Plan File and canonical Git schemas read-only", async () => {
+    const assessment = await assessToolSurface([
+      {
+        toolName: "File",
+        source: "codewhale_native",
+        observedSchema: actionSchema(["read", "list", "search_name", "search_content"]),
+      },
+      {
+        toolName: "Git",
+        source: "codewhale_native",
+        observedSchema: actionSchema(["status", "diff", "log", "show", "blame"]),
+      },
+      { toolName: "kerniq::propose_project_command", source: "kerniq_dynamic" },
+    ]);
+
+    expect(assessment).toMatchObject({
+      outcome: "ADAPTER_ONLY_PASS",
+      provenReadOnlyToolCount: 2,
+      kerniqIntentOnlyToolCount: 1,
+      provenSideEffectToolCount: 0,
+      unclassifiedToolCount: 0,
+      prohibitedToolCallableCount: 0,
+    });
+    expect(assessment.tools.find((tool) => tool.toolName === "Git")).toMatchObject({
+      classification: "proven_read_only",
+      readOnly: true,
+      sideEffectCapable: false,
+      classificationReason: "Pinned Git tool exposes only reviewed read-only inspection actions.",
+    });
+  });
+
+  it.each(["write", "edit", "patch", "delete", "rename", "move", "copy"])(
+    "fails closed when the captured File schema exposes %s",
+    async (action) => {
+      const assessment = await assessToolSurface([{
+        toolName: "File",
+        source: "codewhale_native",
+        observedSchema: actionSchema(["read", action]),
+      }]);
+      expect(assessment).toMatchObject({
+        outcome: "THIN_FORK_REQUIRED",
+        provenReadOnlyToolCount: 0,
+        unclassifiedToolCount: 1,
+        prohibitedToolCallableCount: 1,
+      });
+    },
+  );
+
   it("treats MCP, plugin, and unknown tools as side-effect capable", async () => {
     const assessment = await assessToolSurface([
       { toolName: "mcp_read_resource", source: "codewhale_mcp" },
@@ -152,8 +204,10 @@ describe("model-visible tool surface", () => {
       { toolName: "mystery", source: "codewhale_native" },
     ]);
     expect(assessment.outcome).toBe("THIN_FORK_REQUIRED");
+    expect(assessment.provenSideEffectToolCount).toBe(0);
+    expect(assessment.unclassifiedToolCount).toBe(3);
     expect(assessment.sideEffectToolCount).toBe(3);
-    expect(assessment.unknownToolCount).toBe(1);
+    expect(assessment.unknownToolCount).toBe(3);
     expect(assessment.prohibitedToolCallableCount).toBe(3);
   });
 
@@ -396,6 +450,16 @@ function request(overrides: Partial<DynamicToolRequest> = {}): DynamicToolReques
       catalogDigest: `sha256:${"a".repeat(64)}`,
     },
     ...overrides,
+  };
+}
+
+function actionSchema(actions: readonly string[]): Readonly<Record<string, unknown>> {
+  return {
+    type: "object",
+    properties: {
+      action: { type: "string", enum: actions },
+    },
+    required: ["action"],
   };
 }
 

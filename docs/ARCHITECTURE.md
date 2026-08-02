@@ -388,10 +388,12 @@ tool-surface receipt contains a prohibited callable tool.
 The v0.8.0 spike classified the exact upstream commit as
 `THIN_FORK_REQUIRED`. The Runtime API hard-codes external turns to
 `allowed_tools: None`; the real process exposed five initial tools and 21 after
-its own deferred `tool_search`, of which 20 were side-effect-capable or
-unclassified. It also created a workspace-local subagent coordination lock
-despite the managed profile disabling subagents. Plan mode and approvals are
-not structural tool removal.
+its own deferred `tool_search`. Exact schema and source review proved the
+Plan-mode `File` and canonical `Git` tools read-only; six tools had proven
+side effects and twelve remained unclassified and fail-closed, leaving 18
+prohibited callable tools. The process also created a workspace-local subagent
+coordination lock despite the managed profile disabling subagents. Plan mode
+and approvals are not structural tool removal.
 
 CodeWhale remains a candidate intelligence engine only. KerniQ/DHMS remains
 the sole side-effect authority, and the existing Project Command and AgentFuse

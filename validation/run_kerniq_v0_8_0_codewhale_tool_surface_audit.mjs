@@ -138,6 +138,7 @@ try {
   const assessment = await assessToolSurface(expandedTools.map((tool) => ({
     toolName: tool.name,
     source: isKerniQProposalName(tool.name) ? "kerniq_dynamic" : "codewhale_native",
+    observedSchema: tool.schema,
     enabled: true,
     callable: true,
   })));
@@ -171,14 +172,16 @@ try {
     tool_search_arguments: { query: ".*", match: "regex", max_results: 100 },
     tool_surface_digest: assessment.digest,
     model_visible_tool_count: assessment.modelVisibleToolCount,
-    read_only_tool_count: assessment.readOnlyToolCount,
-    side_effect_tool_count: assessment.sideEffectToolCount,
-    unknown_tool_count: assessment.unknownToolCount,
+    read_only_tool_count: assessment.provenReadOnlyToolCount,
+    kerniq_intent_only_tool_count: assessment.kerniqIntentOnlyToolCount,
+    proven_side_effect_tool_count: assessment.provenSideEffectToolCount,
+    unclassified_tool_count: assessment.unclassifiedToolCount,
     prohibited_tool_callable_count: assessment.prohibitedToolCallableCount,
     tools: assessment.tools.map((tool) => ({
       tool_name: tool.toolName,
       source: tool.source,
       native_or_dynamic: tool.nativeOrDynamic,
+      classification: tool.classification,
       read_only: tool.readOnly,
       side_effect_capable: tool.sideEffectCapable,
       classification_reason: tool.classificationReason,
@@ -341,7 +344,7 @@ function extractTools(request) {
     const name = tool?.function?.name ?? tool?.name ?? tool?.type;
     if (typeof name !== "string" || name.length === 0) throw new Error("Model request included a nameless tool.");
     const schema = tool?.function?.parameters ?? tool?.input_schema ?? tool;
-    return { name, schemaDigest: sha256(Buffer.from(JSON.stringify(schema))) };
+    return { name, schema, schemaDigest: sha256(Buffer.from(JSON.stringify(schema))) };
   });
 }
 

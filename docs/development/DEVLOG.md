@@ -1246,11 +1246,15 @@ deterministic provider.
 
 The initial model request exposed five tools. CodeWhale's real `tool_search`
 expanded the model-visible surface to 21 tools; only the KerniQ
-`propose_project_command` dynamic intent met the accepted boundary. Twenty
-tools remained side-effect-capable or unclassified. Runtime turns hard-code
-`allowed_tools: None`, so Plan and approval settings cannot provide structural
-removal. The process also created `.codewhale/state/subagents.v1.lock` in the
-fixture while subagents were disabled.
+`propose_project_command` dynamic intent and two reviewed native read-only
+tools met the accepted boundary. The captured Plan-mode `File` schema exposed
+only `read`, `list`, `search_name`, and `search_content`; canonical `Git`
+exposed only `status`, `diff`, `log`, `show`, and `blame`. Six other tools had
+proven side effects and twelve remained unclassified and fail-closed, leaving
+18 prohibited callable tools. Runtime turns hard-code `allowed_tools: None`,
+so Plan and approval settings cannot provide structural removal. The process
+also created `.codewhale/state/subagents.v1.lock` in the fixture while
+subagents were disabled.
 
 The new adapter package is isolated from Desktop and production runtimes. Its
 supervisor fails before launch when supplied the observed unsafe receipt. The
@@ -1263,7 +1267,10 @@ V0_7_CODING_PACK_FROZEN=true
 CODEWHALE_SOURCE_COMMIT=4f2c97b0d75c039a9b6069ebcf210cc499583376
 CODEWHALE_TRANSPORT=authenticated_loopback_http_sse
 MODEL_VISIBLE_TOOL_COUNT=21
-PROHIBITED_TOOL_CALLABLE_COUNT=20
+PROVEN_READ_ONLY_TOOL_COUNT=2
+PROVEN_SIDE_EFFECT_TOOL_COUNT=6
+UNCLASSIFIED_TOOL_COUNT=12
+PROHIBITED_TOOL_CALLABLE_COUNT=18
 CODEWHALE_DIRECT_FIXTURE_WRITES=1
 PROJECT_COMMAND_EXECUTION_COUNT=0
 AGENTFUSE_INVOCATION_COUNT=0
