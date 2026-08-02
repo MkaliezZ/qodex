@@ -8,6 +8,10 @@ use std::sync::Mutex;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use tauri::{AppHandle, Manager};
 
+#[cfg(test)]
+#[path = "coding_pack_native_proof.rs"]
+mod controlled_native_proof;
+
 pub const CODING_PACK_DATABASE_SCHEMA_VERSION: i64 = 3;
 pub const CODING_PACK_STORE_SCHEMA_VERSION: &str = "kerniq.coding-pack.store.v3";
 const DATABASE_FILE_NAME: &str = "kerniq-coding-pack.sqlite3";
