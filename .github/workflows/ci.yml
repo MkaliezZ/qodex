@@ -53,16 +53,52 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Setup Node.js
+      - name: Setup pnpm for KerniQ
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9.0.0
+          run_install: false
+
+      - name: Setup Node.js for pinned DSH
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22.20.0
+          cache: pnpm
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
 
       - name: Check isolated DSH spike sources
         run: npm --prefix packages/dsh-engine-adapter run build
 
       - name: Run fail-closed DSH admission tests
         run: npm --prefix packages/dsh-engine-adapter test
+
+      - name: Verify spike stays outside the product workspace
+        run: |
+          grep -F '!packages/dsh-engine-adapter' pnpm-workspace.yaml
+          if grep -R --line-number --fixed-strings '@qodex/dsh-engine-adapter-spike' apps packages/*/package.json 2>/dev/null | grep -v 'packages/dsh-engine-adapter/package.json'; then
+            echo 'DSH spike unexpectedly entered the product dependency graph' >&2
+            exit 1
+          fi
+
+      - name: Install KerniQ dependencies and build governed runtime foundations
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm --filter @qodex/action-runtime build
+          pnpm --filter @qodex/agentfuse-adapter build
+
+      - name: Fetch canonical AgentFuse 3.6 source
+        run: |
+          curl --fail --location --proto '=https' --tlsv1.2 \
+            --output /tmp/dhms-engine.tar.gz \
+            https://codeload.github.com/MkaliezZ/dhms-engine/tar.gz/ec4b5842339dccfba0db62df7541920759203bc9
+          echo "1659d81d39aab382d550c33c3b6a42b24254f584055eb15d8168f17200e323c3  /tmp/dhms-engine.tar.gz" \
+            | sha256sum --check
+          mkdir .ci-agentfuse-dsh
+          tar -xzf /tmp/dhms-engine.tar.gz --strip-components=1 -C .ci-agentfuse-dsh
 
       - name: Fetch and verify pinned DSH source contract
         run: |
@@ -73,13 +109,66 @@ jobs:
           tar -xzf /tmp/deepseek-harness.tar.gz --strip-components=1 -C /tmp/deepseek-harness-source
           node packages/dsh-engine-adapter/scripts/verify-source-contract.mjs /tmp/deepseek-harness-source
 
-      - name: Verify spike stays outside the product workspace
+      - name: Install pinned DSH developer-preview workspace
+        working-directory: /tmp/deepseek-harness-source
+        run: npx --yes pnpm@11.7.0 install --frozen-lockfile
+
+      - name: Run real pinned DSH ToolRuntime governed proof
+        env:
+          KERNIQ_DSH_RUNTIME_EVIDENCE: /tmp/kerniq-dsh-runtime-evidence.json
+          KERNIQ_DSH_READ_ONLY_FIXTURE: /tmp/kerniq-dsh-read-only-fixture
         run: |
-          grep -F '!packages/dsh-engine-adapter' pnpm-workspace.yaml
-          if grep -R --line-number --fixed-strings '@qodex/dsh-engine-adapter-spike' apps packages/*/package.json 2>/dev/null | grep -v 'packages/dsh-engine-adapter/package.json'; then
-            echo 'DSH spike unexpectedly entered the product dependency graph' >&2
-            exit 1
-          fi
+          cp packages/dsh-engine-adapter/runtime/dsh-governed-runtime.spec.ts \
+            /tmp/deepseek-harness-source/packages/core/tools/tests/kerniq-governed-runtime.spec.ts
+          mkdir -p "$KERNIQ_DSH_READ_ONLY_FIXTURE"
+          cd /tmp/deepseek-harness-source
+          npx --yes pnpm@11.7.0 exec vitest run packages/core/tools/tests/kerniq-governed-runtime.spec.ts
+
+      - name: Prove isolated managed DSH profile has no effective user override
+        env:
+          DSH_HOME: /tmp/kerniq-dsh-home
+        run: |
+          cd /tmp/deepseek-harness-source
+          npx --yes pnpm@11.7.0 run build:lib:host
+          npx --yes pnpm@11.7.0 dsh --profile headless --dump-default-config > /tmp/kerniq-dsh-default.yml
+          npx --yes pnpm@11.7.0 dsh --profile headless --dump-config > /tmp/kerniq-dsh-effective.yml
+          cd "$GITHUB_WORKSPACE"
+          node packages/dsh-engine-adapter/scripts/verify-managed-profile.mjs \
+            "$DSH_HOME" \
+            /tmp/kerniq-dsh-default.yml \
+            /tmp/kerniq-dsh-effective.yml \
+            /tmp/kerniq-dsh-profile-evidence.json
+
+      - name: Run real KerniQ ActionRuntime and AgentFuse round trip
+        env:
+          KERNIQ_DSH_RUNTIME_EVIDENCE: /tmp/kerniq-dsh-runtime-evidence.json
+          KERNIQ_DSH_ROUNDTRIP_EVIDENCE: /tmp/kerniq-dsh-roundtrip-evidence.json
+          KERNIQ_DSH_LIFECYCLE_EVIDENCE: /tmp/kerniq-dsh-lifecycle.ndjson
+          KERNIQ_AGENTFUSE_SOURCE: ${{ github.workspace }}/.ci-agentfuse-dsh
+          KERNIQ_PYTHON: python
+        run: node packages/dsh-engine-adapter/scripts/run-kerniq-roundtrip.mjs
+
+      - name: Finalize strict eight-gate admission
+        run: |
+          node packages/dsh-engine-adapter/scripts/finalize-runtime-proof.mjs \
+            /tmp/kerniq-dsh-runtime-evidence.json \
+            /tmp/kerniq-dsh-profile-evidence.json \
+            /tmp/kerniq-dsh-roundtrip-evidence.json \
+            /tmp/kerniq-dsh-governed-engine-evidence.json
+          cat /tmp/kerniq-dsh-governed-engine-evidence.json
+
+      - name: Upload DSH governed-spike evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: kerniq-dsh-governed-engine-v0-8-1
+          path: |
+            /tmp/kerniq-dsh-runtime-evidence.json
+            /tmp/kerniq-dsh-profile-evidence.json
+            /tmp/kerniq-dsh-roundtrip-evidence.json
+            /tmp/kerniq-dsh-lifecycle.ndjson
+            /tmp/kerniq-dsh-governed-engine-evidence.json
+          if-no-files-found: error
+          retention-days: 14
 
   python-bridge:
     runs-on: ubuntu-latest
