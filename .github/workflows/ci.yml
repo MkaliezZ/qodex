@@ -47,6 +47,31 @@ jobs:
       - name: Check whitespace
         run: git diff --check
 
+  dsh-governed-spike:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Check isolated DSH spike sources
+        run: npm --prefix packages/dsh-engine-adapter run build
+
+      - name: Run fail-closed DSH admission tests
+        run: npm --prefix packages/dsh-engine-adapter test
+
+      - name: Verify spike stays outside the product workspace
+        run: |
+          grep -F '!packages/dsh-engine-adapter' pnpm-workspace.yaml
+          if grep -R --line-number --fixed-strings '@qodex/dsh-engine-adapter-spike' apps packages/*/package.json 2>/dev/null | grep -v 'packages/dsh-engine-adapter/package.json'; then
+            echo 'DSH spike unexpectedly entered the product dependency graph' >&2
+            exit 1
+          fi
+
   python-bridge:
     runs-on: ubuntu-latest
 
