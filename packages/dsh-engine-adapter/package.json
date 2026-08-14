@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "node --check src/contract.mjs && node --check src/admission.mjs && node --check src/index.mjs && node --check scripts/verify-source-contract.mjs && node --check scripts/verify-managed-profile.mjs && node --check scripts/run-kerniq-roundtrip.mjs && node --check scripts/finalize-runtime-proof.mjs",
+    "build": "node --check src/contract.mjs && node --check src/admission.mjs && node --check src/index.mjs && node --check scripts/verify-source-contract.mjs && node --check scripts/capture-dsh-config.mjs && node --check scripts/verify-managed-profile.mjs && node --check scripts/run-kerniq-roundtrip.mjs && node --check scripts/finalize-runtime-proof.mjs",
     "test": "node --test tests/admission.test.mjs",
     "verify:source": "node scripts/verify-source-contract.mjs"
   }
