@@ -1,21 +1,10 @@
 {
-  "name": "@qodex/dsh-engine-adapter",
-  "version": "0.1.0",
+  "name": "@qodex/dsh-engine-adapter-spike",
+  "version": "0.8.1-spike.0",
+  "private": true,
   "type": "module",
-  "main": "./dist/index.js",
-  "types": "./dist/index.d.ts",
-  "exports": {
-    ".": {
-      "types": "./dist/index.d.ts",
-      "import": "./dist/index.js"
-    }
-  },
   "scripts": {
-    "build": "tsc",
-    "test": "vitest run"
-  },
-  "devDependencies": {
-    "typescript": "^5.5.0",
-    "vitest": "^2.1.9"
+    "build": "node --check src/contract.mjs && node --check src/admission.mjs && node --check src/index.mjs",
+    "test": "node --test tests/admission.test.mjs"
   }
 }
