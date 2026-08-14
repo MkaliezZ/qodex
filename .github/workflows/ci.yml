@@ -130,9 +130,11 @@ jobs:
         run: |
           cd /tmp/deepseek-harness-source
           npx --yes pnpm@11.7.0 run build:lib:host
-          npx --yes pnpm@11.7.0 dsh --profile headless --dump-default-config > /tmp/kerniq-dsh-default.yml
-          npx --yes pnpm@11.7.0 dsh --profile headless --dump-config > /tmp/kerniq-dsh-effective.yml
           cd "$GITHUB_WORKSPACE"
+          node packages/dsh-engine-adapter/scripts/capture-dsh-config.mjs \
+            /tmp/deepseek-harness-source \
+            /tmp/kerniq-dsh-default.yml \
+            /tmp/kerniq-dsh-effective.yml
           node packages/dsh-engine-adapter/scripts/verify-managed-profile.mjs \
             "$DSH_HOME" \
             /tmp/kerniq-dsh-default.yml \
