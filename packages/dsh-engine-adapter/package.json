@@ -4,7 +4,8 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "node --check src/contract.mjs && node --check src/admission.mjs && node --check src/index.mjs",
-    "test": "node --test tests/admission.test.mjs"
+    "build": "node --check src/contract.mjs && node --check src/admission.mjs && node --check src/index.mjs && node --check scripts/verify-source-contract.mjs",
+    "test": "node --test tests/admission.test.mjs",
+    "verify:source": "node scripts/verify-source-contract.mjs"
   }
 }
