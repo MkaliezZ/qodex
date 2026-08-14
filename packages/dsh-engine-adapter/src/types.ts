@@ -20,7 +20,7 @@ export interface DshPinnedIdentity {
   readonly commit: string;
   readonly packageVersion: string;
   readonly license: "MIT";
-  readonly releaseChannel: "developer_preview";
+  readonly releaseChannel: "developer_preview" | "stable";
 }
 
 export interface DshSourceCapabilities {
