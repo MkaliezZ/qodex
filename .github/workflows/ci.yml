@@ -64,6 +64,15 @@ jobs:
       - name: Run fail-closed DSH admission tests
         run: npm --prefix packages/dsh-engine-adapter test
 
+      - name: Fetch and verify pinned DSH source contract
+        run: |
+          curl --fail --location --proto '=https' --tlsv1.2 \
+            --output /tmp/deepseek-harness.tar.gz \
+            https://codeload.github.com/deepseek-ai/deepseek-harness/tar.gz/47f943859bef60e4160492346772ded9b24f765a
+          mkdir /tmp/deepseek-harness-source
+          tar -xzf /tmp/deepseek-harness.tar.gz --strip-components=1 -C /tmp/deepseek-harness-source
+          node packages/dsh-engine-adapter/scripts/verify-source-contract.mjs /tmp/deepseek-harness-source
+
       - name: Verify spike stays outside the product workspace
         run: |
           grep -F '!packages/dsh-engine-adapter' pnpm-workspace.yaml
