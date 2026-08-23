@@ -18,6 +18,17 @@ import { InMemorySessionStore } from "./sessions/store.js";
 import { InMemoryTaskStore } from "./tasks/store.js";
 import { TaskStateMachine } from "./state/machine.js";
 import { MockStreamingProvider } from "./providers/mock.js";
+import type {
+  AgentBackend,
+  AgentBackendEventListener,
+  AgentBackendEventStream,
+  AgentBackendMessage,
+  AgentBackendSession,
+  AgentBackendSessionInput,
+  AgentBackendToolRequest,
+  AgentBackendToolResult,
+  AgentBackendTurn,
+} from "./backends/types.js";
 
 export interface AgentRuntimeOptions {
   /** Pre-configured provider registry */
@@ -26,6 +37,8 @@ export interface AgentRuntimeOptions {
   defaultProviderId?: string;
   /** Default model ID for task execution */
   defaultModelId?: string;
+  /** Optional external agent transport. Existing provider execution is unchanged. */
+  backend?: AgentBackend;
 }
 
 /**
@@ -51,6 +64,7 @@ export class AgentRuntime {
   private providers = new Map<string, ModelProvider>();
   private defaultProviderId: string;
   private defaultModelId: string;
+  private readonly backend?: AgentBackend;
 
   constructor(options: AgentRuntimeOptions = {}) {
     this.eventBus = new EventBus();
@@ -60,6 +74,7 @@ export class AgentRuntime {
     this.providers = options.providers ?? new Map();
     this.defaultProviderId = options.defaultProviderId ?? "mock";
     this.defaultModelId = options.defaultModelId ?? "mock-model-1";
+    this.backend = options.backend;
 
     // Register mock provider by default (fast for tests)
     if (!this.providers.has("mock")) {
@@ -75,6 +90,38 @@ export class AgentRuntime {
 
   getProvider(id: string): ModelProvider | undefined {
     return this.providers.get(id);
+  }
+
+  // ── Agent Backend Transport ─────────────────────────
+
+  async startBackendSession(input: AgentBackendSessionInput): Promise<AgentBackendSession> {
+    return this.requireBackend().startSession(input);
+  }
+
+  async sendBackendMessage(
+    sessionId: string,
+    message: AgentBackendMessage,
+  ): Promise<AgentBackendTurn> {
+    return this.requireBackend().sendMessage(sessionId, message);
+  }
+
+  async streamBackendEvents(
+    sessionId: string,
+    afterSequence: number | undefined,
+    listener: AgentBackendEventListener,
+  ): Promise<AgentBackendEventStream> {
+    return this.requireBackend().streamEvents(sessionId, afterSequence, listener);
+  }
+
+  async submitBackendToolResult(
+    request: AgentBackendToolRequest,
+    result: AgentBackendToolResult,
+  ): Promise<void> {
+    return this.requireBackend().submitToolResult(request, result);
+  }
+
+  async shutdownBackend(): Promise<void> {
+    await this.backend?.shutdown();
   }
 
   // ── Session Management ───────────────────────────────
@@ -235,6 +282,11 @@ export class AgentRuntime {
 
   private publish(event: AnyAgentEvent): void {
     this.eventBus.publish(event);
+  }
+
+  private requireBackend(): AgentBackend {
+    if (!this.backend) throw new Error("No agent backend is configured.");
+    return this.backend;
   }
 
   private transitionTask(

@@ -34,6 +34,35 @@ export type {
 export { AgentRuntime } from "./runtime.js";
 export type { AgentRuntimeOptions } from "./runtime.js";
 
+// ── Agent Backend Transport ────────────────────────
+export { AgentBackendUnavailableError } from "./backends/types.js";
+export { MockAgentBackend } from "./backends/mock.js";
+export type {
+  MockAgentBackendEventTemplate,
+  MockAgentBackendOptions,
+} from "./backends/mock.js";
+export { CodeWhaleBackend } from "./backends/codewhale.js";
+export { DeepSeekHarnessBackend } from "./backends/deepseek-harness.js";
+export type {
+  AgentBackend,
+  AgentBackendJsonValue,
+  AgentBackendSessionInput,
+  AgentBackendSession,
+  AgentBackendMessage,
+  AgentBackendTurn,
+  AgentBackendToolRequest,
+  AgentBackendToolResult,
+  AgentBackendSessionStartedEvent,
+  AgentBackendMessageEvent,
+  AgentBackendToolRequestEvent,
+  AgentBackendToolResultSubmittedEvent,
+  AgentBackendTurnCompletedEvent,
+  AgentBackendErrorEvent,
+  AgentBackendEvent,
+  AgentBackendEventListener,
+  AgentBackendEventStream,
+} from "./backends/types.js";
+
 // ── Event Bus ────────────────────────────────────────
 export { EventBus } from "./events/bus.js";
 
