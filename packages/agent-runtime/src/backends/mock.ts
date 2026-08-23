@@ -28,6 +28,10 @@ export type MockAgentBackendEventTemplate =
       readonly type: "turn_completed";
     }
   | {
+      readonly type: "turn_cancelled";
+      readonly reason?: string;
+    }
+  | {
       readonly type: "error";
       readonly message: string;
     };
@@ -226,6 +230,20 @@ export class MockAgentBackend implements AgentBackend {
         turnId,
         sequence: 0,
         message: template.message,
+      });
+      return;
+    }
+    if (template.type === "turn_cancelled") {
+      state.completedTurns.add(turnId);
+      for (const [key, request] of state.pendingRequests) {
+        if (request.turnId === turnId) state.pendingRequests.delete(key);
+      }
+      this.emit(sessionId, {
+        type: "turn_cancelled",
+        sessionId,
+        turnId,
+        sequence: 0,
+        ...(template.reason ? { reason: template.reason } : {}),
       });
       return;
     }
