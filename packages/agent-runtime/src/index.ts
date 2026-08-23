@@ -42,7 +42,23 @@ export type {
   MockAgentBackendOptions,
 } from "./backends/mock.js";
 export { CodeWhaleBackend } from "./backends/codewhale.js";
-export { DeepSeekHarnessBackend } from "./backends/deepseek-harness.js";
+export {
+  DeepSeekHarnessBackend,
+  DeepSeekHarnessProtocolError,
+} from "./backends/deepseek-harness.js";
+export type {
+  DeepSeekHarnessBackendOptions,
+  DeepSeekHarnessTransport,
+  DeepSeekHarnessTransportStream,
+  DeepSeekHarnessTransportEvent,
+  DeepSeekHarnessSessionStartedEvent,
+  DeepSeekHarnessModelOutputEvent,
+  DeepSeekHarnessToolCallRequestedEvent,
+  DeepSeekHarnessToolCallResolvedEvent,
+  DeepSeekHarnessTurnCompletedEvent,
+  DeepSeekHarnessTurnCancelledEvent,
+  DeepSeekHarnessRuntimeErrorEvent,
+} from "./backends/deepseek-harness.js";
 export type {
   AgentBackend,
   AgentBackendJsonValue,
@@ -57,6 +73,7 @@ export type {
   AgentBackendToolRequestEvent,
   AgentBackendToolResultSubmittedEvent,
   AgentBackendTurnCompletedEvent,
+  AgentBackendTurnCancelledEvent,
   AgentBackendErrorEvent,
   AgentBackendEvent,
   AgentBackendEventListener,
