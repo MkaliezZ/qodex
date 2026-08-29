@@ -13,6 +13,7 @@ const capabilities = Object.freeze({
   supportsCancel: false,
   supportsToolEvents: true,
   supportsExternalGovernance: false,
+  governanceTier: "OBSERVED" as const,
   supportsResume: false,
 });
 

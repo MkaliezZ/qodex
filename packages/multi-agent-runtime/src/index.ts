@@ -11,6 +11,7 @@ export type {
   AgentTaskResult,
   ControlPlaneTaskInput,
   ControlPlaneTaskResult,
+  GovernanceTier,
   GovernanceLimitationEvidence,
   MatchedFindingPair,
   ReconciliationResult,
@@ -20,6 +21,22 @@ export type {
   WorkerRun,
   WorkerRunStatus,
 } from "./control-plane/types.js";
+export type {
+  AgentGovernanceEvidence,
+  AgentGovernanceEvidenceInput,
+  EvidenceFact,
+  EvidenceProvenance,
+  EvidenceTruthValue,
+  GovernanceEvidenceProvenance,
+  GovernanceOutcome,
+  PolicyDecision,
+} from "./control-plane/governance.js";
+export {
+  GOVERNANCE_EVIDENCE_SCHEMA_VERSION,
+  classifyGovernanceTier,
+  createAgentGovernanceEvidence,
+  supportsExternalGovernance,
+} from "./control-plane/governance.js";
 export {
   ControlPlaneSupervisor,
   createGovernanceLimitationEvidence,

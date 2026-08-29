@@ -19,11 +19,14 @@ export type SupervisorClassification =
   | "DISAGREEMENT"
   | "UNRESOLVED";
 
+export type GovernanceTier = "OBSERVED" | "GOVERNED";
+
 export interface AgentAdapterCapabilities {
   readonly supportsStreaming: boolean;
   readonly supportsCancel: boolean;
   readonly supportsToolEvents: boolean;
   readonly supportsExternalGovernance: boolean;
+  readonly governanceTier: GovernanceTier;
   readonly supportsResume: boolean;
 }
 

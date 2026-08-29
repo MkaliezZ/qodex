@@ -1,0 +1,7 @@
+- id: agentfuse
+  config:
+    defaultAction: block
+    denyTools: [kerniq_write_probe]
+    askTools: []
+    allowTools: []
+    logDecisions: false

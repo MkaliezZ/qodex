@@ -72,6 +72,7 @@ try {
     supportsCancel: false,
     supportsToolEvents: true,
     supportsExternalGovernance: false,
+    governanceTier: "OBSERVED",
     supportsResume: false,
   });
 
