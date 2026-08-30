@@ -162,6 +162,28 @@ fn probe_codex() -> AgentRuntimeProbe {
     }
 }
 
+/// Runtime revision of the configured DSH checkout.
+///
+/// The `#[cfg(test)]` override exists only in test builds: hermetic admission
+/// regressions use it to represent the audited revision without a real
+/// `cd5ef814…` checkout. Release builds always resolve the revision through
+/// git, and the audited-version/revision comparison is unchanged.
+fn dsh_runtime_revision(root: Option<&Path>) -> Option<String> {
+    #[cfg(test)]
+    if let Some(value) = std::env::var("KERNIQ_TEST_DSH_REVISION")
+        .ok()
+        .filter(|value| !value.is_empty())
+    {
+        return Some(value);
+    }
+    root.and_then(|path| {
+        command_text(
+            "git",
+            &["-C", path.to_string_lossy().as_ref(), "rev-parse", "HEAD"],
+        )
+    })
+}
+
 fn probe_dsh() -> AgentRuntimeProbe {
     let entrypoint = configured_path("KERNIQ_DSH_RUNTIME_ENTRYPOINT");
     let root = configured_path("KERNIQ_DSH_RUNTIME_ROOT");
@@ -171,12 +193,7 @@ fn probe_dsh() -> AgentRuntimeProbe {
         .filter(|_| runtime_available)
         .and_then(|path| command_text("node", &[path.to_string_lossy().as_ref(), "--version"]))
         .unwrap_or_else(|| "unavailable".into());
-    let revision = root.as_ref().and_then(|path| {
-        command_text(
-            "git",
-            &["-C", path.to_string_lossy().as_ref(), "rev-parse", "HEAD"],
-        )
-    });
+    let revision = dsh_runtime_revision(root.as_deref());
     let compatible_runtime =
         version == AUDITED_DSH_VERSION && revision.as_deref() == Some(AUDITED_DSH_REVISION);
     let profile = configured_profile_dir();
@@ -684,9 +701,10 @@ enum PluginRecordState {
 ///
 /// Top-level plugin records start with `- ` at column zero; their direct
 /// fields sit on the following two-space-indented `key: value` lines until
-/// the next column-zero line. A record is the target when its `name:` field
-/// equals `package_name`. The target counts as available only when every
-/// matching record is enabled: `disabled: true` disables the record, a
+/// the next column-zero line. A record is the target when exactly one direct
+/// plain `name:` field equals `package_name`; a record claiming the target
+/// name alongside another name fails closed. The target counts as available
+/// only when every matching record is enabled: `disabled: true` disables the record, a
 /// missing or `disabled: false` field leaves it enabled, and any other value
 /// (YAML tag expressions such as `!!js`, unparseable text, or conflicting
 /// duplicates) is ambiguous. A missing target, an ambiguous state, and
@@ -698,6 +716,12 @@ fn dump_has_enabled_plugin(dump: &str, package_name: &str) -> bool {
             continue;
         }
         matched = true;
+        // Exactly one direct plain `name:` field may identify the record.
+        // A record that claims the target name more than once — or alongside
+        // a second name — is ambiguous and fails closed.
+        if names.len() != 1 {
+            return false;
+        }
         if plugin_record_state(&disabled) != PluginRecordState::Enabled {
             return false;
         }
@@ -721,26 +745,31 @@ fn plugin_records(dump: &str) -> Vec<(Vec<&str>, Vec<Option<&str>>)> {
             }
             in_record = true;
         } else if in_record {
-            // Only direct fields (exactly two spaces of indentation) belong
-            // to the record. Deeper indentation is nested configuration to
-            // skip over; a column-zero line ends the record. Nested `name:`
-            // keys never identify the plugin itself.
-            if !line.starts_with(' ') {
-                records.push((std::mem::take(&mut names), std::mem::take(&mut disabled)));
-                in_record = false;
-                continue;
-            }
-            if line.starts_with("   ") {
-                continue;
-            }
-            let trimmed = line.trim();
-            if let Some(rest) = trimmed.strip_prefix("name:") {
-                if let Some(value) = yaml_plain_scalar(rest) {
-                    names.push(value);
+            if line.starts_with(' ') {
+                // Deeper indentation is nested configuration (including
+                // block-scalar content) and is skipped over.
+                if line.starts_with("   ") {
+                    continue;
                 }
-            } else if let Some(rest) = trimmed.strip_prefix("disabled:") {
-                disabled.push(yaml_plain_scalar(rest));
+                let trimmed = line.trim();
+                if let Some(rest) = trimmed.strip_prefix("name:") {
+                    if let Some(value) = yaml_plain_scalar(rest) {
+                        names.push(value);
+                    }
+                } else if let Some(rest) = trimmed.strip_prefix("disabled:") {
+                    disabled.push(yaml_plain_scalar(rest));
+                }
+                continue;
             }
+            // Real dumps contain blank lines inside plugin records (block
+            // scalar values) and column-zero layer comments between them;
+            // neither ends a record. Any other column-zero line does.
+            let trimmed = line.trim();
+            if trimmed.is_empty() || trimmed.starts_with('#') {
+                continue;
+            }
+            records.push((std::mem::take(&mut names), std::mem::take(&mut disabled)));
+            in_record = false;
         }
     }
     if in_record {
@@ -1010,6 +1039,42 @@ mod tests {
             &format!("{enabled}  disabled: false\n  disabled: true\n"),
             PRODUCTION_OBSERVER_PACKAGE
         ));
+        // Duplicate direct `name:` fields claiming the target are ambiguous.
+        assert!(!dump_has_enabled_plugin(
+            &format!(
+                "- id: malformed\n  name: '{PRODUCTION_OBSERVER_PACKAGE}'\n  name: '@other/package'\n"
+            ),
+            PRODUCTION_OBSERVER_PACKAGE
+        ));
+        // Duplicate names on an unrelated record do not affect the target.
+        assert!(dump_has_enabled_plugin(
+            &format!(
+                "- id: malformed\n  name: '@other/a'\n  name: '@other/b'\n{enabled}"
+            ),
+            PRODUCTION_OBSERVER_PACKAGE
+        ));
+        // Real dumps contain blank lines inside records (block-scalar
+        // values); a blank line must not separate `disabled:` from its
+        // record.
+        assert!(!dump_has_enabled_plugin(
+            &format!(
+                "- id: kerniq-control-plane-observer\n  name: '{PRODUCTION_OBSERVER_PACKAGE}'\n\n  disabled: true\n"
+            ),
+            PRODUCTION_OBSERVER_PACKAGE
+        ));
+        // A sibling record with blank lines inside a block scalar leaves the
+        // target record intact.
+        assert!(dump_has_enabled_plugin(
+            &format!(
+                "- id: plan-rules\n  name: '@deepseek-ai/dsh-plan-rules'\n  config:\n    section: >\n      first paragraph\n\n      second paragraph\n{enabled}"
+            ),
+            PRODUCTION_OBSERVER_PACKAGE
+        ));
+        // A column-zero layer comment between records ends nothing.
+        assert!(dump_has_enabled_plugin(
+            &format!("- id: agentfuse\n  name: '{AGENTFUSE_PACKAGE}'\n# == layer comment\n{enabled}"),
+            PRODUCTION_OBSERVER_PACKAGE
+        ));
     }
 
     #[test]
@@ -1021,8 +1086,92 @@ mod tests {
     }
 
     #[test]
-    fn governed_dsh_run_refuses_to_start_when_observer_disabled() {
+    fn admission_starts_with_all_gates_true_and_stops_only_on_disabled_observer() {
         let _guard = GOVERNANCE_ENV_LOCK.lock().unwrap();
+        let fixture = admission_fixture();
+
+        // Positive control: same runtime, revision, profile, adapter, and
+        // evidence path as the negative case; only the observer record
+        // differs. Every gate holds and the stub agent really starts.
+        let enabled = write_dsh_stub(
+            &fixture.root,
+            "stub-observer-enabled.mjs",
+            &admission_dump(false, false),
+        );
+        fixture.set_entrypoint(&enabled);
+        let positive = probe_dsh();
+        assert!(positive.available);
+        assert_governance_gates(positive.governance.as_ref().unwrap(), true, true, true, true);
+        let output = run_dsh(test_request(), &fixture.workspace)
+            .expect("all gates true must admit the governed run");
+        assert!(agent_started(&enabled), "stub agent did not start");
+        assert_eq!(output.result.findings.len(), 1);
+        clear_agent_marker(&enabled);
+
+        // Negative: the disabled observer is the only gate that flips.
+        let disabled = write_dsh_stub(
+            &fixture.root,
+            "stub-observer-disabled.mjs",
+            &admission_dump(true, false),
+        );
+        fixture.set_entrypoint(&disabled);
+        let negative = probe_dsh();
+        assert_governance_gates(negative.governance.as_ref().unwrap(), true, true, false, false);
+        let error = run_dsh(test_request(), &fixture.workspace).unwrap_err();
+        assert_eq!(error, "Governed DSH admission failed before process start.");
+        assert!(!agent_started(&disabled));
+    }
+
+    #[test]
+    fn admission_starts_with_all_gates_true_and_stops_only_on_disabled_agentfuse() {
+        let _guard = GOVERNANCE_ENV_LOCK.lock().unwrap();
+        let fixture = admission_fixture();
+
+        // Positive control: identical environment, AgentFuse enabled.
+        let enabled = write_dsh_stub(
+            &fixture.root,
+            "stub-agentfuse-enabled.mjs",
+            &admission_dump(false, false),
+        );
+        fixture.set_entrypoint(&enabled);
+        let positive = probe_dsh();
+        assert_governance_gates(positive.governance.as_ref().unwrap(), true, true, true, true);
+        let output = run_dsh(test_request(), &fixture.workspace)
+            .expect("all gates true must admit the governed run");
+        assert!(agent_started(&enabled));
+        assert_eq!(output.result.findings.len(), 1);
+        clear_agent_marker(&enabled);
+
+        // Negative: the disabled AgentFuse record is the only gate that
+        // flips; the observer stays available.
+        let disabled = write_dsh_stub(
+            &fixture.root,
+            "stub-agentfuse-disabled.mjs",
+            &admission_dump(false, true),
+        );
+        fixture.set_entrypoint(&disabled);
+        let negative = probe_dsh();
+        assert_governance_gates(negative.governance.as_ref().unwrap(), true, false, true, false);
+        let error = run_dsh(test_request(), &fixture.workspace).unwrap_err();
+        assert_eq!(error, "Governed DSH admission failed before process start.");
+        assert!(!agent_started(&disabled));
+    }
+
+    /// Test-wide lock: probe_dsh/run_dsh read process environment variables,
+    /// so tests that mutate them must not run concurrently.
+    static GOVERNANCE_ENV_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+    /// Hermetic admission environment: installed adapter metadata, evidence
+    /// capture, runtime root, and the audited revision provided through the
+    /// test-only seam in `dsh_runtime_revision`. Cases differ only in the
+    /// stub entrypoint's embedded dump.
+    struct AdmissionFixture {
+        root: PathBuf,
+        workspace: PathBuf,
+        env: ScopedEnv,
+    }
+
+    fn admission_fixture() -> AdmissionFixture {
         let root = std::env::temp_dir().join(format!(
             "kerniq-disabled-plugin-admission-{}",
             temporary_token("admission-test")
@@ -1030,8 +1179,10 @@ mod tests {
         let env = ScopedEnv::capture();
         env.set("KERNIQ_DSH_PROFILE", "headless");
 
-        let profile = root.join("dsh-home").join("profiles").join("headless");
-        let adapter = profile
+        let adapter = root
+            .join("dsh-home")
+            .join("profiles")
+            .join("headless")
             .join("node_modules")
             .join("@dhms-agentfuse")
             .join("dsh-agentfuse");
@@ -1051,72 +1202,91 @@ mod tests {
 
         let git_root = root.join("runtime-root");
         fs::create_dir_all(&git_root).unwrap();
-        assert!(Command::new("git")
-            .args(["init", "--quiet"])
-            .current_dir(&git_root)
-            .output()
-            .is_ok_and(|output| output.status.success()));
         env.set(
             "KERNIQ_DSH_RUNTIME_ROOT",
             git_root.to_string_lossy().as_ref(),
         );
-
-        let enabled_dump = format!(
-            "# == profile layer\n- id: agentfuse\n  name: '{AGENTFUSE_PACKAGE}'\n  config:\n    defaultAction: block\n- id: kerniq-control-plane-observer\n  name: '{PRODUCTION_OBSERVER_PACKAGE}'\n"
-        );
-        let disabled_dump = format!(
-            "{enabled_dump}  disabled: true\n"
-        );
-
-        let enabled_entry = write_dsh_stub(&root, "stub-enabled.mjs", &enabled_dump);
-        let disabled_entry = write_dsh_stub(&root, "stub-disabled.mjs", &disabled_dump);
-
-        env.set(
-            "KERNIQ_DSH_RUNTIME_ENTRYPOINT",
-            enabled_entry.to_string_lossy().as_ref(),
-        );
-        let enabled_probe = probe_dsh();
-        let enabled_governance = enabled_probe.governance.as_ref().unwrap();
-        assert!(enabled_governance.agent_fuse_adapter_available);
-        assert!(enabled_governance.production_observer_available);
-
-        env.set(
-            "KERNIQ_DSH_RUNTIME_ENTRYPOINT",
-            disabled_entry.to_string_lossy().as_ref(),
-        );
-        let disabled_probe = probe_dsh();
-        let disabled_governance = disabled_probe.governance.as_ref().unwrap();
-        // The disabled observer is the only component that flips.
-        assert!(disabled_governance.agent_fuse_adapter_available);
-        assert!(!disabled_governance.production_observer_available);
+        // The audited revision is represented through the test-only seam so
+        // `compatible_runtime=true` holds hermetically; release builds never
+        // read this variable.
+        env.set("KERNIQ_TEST_DSH_REVISION", AUDITED_DSH_REVISION);
 
         let workspace = root.join("workspace");
         fs::create_dir_all(&workspace).unwrap();
-        for entry in [enabled_entry, disabled_entry] {
-            env.set(
-                "KERNIQ_DSH_RUNTIME_ENTRYPOINT",
-                entry.to_string_lossy().as_ref(),
-            );
-            let error = run_dsh(test_request(), &workspace).unwrap_err();
-            assert_eq!(error, "Governed DSH admission failed before process start.");
-            let marker = entry.with_file_name("agent-started-marker");
-            assert!(
-                !marker.exists(),
-                "agent entrypoint ran despite failed governed admission"
-            );
+        AdmissionFixture {
+            root,
+            workspace,
+            env,
         }
-
-        drop(env);
-        let _ = fs::remove_dir_all(&root);
     }
 
-    /// Test-wide lock: probe_dsh/run_dsh read process environment variables,
-    /// so tests that mutate them must not run concurrently.
-    static GOVERNANCE_ENV_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+    impl AdmissionFixture {
+        fn set_entrypoint(&self, entry: &Path) {
+            self.env
+                .set("KERNIQ_DSH_RUNTIME_ENTRYPOINT", entry.to_string_lossy().as_ref());
+        }
+    }
+
+    /// A minimal composed profile dump whose plugin records are enabled or
+    /// disabled per flag. The AgentFuse record carries `disabled:` after its
+    /// configuration block and the observer record after its `name:`, mirroring
+    /// the real 0.1.2-alpha.1 dump shapes.
+    fn admission_dump(observer_disabled: bool, agentfuse_disabled: bool) -> String {
+        let mut dump = format!(
+            "# == profile layer\n- id: agentfuse\n  name: '{AGENTFUSE_PACKAGE}'\n  config:\n    defaultAction: block\n    logDecisions: false\n"
+        );
+        if agentfuse_disabled {
+            dump.push_str("  disabled: true\n");
+        }
+        dump.push_str(&format!(
+            "- id: kerniq-control-plane-observer\n  name: '{PRODUCTION_OBSERVER_PACKAGE}'\n"
+        ));
+        if observer_disabled {
+            dump.push_str("  disabled: true\n");
+        }
+        dump
+    }
+
+    /// Asserts the full governance gate accounting for one admission case.
+    /// `pre_dispatch_seam_available` tracks `compatible_runtime` and
+    /// `evidence_capture_available` always holds in the fixture, so the
+    /// expected values pin exactly which gates are true.
+    fn assert_governance_gates(
+        governance: &DshGovernanceProbe,
+        compatible_runtime: bool,
+        agent_fuse_adapter_available: bool,
+        production_observer_available: bool,
+        governed_profile_valid: bool,
+    ) {
+        assert_eq!(governance.compatible_runtime, compatible_runtime);
+        assert_eq!(
+            governance.agent_fuse_adapter_available,
+            agent_fuse_adapter_available
+        );
+        assert_eq!(
+            governance.pre_dispatch_seam_available,
+            compatible_runtime
+        );
+        assert_eq!(
+            governance.production_observer_available,
+            production_observer_available
+        );
+        assert_eq!(governance.governed_profile_valid, governed_profile_valid);
+        assert!(governance.evidence_capture_available);
+    }
+
+    fn agent_started(entry: &Path) -> bool {
+        entry.with_file_name("agent-started-marker").exists()
+    }
+
+    fn clear_agent_marker(entry: &Path) {
+        let _ = fs::remove_file(entry.with_file_name("agent-started-marker"));
+    }
 
     /// Writes a stub DSH entrypoint that answers `--version` with the audited
-    /// version, `--dump-config` with `dump`, and records a marker file when
-    /// invoked as an agent so tests can prove the process never started.
+    /// version, `--dump-config` with `dump`, and, when invoked as an agent,
+    /// records a marker file and returns the minimum structured result
+    /// `run_dsh` expects so the positive control completes cleanly.
     fn write_dsh_stub(root: &Path, file: &str, dump: &str) -> PathBuf {
         let path = root.join(file);
         fs::write(
@@ -1126,7 +1296,8 @@ mod tests {
                  const args = process.argv.slice(2);\n\
                  if (args.includes('--version')) {{\n  console.log('{AUDITED_DSH_VERSION}');\n\
                  }} else if (args.includes('--dump-config')) {{\n  console.log({dump:?});\n\
-                 }} else {{\n  writeFileSync(new URL('./agent-started-marker', import.meta.url), 'started');\n  console.log('agent body ran');\n }}\n"
+                 }} else {{\n  writeFileSync(new URL('./agent-started-marker', import.meta.url), 'started');\n\
+                 console.log(JSON.stringify({{findings:[{{finding:'stub governed run completed',evidence:'stub.mjs:1',severity:'low',smallestFix:'none',files:['stub.mjs']}}]}}));\n }}\n"
             ),
         )
         .unwrap();
@@ -1146,6 +1317,7 @@ mod tests {
                 "KERNIQ_DSH_EVIDENCE_PATH",
                 "KERNIQ_DSH_RUNTIME_ROOT",
                 "KERNIQ_DSH_RUNTIME_ENTRYPOINT",
+                "KERNIQ_TEST_DSH_REVISION",
             ];
             ScopedEnv {
                 saved: names

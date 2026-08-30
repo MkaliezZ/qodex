@@ -97,21 +97,62 @@ production_admission_rejects_the_validation_proof_as_an_observer
   proof fixture still cannot satisfy governed readiness
 ```
 
-## Admission boundary regression
+## Admission boundary regression (corrected in v0.3.2.1)
 
-`governed_dsh_run_refuses_to_start_when_observer_disabled` runs the real
-`probe_dsh`/`run_dsh` seam against stub DSH entrypoints over a real profile
-layout (installed adapter metadata, evidence path, runtime root):
+The first version of this regression
+(`governed_dsh_run_refuses_to_start_when_observer_disabled`) had a
+verification defect: its stub runtime root was a fresh `git init` repository,
+so `rev-parse HEAD` never matched the audited `cd5ef814…` revision and
+`compatible_runtime=false` in **both** the enabled and disabled cases.
+Admission refused both runs for a reason unrelated to plugin state, so the
+test could not prove that a disabled observer caused the refusal. The
+original claim above was therefore an overclaim.
+
+v0.3.2.1 corrects the proof. Runtime revision retrieval moved behind
+`dsh_runtime_revision`, whose `#[cfg(test)]`-only override
+(`KERNIQ_TEST_DSH_REVISION`) lets hermetic fixtures represent the audited
+revision; release builds always run git and the audited-version/revision
+comparison is unchanged. The corrected regressions
+(`admission_starts_with_all_gates_true_and_stops_only_on_disabled_observer`
+and `…_disabled_agentfuse`) hold every other gate true and differ only in
+the target plugin record:
 
 ```text
-enabled-observer dump   → production_observer_available=true
-disabled-observer dump  → production_observer_available=false
-                          (agent_fuse_adapter_available stays true:
-                          the disabled observer is the only flip)
-run_dsh(governance_required=true) on both →
-  Err("Governed DSH admission failed before process start.")
-agent-started marker absent in both cases → the process never started
+positive control (all gates true)
+  probe: compatible_runtime=true, agent_fuse_adapter_available=true,
+         pre_dispatch_seam_available=true, production_observer_available=true,
+         governed_profile_valid=true, evidence_capture_available=true
+  run_dsh(governance_required=true) → Ok; stub agent starts (marker present)
+                                     and returns a valid structured result
+
+observer disabled (only observer gates flip)
+  probe: compatible_runtime=true, agent_fuse_adapter_available=true,
+         production_observer_available=false, governed_profile_valid=false
+  run_dsh → Err("Governed DSH admission failed before process start.")
+  agent-started marker absent → the process never started
+
+AgentFuse disabled (only adapter gates flip)
+  probe: compatible_runtime=true, agent_fuse_adapter_available=false,
+         production_observer_available=true, governed_profile_valid=false
+  run_dsh → the same admission refusal; marker absent
 ```
+
+## Parser hardening added in v0.3.2.1
+
+Two adversarial reviews of real dumps changed the parser:
+
+```text
+duplicate direct name: fields claiming the target   → fail closed
+duplicate names on an unrelated record              → target unaffected
+```
+
+Real dumps also contain blank lines *inside* plugin records — block-scalar
+values (`section: >`) carry blank lines between their paragraphs. A blank
+line could previously split a record and orphan a trailing `disabled: true`
+as unattributed, so blank lines and column-zero comments no longer end a
+record; only other column-zero content does. Regression coverage includes a
+blank line between `name:` and `disabled: true` and a sibling record with
+blank lines inside a block scalar.
 
 ## Real Windows verification (DSH 0.1.2-alpha.1 @ cd5ef81)
 
@@ -137,6 +178,11 @@ exact content. No governed-path regression.
 - Tauri (MSVC): full suite pass, counts in the milestone report.
 - Observer `2/2`; workspace suites unchanged from the v0.3.1 baseline.
 - `git diff --check` and secret scan clean; no credentials touched.
+
+v0.3.2.1 re-ran the verbatim parser check against the four real overlay
+dumps (unchanged results: disabled targets false, enabled targets true) and
+one final real positive governed run (`allow` pre-execute, dispatch, result,
+single `toolCallId` preserved).
 
 ## Non-goals preserved
 
