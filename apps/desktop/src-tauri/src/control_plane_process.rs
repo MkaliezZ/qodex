@@ -185,11 +185,11 @@ fn probe_dsh() -> AgentRuntimeProbe {
     let agent_fuse_adapter_available = agent_fuse_version.is_some()
         && dump
             .as_deref()
-            .is_some_and(|value| dump_has_plugin(value, AGENTFUSE_PACKAGE));
+            .is_some_and(|value| dump_has_enabled_plugin(value, AGENTFUSE_PACKAGE));
     let pre_dispatch_seam_available = compatible_runtime;
     let production_observer_available = dump
         .as_deref()
-        .is_some_and(|value| dump_has_plugin(value, PRODUCTION_OBSERVER_PACKAGE));
+        .is_some_and(|value| dump_has_enabled_plugin(value, PRODUCTION_OBSERVER_PACKAGE));
     let governed_profile_valid = dump.as_deref().is_some_and(|value| {
         governed_profile_is_product_ready(value, agent_fuse_adapter_available)
     });
@@ -672,17 +672,107 @@ fn installed_agent_fuse_version(profile: &Path) -> Option<String> {
         .map(str::to_string)
 }
 
-fn dump_has_plugin(dump: &str, package_name: &str) -> bool {
-    dump.lines().any(|line| {
-        line.trim()
-            .strip_prefix("name:")
-            .and_then(yaml_plain_scalar)
-            .is_some_and(|value| value == package_name)
-    })
+/// Enabled state of one plugin record in a DSH `--dump-config` document.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum PluginRecordState {
+    Enabled,
+    Disabled,
+    Ambiguous,
+}
+
+/// Whether the plugin record named `package_name` is unambiguously enabled.
+///
+/// Top-level plugin records start with `- ` at column zero; their direct
+/// fields sit on the following two-space-indented `key: value` lines until
+/// the next column-zero line. A record is the target when its `name:` field
+/// equals `package_name`. The target counts as available only when every
+/// matching record is enabled: `disabled: true` disables the record, a
+/// missing or `disabled: false` field leaves it enabled, and any other value
+/// (YAML tag expressions such as `!!js`, unparseable text, or conflicting
+/// duplicates) is ambiguous. A missing target, an ambiguous state, and
+/// conflicting duplicates all fail closed.
+fn dump_has_enabled_plugin(dump: &str, package_name: &str) -> bool {
+    let mut matched = false;
+    for (names, disabled) in plugin_records(dump) {
+        if !names.iter().any(|value| *value == package_name) {
+            continue;
+        }
+        matched = true;
+        if plugin_record_state(&disabled) != PluginRecordState::Enabled {
+            return false;
+        }
+    }
+    matched
+}
+
+/// Collect the direct `name:` and `disabled:` field values of every
+/// top-level plugin record. `name` values that cannot resolve to a plain
+/// scalar are dropped (they cannot identify a target), while unparsable
+/// `disabled` values are kept as `None` so they count as ambiguous.
+fn plugin_records(dump: &str) -> Vec<(Vec<&str>, Vec<Option<&str>>)> {
+    let mut records = Vec::new();
+    let mut names: Vec<&str> = Vec::new();
+    let mut disabled: Vec<Option<&str>> = Vec::new();
+    let mut in_record = false;
+    for line in dump.lines() {
+        if line.starts_with("- ") {
+            if in_record {
+                records.push((std::mem::take(&mut names), std::mem::take(&mut disabled)));
+            }
+            in_record = true;
+        } else if in_record {
+            // Only direct fields (exactly two spaces of indentation) belong
+            // to the record. Deeper indentation is nested configuration to
+            // skip over; a column-zero line ends the record. Nested `name:`
+            // keys never identify the plugin itself.
+            if !line.starts_with(' ') {
+                records.push((std::mem::take(&mut names), std::mem::take(&mut disabled)));
+                in_record = false;
+                continue;
+            }
+            if line.starts_with("   ") {
+                continue;
+            }
+            let trimmed = line.trim();
+            if let Some(rest) = trimmed.strip_prefix("name:") {
+                if let Some(value) = yaml_plain_scalar(rest) {
+                    names.push(value);
+                }
+            } else if let Some(rest) = trimmed.strip_prefix("disabled:") {
+                disabled.push(yaml_plain_scalar(rest));
+            }
+        }
+    }
+    if in_record {
+        records.push((names, disabled));
+    }
+    records
+}
+
+fn plugin_record_state(disabled_values: &[Option<&str>]) -> PluginRecordState {
+    if disabled_values.is_empty() {
+        return PluginRecordState::Enabled;
+    }
+    let mut saw_enabled = false;
+    let mut saw_disabled = false;
+    for value in disabled_values {
+        match value {
+            Some("false") => saw_enabled = true,
+            Some("true") => saw_disabled = true,
+            _ => return PluginRecordState::Ambiguous,
+        }
+    }
+    if saw_enabled && saw_disabled {
+        return PluginRecordState::Ambiguous;
+    }
+    if saw_disabled {
+        return PluginRecordState::Disabled;
+    }
+    PluginRecordState::Enabled
 }
 
 fn governed_profile_is_product_ready(dump: &str, agent_fuse_available: bool) -> bool {
-    agent_fuse_available && dump_has_plugin(dump, PRODUCTION_OBSERVER_PACKAGE)
+    agent_fuse_available && dump_has_enabled_plugin(dump, PRODUCTION_OBSERVER_PACKAGE)
 }
 
 fn dsh_default_model(dump: &str) -> (Option<String>, Option<String>) {
@@ -847,6 +937,238 @@ mod tests {
         assert!(!governed_profile_is_product_ready(proof_only, true));
         assert!(governed_profile_is_product_ready(&production, true));
         assert!(!governed_profile_is_product_ready(&production, false));
+    }
+
+    #[test]
+    fn enabled_plugin_detection_matrix() {
+        let enabled = format!(
+            "- id: kerniq-control-plane-observer\n  name: '{PRODUCTION_OBSERVER_PACKAGE}'\n"
+        );
+        let disabled_after_name = format!(
+            "- id: kerniq-control-plane-observer\n  name: '{PRODUCTION_OBSERVER_PACKAGE}'\n  disabled: true\n"
+        );
+        // Real 0.1.2-alpha.1 dump shape: `disabled:` follows the whole
+        // configuration block, not the `name:` line.
+        let disabled_after_config = format!(
+            "- id: agentfuse\n  name: '{AGENTFUSE_PACKAGE}'\n  config:\n    defaultAction: block\n    denyTools: []\n    allowTools:\n      - read\n    logDecisions: false\n  disabled: true\n"
+        );
+        let other_disabled_target_enabled = format!(
+            "- id: timer\n  name: '@deepseek-ai/cordis-plugin-timer'\n  disabled: true\n- id: kerniq-control-plane-observer\n  name: '{PRODUCTION_OBSERVER_PACKAGE}'\n"
+        );
+
+        assert!(dump_has_enabled_plugin(&enabled, PRODUCTION_OBSERVER_PACKAGE));
+        assert!(!dump_has_enabled_plugin(
+            &disabled_after_name,
+            PRODUCTION_OBSERVER_PACKAGE
+        ));
+        assert!(!dump_has_enabled_plugin(
+            &disabled_after_config,
+            AGENTFUSE_PACKAGE
+        ));
+        // A disabled sibling must not disable the target.
+        assert!(dump_has_enabled_plugin(
+            &other_disabled_target_enabled,
+            PRODUCTION_OBSERVER_PACKAGE
+        ));
+        // Missing target and unrelated packages stay unavailable.
+        assert!(!dump_has_enabled_plugin(&enabled, "@kerniq/absent"));
+        // `disabled: false` is an explicit enabled state.
+        assert!(dump_has_enabled_plugin(
+            &format!("{enabled}  disabled: false\n"),
+            PRODUCTION_OBSERVER_PACKAGE
+        ));
+        // Expression values cannot be resolved statically: fail closed.
+        assert!(!dump_has_enabled_plugin(
+            &format!("{enabled}  disabled: !!js process.platform === 'win32'\n"),
+            PRODUCTION_OBSERVER_PACKAGE
+        ));
+        // Malformed values fail closed.
+        assert!(!dump_has_enabled_plugin(
+            &format!("{enabled}  disabled: maybe\n"),
+            PRODUCTION_OBSERVER_PACKAGE
+        ));
+        // Nested `name:` keys (deeper indentation) never identify a plugin.
+        assert!(!dump_has_enabled_plugin(
+            &format!("- id: other\n  name: '@kerniq/other'\n  config:\n    name: '{PRODUCTION_OBSERVER_PACKAGE}'\n"),
+            PRODUCTION_OBSERVER_PACKAGE
+        ));
+        // A bare name line outside any plugin record does not count.
+        assert!(!dump_has_enabled_plugin(
+            &format!("  name: '{PRODUCTION_OBSERVER_PACKAGE}'\n"),
+            PRODUCTION_OBSERVER_PACKAGE
+        ));
+        // Duplicate targets: agreeing enabled records pass, conflicting
+        // records fail closed.
+        assert!(dump_has_enabled_plugin(&format!("{enabled}{enabled}"), PRODUCTION_OBSERVER_PACKAGE));
+        assert!(!dump_has_enabled_plugin(
+            &format!("{enabled}{disabled_after_name}"),
+            PRODUCTION_OBSERVER_PACKAGE
+        ));
+        // Duplicate `disabled` fields inside one record are parsed as one
+        // conflicting state.
+        assert!(!dump_has_enabled_plugin(
+            &format!("{enabled}  disabled: false\n  disabled: true\n"),
+            PRODUCTION_OBSERVER_PACKAGE
+        ));
+    }
+
+    #[test]
+    fn governed_profile_requires_an_enabled_observer() {
+        let disabled = format!(
+            "- id: agentfuse\n  name: '{AGENTFUSE_PACKAGE}'\n- id: kerniq-control-plane-observer\n  name: '{PRODUCTION_OBSERVER_PACKAGE}'\n  disabled: true\n"
+        );
+        assert!(!governed_profile_is_product_ready(&disabled, true));
+    }
+
+    #[test]
+    fn governed_dsh_run_refuses_to_start_when_observer_disabled() {
+        let _guard = GOVERNANCE_ENV_LOCK.lock().unwrap();
+        let root = std::env::temp_dir().join(format!(
+            "kerniq-disabled-plugin-admission-{}",
+            temporary_token("admission-test")
+        ));
+        let env = ScopedEnv::capture();
+        env.set("KERNIQ_DSH_PROFILE", "headless");
+
+        let profile = root.join("dsh-home").join("profiles").join("headless");
+        let adapter = profile
+            .join("node_modules")
+            .join("@dhms-agentfuse")
+            .join("dsh-agentfuse");
+        fs::create_dir_all(&adapter).unwrap();
+        fs::write(
+            adapter.join("package.json"),
+            format!("{{\"name\":\"{AGENTFUSE_PACKAGE}\",\"version\":\"0.2.1\"}}"),
+        )
+        .unwrap();
+        let evidence = root.join("evidence");
+        fs::create_dir_all(&evidence).unwrap();
+        env.set("DSH_HOME", root.join("dsh-home").to_string_lossy().as_ref());
+        env.set(
+            "KERNIQ_DSH_EVIDENCE_PATH",
+            evidence.join("events.jsonl").to_string_lossy().as_ref(),
+        );
+
+        let git_root = root.join("runtime-root");
+        fs::create_dir_all(&git_root).unwrap();
+        assert!(Command::new("git")
+            .args(["init", "--quiet"])
+            .current_dir(&git_root)
+            .output()
+            .is_ok_and(|output| output.status.success()));
+        env.set(
+            "KERNIQ_DSH_RUNTIME_ROOT",
+            git_root.to_string_lossy().as_ref(),
+        );
+
+        let enabled_dump = format!(
+            "# == profile layer\n- id: agentfuse\n  name: '{AGENTFUSE_PACKAGE}'\n  config:\n    defaultAction: block\n- id: kerniq-control-plane-observer\n  name: '{PRODUCTION_OBSERVER_PACKAGE}'\n"
+        );
+        let disabled_dump = format!(
+            "{enabled_dump}  disabled: true\n"
+        );
+
+        let enabled_entry = write_dsh_stub(&root, "stub-enabled.mjs", &enabled_dump);
+        let disabled_entry = write_dsh_stub(&root, "stub-disabled.mjs", &disabled_dump);
+
+        env.set(
+            "KERNIQ_DSH_RUNTIME_ENTRYPOINT",
+            enabled_entry.to_string_lossy().as_ref(),
+        );
+        let enabled_probe = probe_dsh();
+        let enabled_governance = enabled_probe.governance.as_ref().unwrap();
+        assert!(enabled_governance.agent_fuse_adapter_available);
+        assert!(enabled_governance.production_observer_available);
+
+        env.set(
+            "KERNIQ_DSH_RUNTIME_ENTRYPOINT",
+            disabled_entry.to_string_lossy().as_ref(),
+        );
+        let disabled_probe = probe_dsh();
+        let disabled_governance = disabled_probe.governance.as_ref().unwrap();
+        // The disabled observer is the only component that flips.
+        assert!(disabled_governance.agent_fuse_adapter_available);
+        assert!(!disabled_governance.production_observer_available);
+
+        let workspace = root.join("workspace");
+        fs::create_dir_all(&workspace).unwrap();
+        for entry in [enabled_entry, disabled_entry] {
+            env.set(
+                "KERNIQ_DSH_RUNTIME_ENTRYPOINT",
+                entry.to_string_lossy().as_ref(),
+            );
+            let error = run_dsh(test_request(), &workspace).unwrap_err();
+            assert_eq!(error, "Governed DSH admission failed before process start.");
+            let marker = entry.with_file_name("agent-started-marker");
+            assert!(
+                !marker.exists(),
+                "agent entrypoint ran despite failed governed admission"
+            );
+        }
+
+        drop(env);
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    /// Test-wide lock: probe_dsh/run_dsh read process environment variables,
+    /// so tests that mutate them must not run concurrently.
+    static GOVERNANCE_ENV_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+    /// Writes a stub DSH entrypoint that answers `--version` with the audited
+    /// version, `--dump-config` with `dump`, and records a marker file when
+    /// invoked as an agent so tests can prove the process never started.
+    fn write_dsh_stub(root: &Path, file: &str, dump: &str) -> PathBuf {
+        let path = root.join(file);
+        fs::write(
+            &path,
+            format!(
+                "import {{ writeFileSync }} from 'node:fs';\n\
+                 const args = process.argv.slice(2);\n\
+                 if (args.includes('--version')) {{\n  console.log('{AUDITED_DSH_VERSION}');\n\
+                 }} else if (args.includes('--dump-config')) {{\n  console.log({dump:?});\n\
+                 }} else {{\n  writeFileSync(new URL('./agent-started-marker', import.meta.url), 'started');\n  console.log('agent body ran');\n }}\n"
+            ),
+        )
+        .unwrap();
+        path
+    }
+
+    /// Saves and restores the process environment around a test.
+    struct ScopedEnv {
+        saved: Vec<(String, Option<std::ffi::OsString>)>,
+    }
+
+    impl ScopedEnv {
+        fn capture() -> Self {
+            let names = [
+                "KERNIQ_DSH_PROFILE",
+                "DSH_HOME",
+                "KERNIQ_DSH_EVIDENCE_PATH",
+                "KERNIQ_DSH_RUNTIME_ROOT",
+                "KERNIQ_DSH_RUNTIME_ENTRYPOINT",
+            ];
+            ScopedEnv {
+                saved: names
+                    .iter()
+                    .map(|name| (name.to_string(), std::env::var_os(name)))
+                    .collect(),
+            }
+        }
+
+        fn set(&self, name: &str, value: &str) {
+            std::env::set_var(name, value);
+        }
+    }
+
+    impl Drop for ScopedEnv {
+        fn drop(&mut self) {
+            for (name, value) in self.saved.drain(..) {
+                match value {
+                    Some(value) => std::env::set_var(&name, value),
+                    None => std::env::remove_var(&name),
+                }
+            }
+        }
     }
 
     #[test]
