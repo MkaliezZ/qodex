@@ -154,6 +154,30 @@ record; only other column-zero content does. Regression coverage includes a
 blank line between `name:` and `disabled: true` and a sibling record with
 blank lines inside a block scalar.
 
+## Parser hardening added in v0.3.2.2
+
+One remaining accounting gap: a direct `name:` field whose value failed
+plain-scalar parsing was silently dropped, so `target + name: !!js …` could
+still look like a single-name record. `plugin_records` now keeps every
+syntactic `name:` field (`PluginRecord { name_fields: Vec<Option<&str>>, … }`),
+and availability requires exactly one direct name field that resolved to one
+plain scalar:
+
+```text
+target + unparseable second name    → fail closed
+target + empty second name          → fail closed
+target + identical duplicate name   → fail closed
+```
+
+Direct-field indentation was verified against the real audited dumps (all
+record field lines use even 2/4/6/8-space indentation; direct fields are
+invariably exactly two spaces), and the parser now enforces that contract:
+one-space and three-plus-space `name:` lines never identify a plugin. The
+v0.3.2.1 blank-line and disabled-state semantics are unchanged, the causal
+admission regressions still pass, and one final real governed run
+(`allow` → dispatch → result, single preserved `toolCallId`) confirmed no
+production regression.
+
 ## Real Windows verification (DSH 0.1.2-alpha.1 @ cd5ef81)
 
 Post-fix, the new check was evaluated verbatim against four real

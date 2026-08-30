@@ -711,54 +711,71 @@ enum PluginRecordState {
 /// conflicting duplicates all fail closed.
 fn dump_has_enabled_plugin(dump: &str, package_name: &str) -> bool {
     let mut matched = false;
-    for (names, disabled) in plugin_records(dump) {
-        if !names.iter().any(|value| *value == package_name) {
+    for record in plugin_records(dump) {
+        if !record
+            .name_fields
+            .iter()
+            .flatten()
+            .any(|value| *value == package_name)
+        {
             continue;
         }
         matched = true;
-        // Exactly one direct plain `name:` field may identify the record.
-        // A record that claims the target name more than once — or alongside
-        // a second name — is ambiguous and fails closed.
-        if names.len() != 1 {
+        // Exactly one direct `name:` field that resolved to one plain scalar
+        // may identify the record; a second field — even an unparseable one —
+        // makes the record ambiguous and fails closed.
+        if record.name_fields.len() != 1 {
             return false;
         }
-        if plugin_record_state(&disabled) != PluginRecordState::Enabled {
+        if plugin_record_state(&record.disabled_values) != PluginRecordState::Enabled {
             return false;
         }
     }
     matched
 }
 
-/// Collect the direct `name:` and `disabled:` field values of every
-/// top-level plugin record. `name` values that cannot resolve to a plain
-/// scalar are dropped (they cannot identify a target), while unparsable
-/// `disabled` values are kept as `None` so they count as ambiguous.
-fn plugin_records(dump: &str) -> Vec<(Vec<&str>, Vec<Option<&str>>)> {
+/// Direct-field accounting for one top-level plugin record. Every syntactic
+/// `name:` field is preserved — including values that fail plain-scalar
+/// parsing — so a malformed or unresolved duplicate name can never be
+/// silently dropped from the ambiguity check.
+struct PluginRecord<'a> {
+    name_fields: Vec<Option<&'a str>>,
+    disabled_values: Vec<Option<&'a str>>,
+}
+
+/// Collect the direct `name:` and `disabled:` fields of every top-level
+/// plugin record. Direct fields sit at exactly two spaces of indentation in
+/// real audited DSH dumps; one or three-plus spaces are never direct fields.
+fn plugin_records(dump: &str) -> Vec<PluginRecord<'_>> {
     let mut records = Vec::new();
-    let mut names: Vec<&str> = Vec::new();
-    let mut disabled: Vec<Option<&str>> = Vec::new();
+    let mut record = PluginRecord {
+        name_fields: Vec::new(),
+        disabled_values: Vec::new(),
+    };
     let mut in_record = false;
     for line in dump.lines() {
         if line.starts_with("- ") {
             if in_record {
-                records.push((std::mem::take(&mut names), std::mem::take(&mut disabled)));
+                records.push(PluginRecord {
+                    name_fields: std::mem::take(&mut record.name_fields),
+                    disabled_values: std::mem::take(&mut record.disabled_values),
+                });
             }
             in_record = true;
         } else if in_record {
-            if line.starts_with(' ') {
-                // Deeper indentation is nested configuration (including
-                // block-scalar content) and is skipped over.
-                if line.starts_with("   ") {
-                    continue;
-                }
+            if line.starts_with("  ") && !line.starts_with("   ") {
+                // Exactly two spaces: the record's direct field line.
                 let trimmed = line.trim();
                 if let Some(rest) = trimmed.strip_prefix("name:") {
-                    if let Some(value) = yaml_plain_scalar(rest) {
-                        names.push(value);
-                    }
+                    record.name_fields.push(yaml_plain_scalar(rest));
                 } else if let Some(rest) = trimmed.strip_prefix("disabled:") {
-                    disabled.push(yaml_plain_scalar(rest));
+                    record.disabled_values.push(yaml_plain_scalar(rest));
                 }
+                continue;
+            }
+            if line.starts_with(' ') {
+                // One space, or three-plus: nested configuration (including
+                // block-scalar content) and never a direct plugin field.
                 continue;
             }
             // Real dumps contain blank lines inside plugin records (block
@@ -768,12 +785,15 @@ fn plugin_records(dump: &str) -> Vec<(Vec<&str>, Vec<Option<&str>>)> {
             if trimmed.is_empty() || trimmed.starts_with('#') {
                 continue;
             }
-            records.push((std::mem::take(&mut names), std::mem::take(&mut disabled)));
+            records.push(PluginRecord {
+                name_fields: std::mem::take(&mut record.name_fields),
+                disabled_values: std::mem::take(&mut record.disabled_values),
+            });
             in_record = false;
         }
     }
     if in_record {
-        records.push((names, disabled));
+        records.push(record);
     }
     records
 }
@@ -1039,12 +1059,33 @@ mod tests {
             &format!("{enabled}  disabled: false\n  disabled: true\n"),
             PRODUCTION_OBSERVER_PACKAGE
         ));
-        // Duplicate direct `name:` fields claiming the target are ambiguous.
+        // Duplicate direct `name:` fields claiming the target are ambiguous,
+        // including unparseable, empty, and value-identical duplicates.
+        let target = PRODUCTION_OBSERVER_PACKAGE;
+        for duplicate in [
+            format!("- id: malformed\n  name: '{target}'\n  name: '@other/package'\n"),
+            format!("- id: malformed\n  name: '{target}'\n  name: !!js process.env.PLUGIN\n"),
+            format!("- id: malformed\n  name: '{target}'\n  name:\n"),
+            format!("- id: malformed\n  name: '{target}'\n  name: '{target}'\n"),
+        ] {
+            assert!(
+                !dump_has_enabled_plugin(&duplicate, target),
+                "duplicate direct name must fail closed: {duplicate:?}"
+            );
+        }
+        // Direct fields sit at exactly two spaces in real dumps; one-space
+        // and three-plus-space name lines never identify a plugin.
         assert!(!dump_has_enabled_plugin(
-            &format!(
-                "- id: malformed\n  name: '{PRODUCTION_OBSERVER_PACKAGE}'\n  name: '@other/package'\n"
-            ),
-            PRODUCTION_OBSERVER_PACKAGE
+            &format!("- id: observer\n name: '{target}'\n"),
+            target
+        ));
+        assert!(!dump_has_enabled_plugin(
+            &format!("- id: observer\n   name: '{target}'\n"),
+            target
+        ));
+        assert!(dump_has_enabled_plugin(
+            &format!("- id: observer\n  name: '{target}'\n"),
+            target
         ));
         // Duplicate names on an unrelated record do not affect the target.
         assert!(dump_has_enabled_plugin(
