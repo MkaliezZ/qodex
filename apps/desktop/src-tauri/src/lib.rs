@@ -2,6 +2,7 @@ mod coding_pack_database;
 mod coding_pack_export;
 mod coding_pack_export_fs;
 mod control_plane_process;
+mod governed_runtime_seal;
 mod managed_python;
 mod session_database;
 

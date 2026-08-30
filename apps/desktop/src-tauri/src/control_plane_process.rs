@@ -184,6 +184,33 @@ fn dsh_runtime_revision(root: Option<&Path>) -> Option<String> {
     })
 }
 
+/// Whether `runtime_root` is itself the Git top-level of its repository.
+///
+/// `git rev-parse HEAD` resolves through parent directories, so a runtime
+/// root that is a subdirectory of an audited checkout would borrow the
+/// parent's audited revision while deriving its own — possibly attacker
+/// controlled — entrypoint. Canonical forms compare symlinks/junctions and
+/// drive-letter casing; any resolution failure fails closed.
+fn dsh_runtime_root_is_git_toplevel(root: &Path) -> bool {
+    let Some(toplevel) = command_text(
+        "git",
+        &[
+            "-C",
+            root.to_string_lossy().as_ref(),
+            "rev-parse",
+            "--show-toplevel",
+        ],
+    ) else {
+        return false;
+    };
+    let (Ok(root_canonical), Ok(toplevel_canonical)) =
+        (fs::canonicalize(root), fs::canonicalize(&toplevel))
+    else {
+        return false;
+    };
+    root_canonical == toplevel_canonical
+}
+
 /// The single effective DSH invocation that both admission probing and
 /// governed execution derive their arguments from. The entrypoint is derived
 /// from the audited runtime root; an explicitly configured
@@ -270,9 +297,23 @@ fn probe_dsh() -> AgentRuntimeProbe {
         .unwrap_or_else(|| "unavailable".into());
     let revision =
         dsh_runtime_revision(invocation.as_ref().map(|effective| effective.runtime_root.as_path()));
-    // Version and revision are necessary but not sufficient: the runtime
-    // identity must also be bound to the audited checkout.
+    // Version and revision are necessary but not sufficient. The runtime
+    // identity must be bound to the audited checkout (the root must be its
+    // own Git top-level, not a subdirectory borrowing a parent revision),
+    // and the actual governed execution content must match the pinned
+    // runtime seal.
+    let root_is_toplevel = invocation
+        .as_ref()
+        .is_some_and(|effective| dsh_runtime_root_is_git_toplevel(&effective.runtime_root));
+    let runtime_seal_valid = invocation.as_ref().is_some_and(|effective| {
+        crate::governed_runtime_seal::verify_runtime_seal(
+            &effective.runtime_root,
+            profile_dir_for_seal().as_deref(),
+        )
+    });
     let compatible_runtime = runtime_available
+        && root_is_toplevel
+        && runtime_seal_valid
         && version == AUDITED_DSH_VERSION
         && revision.as_deref() == Some(AUDITED_DSH_REVISION);
     let profile = configured_profile_dir();
@@ -725,6 +766,12 @@ fn configured_profile_dir() -> Option<PathBuf> {
     let home = configured_path("DSH_HOME")?;
     let profile = std::env::var("KERNIQ_DSH_PROFILE").unwrap_or_else(|_| "headless".into());
     Some(home.join("profiles").join(profile))
+}
+
+/// The profile root whose installed plugin implementations belong to the
+/// governed runtime seal.
+fn profile_dir_for_seal() -> Option<std::path::PathBuf> {
+    configured_profile_dir()
 }
 
 fn dump_dsh_profile(invocation: &EffectiveDshInvocation) -> Option<String> {
@@ -1355,6 +1402,128 @@ mod tests {
     }
 
     #[test]
+    fn subdirectory_runtime_root_cannot_borrow_the_parent_revision() {
+        let _guard = GOVERNANCE_ENV_LOCK.lock().unwrap();
+        let fixture = admission_fixture();
+
+        // Positive control: the audited-shape root (its own Git top-level)
+        // is admitted and the stub agent starts.
+        let entry = fixture.install_stub(&admission_dump(false, false));
+        assert_governance_gates(probe_dsh().governance.as_ref().unwrap(), true, true, true, true);
+        run_dsh(test_request(), &fixture.workspace)
+            .expect("top-level root must admit the governed run");
+        assert!(agent_started(&entry));
+        clear_agent_marker(&entry);
+
+        // Adversary: point the runtime root at a subdirectory that carries
+        // its own attacker-controlled bin.js while `git rev-parse HEAD`
+        // would resolve through the parent repository.
+        let runtime_root = fixture.root.join("runtime-root");
+        let attacker = runtime_root.join("attacker-subdir");
+        let attacker_bin = attacker.join("apps").join("cli").join("lib").join("bin.js");
+        fs::create_dir_all(attacker_bin.parent().unwrap()).unwrap();
+        write_dsh_stub(&attacker_bin, &admission_dump(false, false));
+        fixture.env.clear("KERNIQ_DSH_RUNTIME_ENTRYPOINT");
+        fixture.env.set("KERNIQ_DSH_RUNTIME_ROOT", attacker.to_string_lossy().as_ref());
+
+        let probe = probe_dsh();
+        let governance = probe.governance.as_ref().unwrap();
+        // The attacker's own dump still self-reports enabled plugins, so the
+        // soft gates stay green — only the runtime identity gates reject.
+        assert!(governance.agent_fuse_adapter_available);
+        assert!(governance.production_observer_available);
+        assert!(!governance.compatible_runtime);
+        assert!(!governance.pre_dispatch_seam_available);
+        let error = run_dsh(test_request(), &fixture.workspace).unwrap_err();
+        assert_eq!(error, "Governed DSH admission failed before process start.");
+        assert!(!agent_started(&attacker_bin));
+        assert!(!agent_started(&fixture.entrypoint));
+    }
+
+    #[test]
+    fn modified_sealed_runtime_content_refuses_admission() {
+        let _guard = GOVERNANCE_ENV_LOCK.lock().unwrap();
+        let fixture = admission_fixture();
+        let entry = fixture.install_stub(&admission_dump(false, false));
+
+        // Positive control: the sealed closure as provisioned is admitted.
+        assert_governance_gates(probe_dsh().governance.as_ref().unwrap(), true, true, true, true);
+        run_dsh(test_request(), &fixture.workspace)
+            .expect("sealed runtime must admit the governed run");
+        assert!(agent_started(&entry));
+        clear_agent_marker(&entry);
+
+        let runtime_root = fixture.root.join("runtime-root");
+        let profile = fixture.root.join("dsh-home").join("profiles").join("headless");
+        let sealed = [
+            entry.clone(),
+            runtime_root
+                .join("packages")
+                .join("core")
+                .join("session")
+                .join("lib")
+                .join("index.js"),
+            runtime_root
+                .join("packages")
+                .join("llm")
+                .join("llm-deepseek")
+                .join("lib")
+                .join("index.js"),
+            profile
+                .join("node_modules")
+                .join("@dhms-agentfuse")
+                .join("dsh-agentfuse")
+                .join("index.js"),
+            profile
+                .join("node_modules")
+                .join("@kerniq")
+                .join("dsh-control-plane-observer")
+                .join("index.js"),
+        ];
+        // Same HEAD, same version, same profile — only sealed bytes change.
+        for target in &sealed {
+            let original = fs::read(target).unwrap();
+            let mut tampered = original.clone();
+            tampered.extend_from_slice(b"// tampered\n");
+            fs::write(target, &tampered).unwrap();
+
+            let governance = probe_dsh().governance.as_ref().unwrap().clone();
+            assert!(
+                !governance.compatible_runtime,
+                "tampered sealed file must fail the runtime seal: {}",
+                target.display()
+            );
+            let error = run_dsh(test_request(), &fixture.workspace).unwrap_err();
+            assert_eq!(error, "Governed DSH admission failed before process start.");
+            assert!(!agent_started(&entry));
+
+            fs::write(target, &original).unwrap();
+        }
+        // A missing sealed file also fails closed.
+        let victim = runtime_root
+            .join("packages")
+            .join("llm")
+            .join("llm-deepseek")
+            .join("lib")
+            .join("index.js");
+        let original = fs::read(&victim).unwrap();
+        fs::remove_file(&victim).unwrap();
+        assert!(!probe_dsh().governance.as_ref().unwrap().compatible_runtime);
+        let error = run_dsh(test_request(), &fixture.workspace).unwrap_err();
+        assert_eq!(error, "Governed DSH admission failed before process start.");
+        assert!(!agent_started(&entry));
+        fs::write(&victim, &original).unwrap();
+
+        // Without the fixture manifest seam, the pinned production manifest
+        // does not describe this closure and admission fails closed.
+        fixture.env.clear("KERNIQ_TEST_RUNTIME_SEAL_MANIFEST");
+        assert!(!probe_dsh().governance.as_ref().unwrap().compatible_runtime);
+        let error = run_dsh(test_request(), &fixture.workspace).unwrap_err();
+        assert_eq!(error, "Governed DSH admission failed before process start.");
+        assert!(!agent_started(&entry));
+    }
+
+    #[test]
     fn effective_invocation_shares_configuration_arguments() {
         let _guard = GOVERNANCE_ENV_LOCK.lock().unwrap();
         let fixture = admission_fixture();
@@ -1402,17 +1571,38 @@ mod tests {
         let env = ScopedEnv::capture();
         env.set("KERNIQ_DSH_PROFILE", "headless");
 
-        let adapter = root
+        let profile = root
             .join("dsh-home")
             .join("profiles")
-            .join("headless")
+            .join("headless");
+        let adapter = profile.join("node_modules").join("@dhms-agentfuse").join("dsh-agentfuse");
+        let adapter_core = profile.join("node_modules").join("@dhms-agentfuse").join("core");
+        let observer = profile
             .join("node_modules")
-            .join("@dhms-agentfuse")
-            .join("dsh-agentfuse");
+            .join("@kerniq")
+            .join("dsh-control-plane-observer");
         fs::create_dir_all(&adapter).unwrap();
+        fs::create_dir_all(&adapter_core).unwrap();
+        fs::create_dir_all(&observer).unwrap();
         fs::write(
             adapter.join("package.json"),
             format!("{{\"name\":\"{AGENTFUSE_PACKAGE}\",\"version\":\"0.2.1\"}}"),
+        )
+        .unwrap();
+        fs::write(adapter.join("index.js"), "export const name = 'agentfuse';\n").unwrap();
+        fs::write(
+            adapter_core.join("index.js"),
+            "export const name = 'agentfuse-core';\n",
+        )
+        .unwrap();
+        fs::write(
+            observer.join("package.json"),
+            format!("{{\"name\":\"{PRODUCTION_OBSERVER_PACKAGE}\",\"version\":\"0.3.1\"}}"),
+        )
+        .unwrap();
+        fs::write(
+            observer.join("index.js"),
+            "export const name = 'kerniq-control-plane-observer';\n",
         )
         .unwrap();
         let evidence = root.join("evidence");
@@ -1425,6 +1615,26 @@ mod tests {
 
         let git_root = root.join("runtime-root");
         fs::create_dir_all(&git_root).unwrap();
+        assert!(Command::new("git")
+            .args(["init", "--quiet"])
+            .current_dir(&git_root)
+            .output()
+            .is_ok_and(|output| output.status.success()));
+        // Sealed runtime dependency implementations (real closure shapes).
+        let session_lib = git_root.join("packages").join("core").join("session").join("lib");
+        let llm_lib = git_root
+            .join("packages")
+            .join("llm")
+            .join("llm-deepseek")
+            .join("lib");
+        fs::create_dir_all(&session_lib).unwrap();
+        fs::create_dir_all(&llm_lib).unwrap();
+        fs::write(session_lib.join("index.js"), "export const name = 'dsh-session';\n").unwrap();
+        fs::write(
+            llm_lib.join("index.js"),
+            "export const name = 'dsh-llm-deepseek';\n",
+        )
+        .unwrap();
         env.set(
             "KERNIQ_DSH_RUNTIME_ROOT",
             git_root.to_string_lossy().as_ref(),
@@ -1450,12 +1660,88 @@ mod tests {
 
     impl AdmissionFixture {
         /// Installs the stub DSH entrypoint into the canonical audited CLI
-        /// slot under the runtime root.
+        /// slot under the runtime root and regenerates the fixture seal
+        /// manifest so the entrypoint belongs to the sealed closure.
         fn install_stub(&self, dump: &str) -> PathBuf {
             fs::create_dir_all(self.entrypoint.parent().unwrap()).unwrap();
             write_dsh_stub(&self.entrypoint, dump);
             self.set_entrypoint(&self.entrypoint);
+            let manifest = self.write_seal_manifest();
+            self.env
+                .set("KERNIQ_TEST_RUNTIME_SEAL_MANIFEST", manifest.to_string_lossy().as_ref());
             self.entrypoint.clone()
+        }
+
+        /// Regenerates the fixture's expected seal manifest from the sealed
+        /// closure as provisioned. This is the test-side trust-establishment
+        /// step; admission verification then hashes the same files through
+        /// the normal production path.
+        fn write_seal_manifest(&self) -> PathBuf {
+            use sha2::{Digest, Sha256};
+            let profile = self.root.join("dsh-home").join("profiles").join("headless");
+            let runtime_root = self.root.join("runtime-root");
+            let mut entries: Vec<(String, String, u64, String)> = Vec::new();
+            let mut add_tree = |base: &Path, scope: &str, dir: &Path| {
+                for file in walk_files(dir) {
+                    let bytes = fs::read(&file).unwrap();
+                    entries.push((
+                        scope.to_string(),
+                        file.strip_prefix(base).unwrap().to_string_lossy().replace('\\', "/"),
+                        bytes.len() as u64,
+                        format!("{:x}", Sha256::digest(&bytes)),
+                    ));
+                }
+            };
+            add_tree(&runtime_root, "runtime", self.entrypoint.parent().unwrap());
+            add_tree(
+                &runtime_root,
+                "runtime",
+                &runtime_root.join("packages").join("core").join("session").join("lib"),
+            );
+            add_tree(
+                &runtime_root,
+                "runtime",
+                &runtime_root.join("packages").join("llm").join("llm-deepseek").join("lib"),
+            );
+            add_tree(
+                &profile,
+                "profile",
+                &profile.join("node_modules").join("@dhms-agentfuse"),
+            );
+            add_tree(
+                &profile,
+                "profile",
+                &profile.join("node_modules").join("@kerniq"),
+            );
+            let refs: Vec<(&str, &str, u64, &str)> = entries
+                .iter()
+                .map(|(root, path, size, sha256)| {
+                    (root.as_str(), path.as_str(), *size, sha256.as_str())
+                })
+                .collect();
+            let seal = format!(
+                "{:x}",
+                Sha256::digest(
+                    crate::governed_runtime_seal::canonical_manifest_bytes(&refs).as_bytes()
+                )
+            );
+            let manifest = serde_json::json!({
+                "schema_version": crate::governed_runtime_seal::MANIFEST_SCHEMA_VERSION,
+                "source_repository": "deepseek-ai/deepseek-harness",
+                "source_revision": crate::governed_runtime_seal::MANIFEST_SOURCE_REVISION,
+                "runtime_version": crate::governed_runtime_seal::MANIFEST_RUNTIME_VERSION,
+                "runtime_seal_sha256": seal,
+                "entry_count": entries.len(),
+                "entries": entries
+                    .iter()
+                    .map(|(root, path, size, sha256)| serde_json::json!({
+                        "root": root, "path": path, "size": size, "sha256": sha256,
+                    }))
+                    .collect::<Vec<_>>(),
+            });
+            let path = self.root.join("kerniq-test-runtime-seal.json");
+            fs::write(&path, serde_json::to_string_pretty(&manifest).unwrap()).unwrap();
+            path
         }
 
         fn set_entrypoint(&self, entry: &Path) {
@@ -1523,6 +1809,29 @@ mod tests {
 
     fn clear_agent_marker(entry: &Path) {
         let _ = fs::remove_file(entry.with_file_name("agent-started-marker"));
+    }
+
+    /// Deterministically lists the files under `dir` (depth first, sorted).
+    fn walk_files(dir: &Path) -> Vec<PathBuf> {
+        let mut files = Vec::new();
+        let mut stack = vec![dir.to_path_buf()];
+        while let Some(current) = stack.pop() {
+            let Ok(read) = fs::read_dir(&current) else {
+                continue;
+            };
+            let mut children: Vec<_> = read.flatten().collect();
+            children.sort_by_key(|entry| entry.path());
+            for child in children {
+                let path = child.path();
+                if path.is_dir() {
+                    stack.push(path);
+                } else {
+                    files.push(path);
+                }
+            }
+        }
+        files.sort();
+        files
     }
 
     /// Writes a stub DSH entrypoint at `path`. It answers `--version` with
@@ -1595,6 +1904,7 @@ if (args.includes('--version')) {{
                 "KERNIQ_DSH_RUNTIME_ENTRYPOINT",
                 "KERNIQ_DSH_PRODUCT_PATCH",
                 "KERNIQ_TEST_DSH_REVISION",
+                "KERNIQ_TEST_RUNTIME_SEAL_MANIFEST",
             ];
             ScopedEnv {
                 saved: names
