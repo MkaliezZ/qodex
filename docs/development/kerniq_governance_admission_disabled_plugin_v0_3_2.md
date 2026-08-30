@@ -52,7 +52,8 @@ whole `config:` block (agentfuse) — and base-profile records also carry
 `dump_has_enabled_plugin(dump, package)` parses top-level plugin records
 (column-zero `- ` starts; direct fields are the following two-space-indented
 `key: value` lines; deeper indentation is nested configuration and is
-skipped; any column-zero line ends the record):
+skipped; blank lines and column-zero comments do not terminate a record —
+other nonblank, non-comment column-zero content does):
 
 ```text
 matching record, no disabled field            → enabled
@@ -177,6 +178,71 @@ v0.3.2.1 blank-line and disabled-state semantics are unchanged, the causal
 admission regressions still pass, and one final real governed run
 (`allow` → dispatch → result, single preserved `toolCallId`) confirmed no
 production regression.
+
+## v0.3.2.3 — Effective config & runtime identity binding (Codex review P1s)
+
+Codex's independent review confirmed two P1 governance defects beyond the
+parser work:
+
+```text
+P1-A  ADMISSION_CONFIG != EXECUTION_CONFIG
+      the admission dump ran --profile only, while execution added
+      --patch $KERNIQ_DSH_PRODUCT_PATCH — a product patch could disable
+      AgentFuse or the production observer after admission had approved
+      the unpatched profile
+
+P1-B  AUDITED_RUNTIME_ROOT != NECESSARILY_EXECUTED_RUNTIME
+      revision was checked against KERNIQ_DSH_RUNTIME_ROOT while version,
+      dump, and execution came from the independently configurable
+      KERNIQ_DSH_RUNTIME_ENTRYPOINT — a foreign same-version executable
+      could borrow the audited root's identity
+```
+
+Both are closed by one shared `EffectiveDshInvocation`: the admission dump
+and the agent execution now derive `--profile` and `--patch` arguments from
+the same object (`configuration_args()`), and the entrypoint is derived from
+the audited runtime root (`<root>/apps/cli/lib/bin.js`, the audited CLI
+location). A configured `KERNIQ_DSH_RUNTIME_ENTRYPOINT` is accepted only
+when it canonicalizes to exactly that file — canonical forms are used for
+the identity comparison only, because node cannot execute `\\?\`-prefixed
+paths on Windows (discovered while testing; execution keeps the original
+path). Unresolvable identity (missing root/entrypoint, foreign entrypoint)
+makes the invocation `None` and governed admission fails closed; version
+and revision remain necessary but no longer sufficient.
+
+Causal regressions added:
+
+```text
+no product patch, all gates true            → admitted, stub agent starts
+patch disables observer                     → dump itself reflects it,
+                                              observer gates false, refused
+                                              before process start
+patch disables AgentFuse                    → adapter gates false, refused
+configured patch missing                    → dump fails, refused without a
+                                              patch-free fallback
+foreign same-version entrypoint             → identity unresolvable,
+                                              compatible_runtime=false,
+                                              refused; audited stub never ran
+missing runtime root                        → identity unresolvable, refused
+configuration_args shared by probe and run  → profile/patch bound together
+```
+
+Residual bounded TOCTOU, reported not redesigned (per review guidance):
+between the admission dump and process start (milliseconds, same process),
+the patch file on disk could in principle be swapped. Exploiting it requires
+local filesystem write access to the patch path between probe and spawn;
+closing it fully would need immutable patch snapshots inside DSH's launch
+API, which is out of KerniQ's control. The configuration arguments
+themselves are bound; the patch *contents* are re-read by DSH at execution.
+
+A final real governed run on the actual Windows audited runtime (root
+`F:\DSH-Runtime` at `cd5ef81`, entrypoint derived
+`apps\cli\lib\bin.js`, no product patch, real DeepSeek request) reproduced
+the full evidence chain unchanged.
+
+The P3 documentation inconsistency (an older paragraph still claiming any
+column-zero line ends a record, contradicting the blank-line correction) is
+fixed above.
 
 ## Real Windows verification (DSH 0.1.2-alpha.1 @ cd5ef81)
 

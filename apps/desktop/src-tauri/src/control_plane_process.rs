@@ -184,20 +184,99 @@ fn dsh_runtime_revision(root: Option<&Path>) -> Option<String> {
     })
 }
 
+/// The single effective DSH invocation that both admission probing and
+/// governed execution derive their arguments from. The entrypoint is derived
+/// from the audited runtime root; an explicitly configured
+/// `KERNIQ_DSH_RUNTIME_ENTRYPOINT` is accepted only when it canonicalizes to
+/// exactly the audited checkout's CLI file, so no independently configurable
+/// trust object can substitute another runtime after admission.
+struct EffectiveDshInvocation {
+    runtime_root: PathBuf,
+    entrypoint: PathBuf,
+    profile: String,
+    product_patch: Option<PathBuf>,
+}
+
+impl EffectiveDshInvocation {
+    /// Derives the invocation from the environment. Returns `None` when the
+    /// runtime identity cannot be resolved confidently — missing root or
+    /// entrypoint, or a configured entrypoint that is not the audited
+    /// checkout's canonical CLI file — and admission then fails closed.
+    fn from_environment() -> Option<Self> {
+        let runtime_root = configured_path("KERNIQ_DSH_RUNTIME_ROOT")?;
+        let derived = runtime_root
+            .join("apps")
+            .join("cli")
+            .join("lib")
+            .join("bin.js");
+        let entrypoint = match configured_path("KERNIQ_DSH_RUNTIME_ENTRYPOINT") {
+            Some(configured) => {
+                // Canonical forms resolve symlinks/junctions and case only
+                // for the identity comparison; execution keeps the original
+                // path because node cannot execute `\\?\`-prefixed paths.
+                let canonical_configured = fs::canonicalize(&configured).ok()?;
+                let canonical_derived = fs::canonicalize(&derived).ok()?;
+                // Exact canonical equality only: an entrypoint merely
+                // somewhere under the root is not trust.
+                if canonical_configured != canonical_derived {
+                    return None;
+                }
+                if !configured.is_file() {
+                    return None;
+                }
+                configured
+            }
+            None => derived,
+        };
+        if !entrypoint.is_file() {
+            return None;
+        }
+        let profile = std::env::var("KERNIQ_DSH_PROFILE").unwrap_or_else(|_| "headless".into());
+        let product_patch = configured_path("KERNIQ_DSH_PRODUCT_PATCH");
+        Some(EffectiveDshInvocation {
+            runtime_root,
+            entrypoint,
+            profile,
+            product_patch,
+        })
+    }
+
+    /// The configuration-determining arguments shared by the admission dump
+    /// and the agent execution. The prompt is execution-only and deliberately
+    /// excluded; profile and product patch must never diverge between probe
+    /// and run.
+    fn configuration_args(&self) -> Vec<String> {
+        let mut args = vec!["--profile".to_string(), self.profile.clone()];
+        if let Some(patch) = &self.product_patch {
+            args.push("--patch".to_string());
+            args.push(patch.to_string_lossy().into_owned());
+        }
+        args
+    }
+}
+
 fn probe_dsh() -> AgentRuntimeProbe {
-    let entrypoint = configured_path("KERNIQ_DSH_RUNTIME_ENTRYPOINT");
-    let root = configured_path("KERNIQ_DSH_RUNTIME_ROOT");
-    let runtime_available = entrypoint.as_ref().is_some_and(|path| path.is_file());
-    let version = entrypoint
+    let invocation = EffectiveDshInvocation::from_environment();
+    let runtime_available = invocation.is_some();
+    let version = invocation
         .as_ref()
         .filter(|_| runtime_available)
-        .and_then(|path| command_text("node", &[path.to_string_lossy().as_ref(), "--version"]))
+        .and_then(|effective| {
+            command_text(
+                "node",
+                &[effective.entrypoint.to_string_lossy().as_ref(), "--version"],
+            )
+        })
         .unwrap_or_else(|| "unavailable".into());
-    let revision = dsh_runtime_revision(root.as_deref());
-    let compatible_runtime =
-        version == AUDITED_DSH_VERSION && revision.as_deref() == Some(AUDITED_DSH_REVISION);
+    let revision =
+        dsh_runtime_revision(invocation.as_ref().map(|effective| effective.runtime_root.as_path()));
+    // Version and revision are necessary but not sufficient: the runtime
+    // identity must also be bound to the audited checkout.
+    let compatible_runtime = runtime_available
+        && version == AUDITED_DSH_VERSION
+        && revision.as_deref() == Some(AUDITED_DSH_REVISION);
     let profile = configured_profile_dir();
-    let dump = entrypoint.as_ref().and_then(|path| dump_dsh_profile(path));
+    let dump = invocation.as_ref().and_then(dump_dsh_profile);
     let agent_fuse_version = profile.as_deref().and_then(installed_agent_fuse_version);
     let agent_fuse_adapter_available = agent_fuse_version.is_some()
         && dump
@@ -312,19 +391,18 @@ fn run_dsh(request: RunBackendRequest, workspace: &Path) -> Result<BackendRunOut
     if !probe.available {
         return Err("DeepSeek Harness backend is unavailable.".into());
     }
-    let entrypoint = configured_path("KERNIQ_DSH_RUNTIME_ENTRYPOINT")
-        .ok_or("DeepSeek Harness runtime entrypoint is not configured.")?;
+    let invocation = EffectiveDshInvocation::from_environment()
+        .ok_or("DeepSeek Harness runtime identity could not be established.")?;
     let evidence_path = configured_path("KERNIQ_DSH_EVIDENCE_PATH")
         .ok_or("DeepSeek Harness evidence capture is not configured.")?;
     fs::write(&evidence_path, b"")
         .map_err(|_| "DeepSeek Harness evidence capture could not be initialized.")?;
-    let profile = std::env::var("KERNIQ_DSH_PROFILE").unwrap_or_else(|_| "headless".into());
     let prompt = bounded_review_prompt(&request.prompt);
     let mut command = Command::new("node");
-    command.arg(entrypoint).args(["--profile", &profile]);
-    if let Some(patch) = configured_path("KERNIQ_DSH_PRODUCT_PATCH") {
-        command.args(["--patch", patch.to_string_lossy().as_ref()]);
-    }
+    command.arg(&invocation.entrypoint);
+    let configuration_args = invocation.configuration_args();
+    let arg_refs: Vec<&str> = configuration_args.iter().map(String::as_str).collect();
+    command.args(&arg_refs);
     command.arg(prompt).current_dir(workspace);
     configure_agent_environment(&mut command, true);
     let output = run_bounded(command)?;
@@ -649,12 +727,12 @@ fn configured_profile_dir() -> Option<PathBuf> {
     Some(home.join("profiles").join(profile))
 }
 
-fn dump_dsh_profile(entrypoint: &Path) -> Option<String> {
-    let profile = std::env::var("KERNIQ_DSH_PROFILE").unwrap_or_else(|_| "headless".into());
+fn dump_dsh_profile(invocation: &EffectiveDshInvocation) -> Option<String> {
     let mut command = Command::new("node");
-    command
-        .arg(entrypoint)
-        .args(["--profile", &profile, "--dump-config"]);
+    command.arg(&invocation.entrypoint);
+    let configuration_args = invocation.configuration_args();
+    let arg_refs: Vec<&str> = configuration_args.iter().map(String::as_str).collect();
+    command.args(&arg_refs).arg("--dump-config");
     configure_agent_environment(&mut command, true);
     let output = command.output().ok()?;
     output
@@ -1134,33 +1212,23 @@ mod tests {
         // Positive control: same runtime, revision, profile, adapter, and
         // evidence path as the negative case; only the observer record
         // differs. Every gate holds and the stub agent really starts.
-        let enabled = write_dsh_stub(
-            &fixture.root,
-            "stub-observer-enabled.mjs",
-            &admission_dump(false, false),
-        );
-        fixture.set_entrypoint(&enabled);
+        let entry = fixture.install_stub(&admission_dump(false, false));
         let positive = probe_dsh();
         assert!(positive.available);
         assert_governance_gates(positive.governance.as_ref().unwrap(), true, true, true, true);
         let output = run_dsh(test_request(), &fixture.workspace)
             .expect("all gates true must admit the governed run");
-        assert!(agent_started(&enabled), "stub agent did not start");
+        assert!(agent_started(&entry), "stub agent did not start");
         assert_eq!(output.result.findings.len(), 1);
-        clear_agent_marker(&enabled);
+        clear_agent_marker(&entry);
 
         // Negative: the disabled observer is the only gate that flips.
-        let disabled = write_dsh_stub(
-            &fixture.root,
-            "stub-observer-disabled.mjs",
-            &admission_dump(true, false),
-        );
-        fixture.set_entrypoint(&disabled);
+        fixture.install_stub(&admission_dump(true, false));
         let negative = probe_dsh();
         assert_governance_gates(negative.governance.as_ref().unwrap(), true, true, false, false);
         let error = run_dsh(test_request(), &fixture.workspace).unwrap_err();
         assert_eq!(error, "Governed DSH admission failed before process start.");
-        assert!(!agent_started(&disabled));
+        assert!(!agent_started(&entry));
     }
 
     #[test]
@@ -1169,33 +1237,145 @@ mod tests {
         let fixture = admission_fixture();
 
         // Positive control: identical environment, AgentFuse enabled.
-        let enabled = write_dsh_stub(
-            &fixture.root,
-            "stub-agentfuse-enabled.mjs",
-            &admission_dump(false, false),
-        );
-        fixture.set_entrypoint(&enabled);
+        let entry = fixture.install_stub(&admission_dump(false, false));
         let positive = probe_dsh();
         assert_governance_gates(positive.governance.as_ref().unwrap(), true, true, true, true);
         let output = run_dsh(test_request(), &fixture.workspace)
             .expect("all gates true must admit the governed run");
-        assert!(agent_started(&enabled));
+        assert!(agent_started(&entry));
         assert_eq!(output.result.findings.len(), 1);
-        clear_agent_marker(&enabled);
+        clear_agent_marker(&entry);
 
         // Negative: the disabled AgentFuse record is the only gate that
         // flips; the observer stays available.
-        let disabled = write_dsh_stub(
-            &fixture.root,
-            "stub-agentfuse-disabled.mjs",
-            &admission_dump(false, true),
-        );
-        fixture.set_entrypoint(&disabled);
+        fixture.install_stub(&admission_dump(false, true));
         let negative = probe_dsh();
         assert_governance_gates(negative.governance.as_ref().unwrap(), true, false, true, false);
         let error = run_dsh(test_request(), &fixture.workspace).unwrap_err();
         assert_eq!(error, "Governed DSH admission failed before process start.");
-        assert!(!agent_started(&disabled));
+        assert!(!agent_started(&entry));
+    }
+
+    #[test]
+    fn admission_dump_applies_the_product_patch_and_refuses_disabled_governance() {
+        let _guard = GOVERNANCE_ENV_LOCK.lock().unwrap();
+        let fixture = admission_fixture();
+        let entry = fixture.install_stub(&admission_dump(false, false));
+
+        // Positive control: no product patch, all gates hold, agent starts.
+        assert_governance_gates(probe_dsh().governance.as_ref().unwrap(), true, true, true, true);
+        run_dsh(test_request(), &fixture.workspace)
+            .expect("no-patch positive control must admit the governed run");
+        assert!(agent_started(&entry));
+        clear_agent_marker(&entry);
+
+        // Product patch disables the observer: the admission dump itself must
+        // reflect the effective configuration and refuse the run.
+        let observer_patch = fixture.root.join("disable-observer.patch.yml");
+        fs::write(&observer_patch, "- id: kerniq-control-plane-observer\n  disabled: true\n")
+            .unwrap();
+        fixture.set_product_patch(&observer_patch);
+        assert_governance_gates(
+            probe_dsh().governance.as_ref().unwrap(),
+            true,
+            true,
+            false,
+            false,
+        );
+        let error = run_dsh(test_request(), &fixture.workspace).unwrap_err();
+        assert_eq!(error, "Governed DSH admission failed before process start.");
+        assert!(!agent_started(&entry));
+        fixture.env.clear("KERNIQ_DSH_PRODUCT_PATCH");
+
+        // Product patch disables AgentFuse: same refusal, only the adapter
+        // gates flip.
+        let agentfuse_patch = fixture.root.join("disable-agentfuse.patch.yml");
+        fs::write(&agentfuse_patch, "- id: agentfuse\n  disabled: true\n").unwrap();
+        fixture.set_product_patch(&agentfuse_patch);
+        assert_governance_gates(
+            probe_dsh().governance.as_ref().unwrap(),
+            true,
+            false,
+            true,
+            false,
+        );
+        let error = run_dsh(test_request(), &fixture.workspace).unwrap_err();
+        assert_eq!(error, "Governed DSH admission failed before process start.");
+        assert!(!agent_started(&entry));
+        fixture.env.clear("KERNIQ_DSH_PRODUCT_PATCH");
+
+        // A configured patch that cannot be resolved fails the dump itself,
+        // and governed admission fails closed without a patch-free fallback.
+        fixture.set_product_patch(&fixture.root.join("missing.patch.yml"));
+        let broken = probe_dsh().governance.as_ref().unwrap().clone();
+        assert!(!broken.agent_fuse_adapter_available);
+        assert!(!broken.production_observer_available);
+        assert!(!broken.governed_profile_valid);
+        let error = run_dsh(test_request(), &fixture.workspace).unwrap_err();
+        assert_eq!(error, "Governed DSH admission failed before process start.");
+        assert!(!agent_started(&entry));
+    }
+
+    #[test]
+    fn foreign_same_version_entrypoint_cannot_borrow_the_audited_root() {
+        let _guard = GOVERNANCE_ENV_LOCK.lock().unwrap();
+        let fixture = admission_fixture();
+        // The audited slot holds a stub that would report the correct version
+        // and an enabled dump, but it must never be reached through the
+        // adversary's entrypoint.
+        fixture.install_stub(&admission_dump(false, false));
+
+        // Adversary: a foreign entrypoint outside the audited checkout that
+        // also reports the audited version with a clean dump.
+        let foreign = fixture.root.join("foreign-bin.mjs");
+        write_dsh_stub(&foreign, &admission_dump(false, false));
+        fixture.set_entrypoint(&foreign);
+        let probe = probe_dsh();
+        assert!(!probe.available, "foreign entrypoint must not resolve");
+        let governance = probe.governance.as_ref().unwrap();
+        assert!(!governance.compatible_runtime);
+        assert!(!governance.agent_fuse_adapter_available);
+        assert!(!governance.production_observer_available);
+        let error = run_dsh(test_request(), &fixture.workspace).unwrap_err();
+        assert_eq!(error, "Governed DSH admission failed before process start.");
+        assert!(!agent_started(&fixture.entrypoint));
+        let _ = fs::remove_file(foreign.with_file_name("agent-started-marker"));
+
+        // Unresolved runtime identity (missing root) also fails closed.
+        fixture.env.clear("KERNIQ_DSH_RUNTIME_ENTRYPOINT");
+        fixture.env.set(
+            "KERNIQ_DSH_RUNTIME_ROOT",
+            fixture.root.join("absent-root").to_string_lossy().as_ref(),
+        );
+        let missing = probe_dsh();
+        assert!(!missing.available);
+        assert!(!missing.governance.as_ref().unwrap().compatible_runtime);
+        let error = run_dsh(test_request(), &fixture.workspace).unwrap_err();
+        assert_eq!(error, "Governed DSH admission failed before process start.");
+    }
+
+    #[test]
+    fn effective_invocation_shares_configuration_arguments() {
+        let _guard = GOVERNANCE_ENV_LOCK.lock().unwrap();
+        let fixture = admission_fixture();
+        fixture.install_stub(&admission_dump(false, false));
+        let patch = fixture.root.join("product.patch.yml");
+        fs::write(&patch, "[]\n").unwrap();
+        fixture.set_product_patch(&patch);
+
+        let invocation = EffectiveDshInvocation::from_environment()
+            .expect("canonical fixture must resolve its invocation");
+        // The dump-config invocation and the runtime invocation both build
+        // from this one argument vector: profile and patch are shared.
+        assert_eq!(
+            invocation.configuration_args(),
+            vec![
+                "--profile".to_string(),
+                "headless".to_string(),
+                "--patch".to_string(),
+                patch.to_string_lossy().into_owned(),
+            ]
+        );
     }
 
     /// Test-wide lock: probe_dsh/run_dsh read process environment variables,
@@ -1203,12 +1383,14 @@ mod tests {
     static GOVERNANCE_ENV_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
 
     /// Hermetic admission environment: installed adapter metadata, evidence
-    /// capture, runtime root, and the audited revision provided through the
+    /// capture, an audited-shape runtime root whose canonical CLI slot holds
+    /// the stub entrypoint, and the audited revision provided through the
     /// test-only seam in `dsh_runtime_revision`. Cases differ only in the
-    /// stub entrypoint's embedded dump.
+    /// stub's embedded dump and the optional product patch.
     struct AdmissionFixture {
         root: PathBuf,
         workspace: PathBuf,
+        entrypoint: PathBuf,
         env: ScopedEnv,
     }
 
@@ -1257,14 +1439,33 @@ mod tests {
         AdmissionFixture {
             root,
             workspace,
+            entrypoint: git_root
+                .join("apps")
+                .join("cli")
+                .join("lib")
+                .join("bin.js"),
             env,
         }
     }
 
     impl AdmissionFixture {
+        /// Installs the stub DSH entrypoint into the canonical audited CLI
+        /// slot under the runtime root.
+        fn install_stub(&self, dump: &str) -> PathBuf {
+            fs::create_dir_all(self.entrypoint.parent().unwrap()).unwrap();
+            write_dsh_stub(&self.entrypoint, dump);
+            self.set_entrypoint(&self.entrypoint);
+            self.entrypoint.clone()
+        }
+
         fn set_entrypoint(&self, entry: &Path) {
             self.env
                 .set("KERNIQ_DSH_RUNTIME_ENTRYPOINT", entry.to_string_lossy().as_ref());
+        }
+
+        fn set_product_patch(&self, patch: &Path) {
+            self.env
+                .set("KERNIQ_DSH_PRODUCT_PATCH", patch.to_string_lossy().as_ref());
         }
     }
 
@@ -1324,25 +1525,59 @@ mod tests {
         let _ = fs::remove_file(entry.with_file_name("agent-started-marker"));
     }
 
-    /// Writes a stub DSH entrypoint that answers `--version` with the audited
-    /// version, `--dump-config` with `dump`, and, when invoked as an agent,
-    /// records a marker file and returns the minimum structured result
-    /// `run_dsh` expects so the positive control completes cleanly.
-    fn write_dsh_stub(root: &Path, file: &str, dump: &str) -> PathBuf {
-        let path = root.join(file);
+    /// Writes a stub DSH entrypoint at `path`. It answers `--version` with
+    /// the audited version; for `--dump-config` it prints the base dump and,
+    /// when a product patch is configured, applies the patch's
+    /// `- id: X / disabled: true` rows to the matching records — failing when
+    /// the patch file is missing, like the real CLI; when invoked as an agent
+    /// it records a marker file and returns the minimum structured result
+    /// `run_dsh` expects.
+    fn write_dsh_stub(path: &Path, dump: &str) {
         fs::write(
-            &path,
+            path,
             format!(
-                "import {{ writeFileSync }} from 'node:fs';\n\
-                 const args = process.argv.slice(2);\n\
-                 if (args.includes('--version')) {{\n  console.log('{AUDITED_DSH_VERSION}');\n\
-                 }} else if (args.includes('--dump-config')) {{\n  console.log({dump:?});\n\
-                 }} else {{\n  writeFileSync(new URL('./agent-started-marker', import.meta.url), 'started');\n\
-                 console.log(JSON.stringify({{findings:[{{finding:'stub governed run completed',evidence:'stub.mjs:1',severity:'low',smallestFix:'none',files:['stub.mjs']}}]}}));\n }}\n"
+                r#"const {{ writeFileSync, readFileSync, existsSync }} = require('node:fs');
+const {{ join }} = require('node:path');
+const args = process.argv.slice(2);
+const base = {dump:?};
+if (args.includes('--version')) {{
+  console.log('{AUDITED_DSH_VERSION}');
+}} else if (args.includes('--dump-config')) {{
+  let effective = base;
+  const patchIndex = args.indexOf('--patch');
+  if (patchIndex !== -1) {{
+    const patchPath = args[patchIndex + 1];
+    if (!existsSync(patchPath)) {{ console.error('patch not found'); process.exit(1); }}
+    const plines = readFileSync(patchPath, 'utf8').split(/\r?\n/);
+    const disabledIds = [];
+    for (let i = 0; i < plines.length; i++) {{
+      const m = (plines[i] || '').match(/^-\s*id:\s*(\S+)/);
+      if (m && /^\s+disabled:\s*true\s*$/.test(plines[i + 1] || '')) disabledIds.push(m[1]);
+    }}
+    if (disabledIds.length) {{
+      const dl = base.split('\n');
+      const out = [];
+      for (let i = 0; i < dl.length; i++) {{
+        out.push(dl[i]);
+        const m = (dl[i] || '').match(/^-\s*id:\s*(\S+)/);
+        if (m && disabledIds.includes(m[1]) && (dl[i + 1] || '').startsWith('  name:')) {{
+          out.push(dl[i + 1]);
+          out.push('  disabled: true');
+          i++;
+        }}
+      }}
+      effective = out.join('\n');
+    }}
+  }}
+  console.log(effective);
+}} else {{
+  writeFileSync(join(__dirname, 'agent-started-marker'), 'started');
+  console.log(JSON.stringify({{findings:[{{finding:'stub governed run completed',evidence:'stub.mjs:1',severity:'low',smallestFix:'none',files:['stub.mjs']}}]}}));
+}}
+"#
             ),
         )
         .unwrap();
-        path
     }
 
     /// Saves and restores the process environment around a test.
@@ -1358,6 +1593,7 @@ mod tests {
                 "KERNIQ_DSH_EVIDENCE_PATH",
                 "KERNIQ_DSH_RUNTIME_ROOT",
                 "KERNIQ_DSH_RUNTIME_ENTRYPOINT",
+                "KERNIQ_DSH_PRODUCT_PATCH",
                 "KERNIQ_TEST_DSH_REVISION",
             ];
             ScopedEnv {
@@ -1370,6 +1606,10 @@ mod tests {
 
         fn set(&self, name: &str, value: &str) {
             std::env::set_var(name, value);
+        }
+
+        fn clear(&self, name: &str) {
+            std::env::remove_var(name);
         }
     }
 
