@@ -1,8 +1,6 @@
-export type ControlPlaneTaskStatus =
-  | "queued"
-  | "running"
-  | "completed"
-  | "failed";
+import type { AgentGovernanceEvidence } from "./governance.js";
+
+export type ControlPlaneTaskStatus = "queued" | "running" | "completed" | "failed";
 
 export type WorkerRunStatus =
   | "queued"
@@ -19,15 +17,33 @@ export type SupervisorClassification =
   | "DISAGREEMENT"
   | "UNRESOLVED";
 
-export type GovernanceTier = "OBSERVED" | "GOVERNED";
+export type GovernanceTier = "OPAQUE" | "OBSERVED" | "GOVERNED";
 
-export interface AgentAdapterCapabilities {
+export type GovernanceMode =
+  | "none"
+  | "host_dispatch"
+  | "pre_dispatch_plugin"
+  | "external_decision";
+
+export interface AgentBackendCapabilities {
   readonly supportsStreaming: boolean;
   readonly supportsCancel: boolean;
   readonly supportsToolEvents: boolean;
-  readonly supportsExternalGovernance: boolean;
   readonly governanceTier: GovernanceTier;
+  readonly governanceMode: GovernanceMode;
   readonly supportsResume: boolean;
+}
+
+export interface AgentBackendAdmission {
+  readonly version: string;
+  readonly model?: string;
+  readonly capabilities: AgentBackendCapabilities;
+}
+
+export interface ControlPlaneWorkerRequirement {
+  readonly backendId: string;
+  readonly sessionId?: string;
+  readonly governanceRequired?: boolean;
 }
 
 export interface ControlPlaneTaskInput {
@@ -35,6 +51,17 @@ export interface ControlPlaneTaskInput {
   readonly title: string;
   readonly workspace: string;
   readonly prompt: string;
+  readonly workers?: readonly ControlPlaneWorkerRequirement[];
+}
+
+export interface AgentBackendTaskInput {
+  readonly taskId: string;
+  readonly title: string;
+  readonly workspace: string;
+  readonly prompt: string;
+  readonly workerRunId: string;
+  readonly sessionId?: string;
+  readonly governanceRequired: boolean;
 }
 
 export interface AgentObservation {
@@ -60,17 +87,34 @@ export interface AgentTaskResult {
   readonly rawResultReference: string;
 }
 
-export interface AgentAdapter {
+export interface AgentBackendTaskOutput {
+  readonly result: AgentTaskResult;
+  readonly governanceEvidence: readonly AgentGovernanceEvidence[];
+}
+
+/**
+ * Product-level control-plane backend.
+ *
+ * This contract owns runtime admission and bounded task transport only. It
+ * does not approve actions, evaluate policy, execute KerniQ tools, or own the
+ * Universal Session Ledger.
+ */
+export interface AgentBackend {
   readonly id: string;
   readonly kind: string;
-  readonly version: string;
-  readonly capabilities: AgentAdapterCapabilities;
-  runTask(
-    input: ControlPlaneTaskInput,
+  probeCapabilities(): Promise<AgentBackendAdmission>;
+  startTask(
+    input: AgentBackendTaskInput,
     observe: (observation: AgentObservation) => void,
-  ): Promise<AgentTaskResult>;
-  cancel?(taskId: string): Promise<void>;
+  ): Promise<AgentBackendTaskOutput>;
+  stop?(workerRunId: string): Promise<void>;
 }
+
+/** @deprecated Use AgentBackend. */
+export type AgentAdapter = AgentBackend;
+
+/** @deprecated Use AgentBackendCapabilities. */
+export type AgentAdapterCapabilities = AgentBackendCapabilities;
 
 export interface WorkerLifecycleEntry {
   readonly status: WorkerRunStatus;
@@ -78,13 +122,22 @@ export interface WorkerLifecycleEntry {
   readonly summary: string;
 }
 
+export interface WorkerGovernance {
+  readonly tier: GovernanceTier;
+  readonly mode: GovernanceMode;
+  readonly evidence: readonly AgentGovernanceEvidence[];
+}
+
 export interface WorkerRun {
   readonly runId: string;
   readonly taskId: string;
+  readonly sessionId?: string;
   readonly agentId: string;
   readonly agentKind: string;
   readonly agentVersion: string;
-  readonly capabilities: AgentAdapterCapabilities;
+  readonly model?: string;
+  readonly capabilities: AgentBackendCapabilities;
+  readonly governance: WorkerGovernance;
   readonly status: WorkerRunStatus;
   readonly startedAt: string;
   readonly endedAt: string;
@@ -109,16 +162,6 @@ export interface MatchedFindingPair {
   readonly similarity: number;
 }
 
-export interface GovernanceLimitationEvidence {
-  readonly action: "git push";
-  readonly interception: "not_proven";
-  readonly decision: "unknown";
-  readonly dispatchOccurred: "unknown";
-  readonly handlerStarted: "unknown";
-  readonly outcome: "not_tested";
-  readonly reason: string;
-}
-
 export interface ControlPlaneTaskResult {
   readonly taskId: string;
   readonly title: string;
@@ -127,5 +170,20 @@ export interface ControlPlaneTaskResult {
   readonly endedAt: string;
   readonly workers: readonly WorkerRun[];
   readonly reconciliation: ReconciliationResult;
-  readonly governance: GovernanceLimitationEvidence;
+}
+
+export function createAgentBackendCapabilities(
+  input: AgentBackendCapabilities,
+): AgentBackendCapabilities {
+  validateGovernanceCapability(input.governanceTier, input.governanceMode);
+  return Object.freeze({ ...input });
+}
+
+function validateGovernanceCapability(tier: GovernanceTier, mode: GovernanceMode): void {
+  if (tier === "GOVERNED" && mode === "none") {
+    throw new TypeError("A governed backend must declare its governance mode.");
+  }
+  if (tier === "OPAQUE" && mode !== "none") {
+    throw new TypeError("An opaque backend cannot claim a governance integration mode.");
+  }
 }

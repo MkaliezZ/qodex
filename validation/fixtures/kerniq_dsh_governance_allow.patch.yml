@@ -3,5 +3,5 @@
     defaultAction: block
     denyTools: []
     askTools: []
-    allowTools: [kerniq_write_probe]
+    allowTools: [kerniq_write_probe, read, glob]
     logDecisions: false

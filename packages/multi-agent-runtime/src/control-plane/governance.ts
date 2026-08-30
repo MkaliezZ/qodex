@@ -70,6 +70,7 @@ export function createAgentGovernanceEvidence(
 export function classifyGovernanceTier(
   evidence: readonly AgentGovernanceEvidence[],
 ): GovernanceTier {
+  if (evidence.length === 0) return "OPAQUE";
   const groups = new Map<string, AgentGovernanceEvidence[]>();
   for (const item of evidence) {
     const group = groups.get(governanceIdentity(item)) ?? [];
@@ -92,9 +93,12 @@ export function classifyGovernanceTier(
   return "OBSERVED";
 }
 
-export function supportsExternalGovernance(tier: GovernanceTier): boolean {
+export function isGovernedTier(tier: GovernanceTier): boolean {
   return tier === "GOVERNED";
 }
+
+/** @deprecated Use isGovernedTier; the integration mode describes the boundary. */
+export const supportsExternalGovernance = isGovernedTier;
 
 function provesCase(
   evidence: AgentGovernanceEvidence,

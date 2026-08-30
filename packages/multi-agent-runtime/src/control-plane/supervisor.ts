@@ -1,9 +1,11 @@
 import type {
-  AgentAdapter,
+  AgentBackend,
+  AgentBackendAdmission,
+  AgentBackendTaskOutput,
   AgentTaskResult,
   ControlPlaneTaskInput,
   ControlPlaneTaskResult,
-  GovernanceLimitationEvidence,
+  ControlPlaneWorkerRequirement,
   MatchedFindingPair,
   ReconciliationResult,
   ReviewFinding,
@@ -15,10 +17,13 @@ import type {
 interface MutableWorkerRun {
   runId: string;
   taskId: string;
+  sessionId?: string;
   agentId: string;
   agentKind: string;
   agentVersion: string;
-  capabilities: AgentAdapter["capabilities"];
+  model?: string;
+  capabilities: AgentBackendAdmission["capabilities"];
+  governance: WorkerRun["governance"];
   status: WorkerRunStatus;
   startedAt: string;
   endedAt: string;
@@ -28,11 +33,29 @@ interface MutableWorkerRun {
   error?: string;
 }
 
+interface AdmittedBackend {
+  readonly backend: AgentBackend;
+  readonly admission: AgentBackendAdmission;
+  readonly requirement: ControlPlaneWorkerRequirement;
+}
+
 export interface ControlPlaneSupervisorOptions {
   readonly now?: () => Date;
 }
 
+export class GovernanceAdmissionError extends Error {
+  constructor(
+    readonly backendId: string,
+    readonly admittedTier: AgentBackendAdmission["capabilities"]["governanceTier"],
+  ) {
+    super(`Backend "${backendId}" cannot start because governed execution is required but its admitted tier is ${admittedTier}.`);
+    this.name = "GovernanceAdmissionError";
+  }
+}
+
 export class ControlPlaneSupervisor {
+  static readonly workerLimit = 2;
+
   private readonly now: () => Date;
 
   constructor(options: ControlPlaneSupervisorOptions = {}) {
@@ -41,15 +64,16 @@ export class ControlPlaneSupervisor {
 
   async runParallel(
     input: ControlPlaneTaskInput,
-    adapters: readonly AgentAdapter[],
+    backends: readonly AgentBackend[],
   ): Promise<ControlPlaneTaskResult> {
     validateTask(input);
-    validateAdapters(adapters);
+    validateBackends(backends);
+    const admitted = await admitBackends(input, backends);
     const startedAt = this.timestamp();
-    const workers = adapters.map((adapter, index) => this.createWorker(input, adapter, index));
+    const workers = admitted.map((item, index) => this.createWorker(input, item, index));
 
     await Promise.all(workers.map((worker, index) => (
-      this.runWorker(input, adapters[index], worker)
+      this.runWorker(input, admitted[index]!, worker)
     )));
 
     const endedAt = this.timestamp();
@@ -63,23 +87,30 @@ export class ControlPlaneSupervisor {
       endedAt,
       workers: Object.freeze(snapshots),
       reconciliation: reconcileWorkerResults(snapshots),
-      governance: createGovernanceLimitationEvidence(),
     });
   }
 
   private createWorker(
     input: ControlPlaneTaskInput,
-    adapter: AgentAdapter,
+    admitted: AdmittedBackend,
     index: number,
   ): MutableWorkerRun {
     const at = this.timestamp();
+    const { backend, admission, requirement } = admitted;
     return {
       runId: `${input.taskId}:worker:${index + 1}`,
       taskId: input.taskId,
-      agentId: adapter.id,
-      agentKind: adapter.kind,
-      agentVersion: adapter.version,
-      capabilities: Object.freeze({ ...adapter.capabilities }),
+      ...(requirement.sessionId ? { sessionId: requirement.sessionId } : {}),
+      agentId: backend.id,
+      agentKind: backend.kind,
+      agentVersion: admission.version,
+      ...(admission.model ? { model: admission.model } : {}),
+      capabilities: Object.freeze({ ...admission.capabilities }),
+      governance: Object.freeze({
+        tier: admission.capabilities.governanceTier,
+        mode: admission.capabilities.governanceMode,
+        evidence: Object.freeze([]),
+      }),
       status: "queued",
       startedAt: at,
       endedAt: at,
@@ -90,27 +121,32 @@ export class ControlPlaneSupervisor {
 
   private async runWorker(
     input: ControlPlaneTaskInput,
-    adapter: AgentAdapter,
+    admitted: AdmittedBackend,
     worker: MutableWorkerRun,
   ): Promise<void> {
-    worker.startedAt = this.transition(worker, "starting", "Starting the real agent adapter.");
-    this.transition(worker, "running", "Agent process is running.");
+    worker.startedAt = this.transition(worker, "starting", "Starting the admitted agent backend.");
+    this.transition(worker, "running", "Agent backend is running.");
     try {
-      worker.result = await adapter.runTask(input, (observation) => {
+      const output = await admitted.backend.startTask({
+        taskId: input.taskId,
+        title: input.title,
+        workspace: input.workspace,
+        prompt: input.prompt,
+        workerRunId: worker.runId,
+        ...(worker.sessionId ? { sessionId: worker.sessionId } : {}),
+        governanceRequired: admitted.requirement.governanceRequired === true,
+      }, (observation) => {
         worker.observations.push(Object.freeze({ ...observation }));
       });
+      attachOutput(worker, output);
       worker.endedAt = this.transition(worker, "completed", "Agent returned a structured result.");
     } catch (error) {
-      worker.error = error instanceof Error ? error.message : "Agent adapter failed.";
+      worker.error = error instanceof Error ? error.message : "Agent backend failed.";
       worker.endedAt = this.transition(worker, "failed", worker.error);
     }
   }
 
-  private transition(
-    worker: MutableWorkerRun,
-    status: WorkerRunStatus,
-    summary: string,
-  ): string {
+  private transition(worker: MutableWorkerRun, status: WorkerRunStatus, summary: string): string {
     const at = this.timestamp();
     worker.status = status;
     worker.lifecycle.push(lifecycle(status, at, summary));
@@ -134,14 +170,16 @@ export function reconcileWorkerResults(workers: readonly WorkerRun[]): Reconcili
     return unresolved(workers, "At least one worker returned no repository file evidence.");
   }
 
-  const sharedFiles = [...fileSets[0]].filter((file) => fileSets.slice(1).every((files) => files.has(file))).sort();
+  const sharedFiles = [...fileSets[0]!]
+    .filter((file) => fileSets.slice(1).every((files) => files.has(file)))
+    .sort();
   const agentOnlyFiles = Object.fromEntries(completed.map((worker, index) => [
     worker.agentId,
-    [...fileSets[index]].filter((file) => !sharedFiles.includes(file)).sort(),
+    [...fileSets[index]!].filter((file) => !sharedFiles.includes(file)).sort(),
   ]));
-  const matchedFindings = matchFindings(left, right);
-  const allMatched = matchedFindings.length === left.result!.findings.length
-    && matchedFindings.length === right.result!.findings.length
+  const matchedFindings = matchFindings(left!, right!);
+  const allMatched = matchedFindings.length === left!.result!.findings.length
+    && matchedFindings.length === right!.result!.findings.length
     && Object.values(agentOnlyFiles).every((files) => files.length === 0);
   const classification = matchedFindings.length === 0
     ? "DISAGREEMENT"
@@ -161,15 +199,78 @@ export function reconcileWorkerResults(workers: readonly WorkerRun[]): Reconcili
   });
 }
 
-export function createGovernanceLimitationEvidence(): GovernanceLimitationEvidence {
+async function admitBackends(
+  input: ControlPlaneTaskInput,
+  backends: readonly AgentBackend[],
+): Promise<readonly AdmittedBackend[]> {
+  const requirements = requirementsByBackend(input, backends);
+  const admitted = await Promise.all(backends.map(async (backend) => {
+    const admission = freezeAdmission(await backend.probeCapabilities());
+    const requirement = requirements.get(backend.id)!;
+    if (requirement.governanceRequired && admission.capabilities.governanceTier !== "GOVERNED") {
+      throw new GovernanceAdmissionError(backend.id, admission.capabilities.governanceTier);
+    }
+    return Object.freeze({ backend, admission, requirement });
+  }));
+  return Object.freeze(admitted);
+}
+
+function freezeAdmission(admission: AgentBackendAdmission): AgentBackendAdmission {
+  if (!admission.version.trim()) throw new TypeError("Agent backend version must be non-empty.");
+  const { governanceTier, governanceMode } = admission.capabilities;
+  if (governanceTier === "GOVERNED" && governanceMode === "none") {
+    throw new TypeError("A governed backend must declare its governance mode.");
+  }
+  if (governanceTier === "OPAQUE" && governanceMode !== "none") {
+    throw new TypeError("An opaque backend cannot claim a governance integration mode.");
+  }
   return Object.freeze({
-    action: "git push",
-    interception: "not_proven",
-    decision: "unknown",
-    dispatchOccurred: "unknown",
-    handlerStarted: "unknown",
-    outcome: "not_tested",
-    reason: "The verified CLI agents own their internal tool execution. KerniQ has no supported pre-execution interception boundary for either process.",
+    version: admission.version,
+    ...(admission.model?.trim() ? { model: admission.model.trim() } : {}),
+    capabilities: Object.freeze({ ...admission.capabilities }),
+  });
+}
+
+function requirementsByBackend(
+  input: ControlPlaneTaskInput,
+  backends: readonly AgentBackend[],
+): Map<string, ControlPlaneWorkerRequirement> {
+  const configured = input.workers ?? [];
+  if (new Set(configured.map((item) => item.backendId)).size !== configured.length) {
+    throw new TypeError("Control-plane worker requirements must have unique backend IDs.");
+  }
+  const backendIds = new Set(backends.map((backend) => backend.id));
+  if (configured.some((item) => !backendIds.has(item.backendId))) {
+    throw new TypeError("Control-plane worker requirements reference an unknown backend.");
+  }
+  return new Map(backends.map((backend) => {
+    const requirement = configured.find((item) => item.backendId === backend.id) ?? {
+      backendId: backend.id,
+      governanceRequired: false,
+    };
+    if (requirement.sessionId !== undefined && !requirement.sessionId.trim()) {
+      throw new TypeError("Control-plane worker session IDs must be non-empty when provided.");
+    }
+    return [backend.id, Object.freeze({ ...requirement })];
+  }));
+}
+
+function attachOutput(worker: MutableWorkerRun, output: AgentBackendTaskOutput): void {
+  for (const evidence of output.governanceEvidence) {
+    if (
+      evidence.taskId !== worker.taskId
+      || evidence.workerRunId !== worker.runId
+      || evidence.agentId !== worker.agentId
+      || evidence.agentKind !== worker.agentKind
+      || evidence.agentVersion !== worker.agentVersion
+    ) {
+      throw new TypeError("Agent governance evidence does not match its worker identity.");
+    }
+  }
+  worker.result = output.result;
+  worker.governance = Object.freeze({
+    ...worker.governance,
+    evidence: Object.freeze(output.governanceEvidence.map((item) => Object.freeze({ ...item }))),
   });
 }
 
@@ -178,7 +279,7 @@ function findingFiles(finding: ReviewFinding): string[] {
 }
 
 function normalizeFile(value: string): string {
-  return value.trim().replace(/^\.\//, "").replaceAll("\\", "/");
+  return value.trim().replace(/^\.\//, "").replace(/\\/g, "/");
 }
 
 function unresolved(workers: readonly WorkerRun[], summary: string): ReconciliationResult {
@@ -194,6 +295,11 @@ function unresolved(workers: readonly WorkerRun[], summary: string): Reconciliat
 function freezeWorker(worker: MutableWorkerRun): WorkerRun {
   return Object.freeze({
     ...worker,
+    capabilities: Object.freeze({ ...worker.capabilities }),
+    governance: Object.freeze({
+      ...worker.governance,
+      evidence: Object.freeze([...worker.governance.evidence]),
+    }),
     lifecycle: Object.freeze(worker.lifecycle.map((entry) => Object.freeze({ ...entry }))),
     observations: Object.freeze(worker.observations.map((entry) => Object.freeze({ ...entry }))),
     ...(worker.result
@@ -220,13 +326,15 @@ function validateTask(input: ControlPlaneTaskInput): void {
   }
 }
 
-function validateAdapters(adapters: readonly AgentAdapter[]): void {
-  if (adapters.length !== 2) throw new TypeError("Exactly two real agent adapters are required for this vertical slice.");
-  if (new Set(adapters.map((adapter) => adapter.id)).size !== adapters.length) {
-    throw new TypeError("Agent adapter IDs must be unique.");
+function validateBackends(backends: readonly AgentBackend[]): void {
+  if (backends.length !== ControlPlaneSupervisor.workerLimit) {
+    throw new TypeError(`The bounded product supervisor currently requires ${ControlPlaneSupervisor.workerLimit} backends.`);
   }
-  if (new Set(adapters.map((adapter) => adapter.kind)).size !== adapters.length) {
-    throw new TypeError("The control-plane proof requires independent agent runtime kinds.");
+  if (new Set(backends.map((backend) => backend.id)).size !== backends.length) {
+    throw new TypeError("Agent backend IDs must be unique.");
+  }
+  if (new Set(backends.map((backend) => backend.kind)).size !== backends.length) {
+    throw new TypeError("The bounded control plane requires independent agent runtime kinds.");
   }
 }
 

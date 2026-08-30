@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 import {
   classifyGovernanceTier,
   createAgentGovernanceEvidence,
+  createAgentBackendCapabilities,
+  isGovernedTier,
   supportsExternalGovernance,
   type AgentGovernanceEvidenceInput,
   type EvidenceTruthValue,
@@ -18,9 +20,22 @@ describe("agent governance evidence", () => {
     ];
 
     expect(classifyGovernanceTier(evidence)).toBe("GOVERNED");
+    expect(isGovernedTier(classifyGovernanceTier(evidence))).toBe(true);
     expect(supportsExternalGovernance(classifyGovernanceTier(evidence))).toBe(true);
     expect(classifyGovernanceTier(evidence.slice(0, 2))).toBe("OBSERVED");
     expect(supportsExternalGovernance("OBSERVED")).toBe(false);
+  });
+
+  it("keeps an evidence-free backend opaque and validates tier/mode claims", () => {
+    expect(classifyGovernanceTier([])).toBe("OPAQUE");
+    expect(() => createAgentBackendCapabilities({
+      supportsStreaming: true,
+      supportsCancel: false,
+      supportsToolEvents: true,
+      governanceTier: "GOVERNED",
+      governanceMode: "none",
+      supportsResume: false,
+    })).toThrow("must declare its governance mode");
   });
 
   it("does not combine cases from different backend identities", () => {

@@ -1,5 +1,4 @@
 import type { Agent, AgentReport, SubTask, TaskPlan } from "../models/agent.js";
-import type { AgentRole } from "../models/agent.js";
 import { TaskPlanner } from "../planner/planner.js";
 import { SpecialistFactory, MOCK_OUTPUTS } from "../agents/specialists.js";
 import { AgentEventBus } from "../events/bus.js";

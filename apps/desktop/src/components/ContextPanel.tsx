@@ -3,7 +3,15 @@ import { useProviderContext } from "./ProviderContext";
 import { StatusIndicator } from "./WorkbenchPrimitives";
 
 export function ContextPanel() {
-  const { selectedFileCount, selectedFileSize, projectName, lastBundle, estimatedTokens } = useRuntimeContext();
+  const {
+    controlPlaneMode,
+    controlPlaneView,
+    selectedFileCount,
+    selectedFileSize,
+    projectName,
+    lastBundle,
+    estimatedTokens,
+  } = useRuntimeContext();
   const { config } = useProviderContext();
 
   const formatSize = (bytes: number): string => {
@@ -65,26 +73,46 @@ export function ContextPanel() {
 
       <section className="inspector-section">
         <h3>Runtime</h3>
-        <div className="inspector-row">
-          <span>Provider</span>
-          <strong>{config.providerId ?? "Not configured"}</strong>
-        </div>
-        <div className="inspector-row">
-          <span>Model</span>
-          <strong>{config.modelId ?? config.manualModelId ?? "Not selected"}</strong>
-        </div>
+        {controlPlaneMode === "supervisor" ? (
+          <>
+            <div className="inspector-row"><span>Runtime</span><strong>Supervisor</strong></div>
+            <div className="inspector-row"><span>Agents</span><strong>Codex + DSH</strong></div>
+            {controlPlaneView?.workers.map((worker) => (
+              <div className="inspector-worker" key={worker.id}>
+                <div className="inspector-row"><span>{worker.label}</span><strong>{worker.status}</strong></div>
+                <div className="inspector-row"><span>Model</span><strong>{worker.model}</strong></div>
+                <div className="inspector-row"><span>Governance</span><strong>{worker.tier} · {worker.mode.replace(/_/g, " ")}</strong></div>
+              </div>
+            ))}
+          </>
+        ) : (
+          <>
+            <div className="inspector-row">
+              <span>Provider</span>
+              <strong>{config.providerId ?? "Not configured"}</strong>
+            </div>
+            <div className="inspector-row">
+              <span>Model</span>
+              <strong>{config.modelId ?? config.manualModelId ?? "Not selected"}</strong>
+            </div>
+          </>
+        )}
         <div className="inspector-row">
           <span>Access</span>
           <strong>{projectName ? "Project bound" : "No project"}</strong>
         </div>
-        <StatusIndicator label="Review Mode · approval required" tone="accent" />
+        <StatusIndicator
+          label={controlPlaneMode === "supervisor" ? "Governed Supervisor" : "Review Mode · approval required"}
+          tone="accent"
+        />
       </section>
 
-      <section className="inspector-section">
-        <h3>Git</h3>
-        <div className="inspector-row"><span>Branch</span><strong className="mono-value">main</strong></div>
-        <div className="inspector-row"><span>Working tree</span><strong>0 changed</strong></div>
-      </section>
+      {controlPlaneMode === "single" ? (
+        <section className="inspector-section">
+          <h3>Git</h3>
+          <div className="inspector-row"><span>Execution facts</span><strong>Unavailable</strong></div>
+        </section>
+      ) : null}
     </aside>
   );
 }

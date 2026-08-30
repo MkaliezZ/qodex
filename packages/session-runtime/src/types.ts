@@ -56,6 +56,15 @@ export type SessionEventType = UniversalEventType | CodingEventType;
 export interface SafeMetadata {
   recordKey?: string;
   taskId?: string;
+  controlPlaneTaskId?: string;
+  workerRunId?: string;
+  agentId?: string;
+  agentKind?: string;
+  agentVersion?: string;
+  governanceTier?: "OPAQUE" | "OBSERVED" | "GOVERNED";
+  governanceMode?: "none" | "host_dispatch" | "pre_dispatch_plugin" | "external_decision";
+  governanceDecision?: string;
+  governanceOutcome?: string;
   toolCallId?: string;
   runtimeStatus?: string;
   runtimeType?: string;

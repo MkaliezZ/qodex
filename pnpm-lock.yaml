@@ -41,6 +41,9 @@ importers:
       '@qodex/marketplace-runtime':
         specifier: workspace:^
         version: link:../../packages/marketplace-runtime
+      '@qodex/multi-agent-runtime':
+        specifier: workspace:*
+        version: link:../../packages/multi-agent-runtime
       '@qodex/project-runtime':
         specifier: workspace:*
         version: link:../../packages/project-runtime
@@ -240,15 +243,6 @@ importers:
         version: 5.9.3
       vitest:
         specifier: ^2.1.0
-        version: 2.1.9(@types/node@22.20.1)
-
-  packages/mcp-runtime:
-    devDependencies:
-      typescript:
-        specifier: ^5.5.0
-        version: 5.9.3
-      vitest:
-        specifier: ^2.0.0
         version: 2.1.9(@types/node@22.20.1)
 
   packages/multi-agent-runtime:
