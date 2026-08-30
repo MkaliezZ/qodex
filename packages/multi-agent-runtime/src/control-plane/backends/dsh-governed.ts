@@ -68,6 +68,7 @@ export function failedGovernanceChecks(probe: DshRuntimeProbe): readonly string[
     ["compatible_runtime", probe.governance.compatibleRuntime],
     ["agentfuse_adapter", probe.governance.agentFuseAdapterAvailable],
     ["pre_dispatch_seam", probe.governance.preDispatchSeamAvailable],
+    ["production_observer", probe.governance.productionObserverAvailable],
     ["governed_profile", probe.governance.governedProfileValid],
     ["evidence_capture", probe.governance.evidenceCaptureAvailable],
   ];

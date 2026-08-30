@@ -8,7 +8,7 @@ test("runs a bounded Supervisor task through the existing product UI and session
   });
   await page.addInitScript(() => {
     const capabilities = (governed: boolean) => ({
-      supportsStreaming: true,
+      supportsStreaming: false,
       supportsCancel: false,
       supportsToolEvents: true,
       governanceTier: governed ? "GOVERNED" as const : "OBSERVED" as const,
@@ -105,6 +105,11 @@ test("runs a bounded Supervisor task through the existing product UI and session
   await expect(governedWorker).toContainText("PROVEN");
   await expect(page.getByText("AGREEMENT", { exact: true })).toBeVisible();
   await expect(page.getByTestId("context-inspector")).toContainText("pre dispatch plugin");
+  await expect(page.getByTestId("context-inspector")).toContainText("Supervisor mode");
+  await expect(page.getByTestId("context-inspector")).toContainText("Authorized repository");
+  await expect(page.getByTestId("context-inspector")).toContainText("Backend-managed");
+  await expect(page.getByTestId("context-inspector")).not.toContainText("Context budget");
+  await expect(page.getByTestId("context-inspector")).not.toContainText("Estimated tokens");
   if (process.env.KERNIQ_CONTROL_PLANE_SCREENSHOT) {
     await page.screenshot({
       path: process.env.KERNIQ_CONTROL_PLANE_SCREENSHOT,

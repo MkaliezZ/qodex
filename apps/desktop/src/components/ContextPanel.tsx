@@ -36,40 +36,56 @@ export function ContextPanel() {
         <span>Current task context</span>
       </header>
 
-      <section className="inspector-section">
-        <h3>Selected context</h3>
-        <div className="inspector-row">
-          <span>Project</span>
-          <strong>{projectName ?? "Not opened"}</strong>
-        </div>
-        <div className="inspector-row">
-          <span>Files</span>
-          <strong>{selectedFileCount > 0
-            ? `${selectedFileCount} · ${formatSize(selectedFileSize)}`
-            : "None selected"}</strong>
-        </div>
-        {sources.length > 0 ? (
-          <div className="inspector-sources">
-            {sources.map((s) => (
-              <StatusIndicator key={s.name} label={s.name} tone={s.active ? "success" : "neutral"} />
-            ))}
+      {controlPlaneMode === "supervisor" ? (
+        <section className="inspector-section">
+          <h3>Context scope</h3>
+          <div className="inspector-row">
+            <span>Authorized repository</span>
+            <strong>{projectName ?? "Not opened"}</strong>
           </div>
-        ) : (
-          <p className="inspector-empty-copy">Run a prompt to assemble context sources.</p>
-        )}
-      </section>
+          <div className="inspector-row">
+            <span>Prompt routing</span>
+            <strong>Backend-managed</strong>
+          </div>
+        </section>
+      ) : (
+        <>
+          <section className="inspector-section">
+            <h3>Selected context</h3>
+            <div className="inspector-row">
+              <span>Project</span>
+              <strong>{projectName ?? "Not opened"}</strong>
+            </div>
+            <div className="inspector-row">
+              <span>Files</span>
+              <strong>{selectedFileCount > 0
+                ? `${selectedFileCount} · ${formatSize(selectedFileSize)}`
+                : "None selected"}</strong>
+            </div>
+            {sources.length > 0 ? (
+              <div className="inspector-sources">
+                {sources.map((s) => (
+                  <StatusIndicator key={s.name} label={s.name} tone={s.active ? "success" : "neutral"} />
+                ))}
+              </div>
+            ) : (
+              <p className="inspector-empty-copy">Run a prompt to assemble context sources.</p>
+            )}
+          </section>
 
-      <section className="inspector-section">
-        <h3>Context budget</h3>
-        <div className="inspector-row">
-          <span>Estimated tokens</span>
-          <strong>{estimatedTokens > 0 ? estimatedTokens.toLocaleString() : "0"}</strong>
-        </div>
-        <div className="token-meter" aria-label={`${estimatedTokens} of 128000 estimated tokens`}>
-          <span style={{ width: `${Math.min((estimatedTokens / 128000) * 100, 100)}%` }} />
-        </div>
-        <span className="inspector-limit">128K limit</span>
-      </section>
+          <section className="inspector-section">
+            <h3>Context budget</h3>
+            <div className="inspector-row">
+              <span>Estimated tokens</span>
+              <strong>{estimatedTokens > 0 ? estimatedTokens.toLocaleString() : "0"}</strong>
+            </div>
+            <div className="token-meter" aria-label={`${estimatedTokens} of 128000 estimated tokens`}>
+              <span style={{ width: `${Math.min((estimatedTokens / 128000) * 100, 100)}%` }} />
+            </div>
+            <span className="inspector-limit">128K limit</span>
+          </section>
+        </>
+      )}
 
       <section className="inspector-section">
         <h3>Runtime</h3>
@@ -102,7 +118,7 @@ export function ContextPanel() {
           <strong>{projectName ? "Project bound" : "No project"}</strong>
         </div>
         <StatusIndicator
-          label={controlPlaneMode === "supervisor" ? "Governed Supervisor" : "Review Mode · approval required"}
+          label={controlPlaneMode === "supervisor" ? "Supervisor mode" : "Review Mode · approval required"}
           tone="accent"
         />
       </section>

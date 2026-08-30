@@ -28,7 +28,9 @@ export interface DshGovernanceProbe {
   readonly mode: GovernanceMode;
   readonly compatibleRuntime: boolean;
   readonly agentFuseAdapterAvailable: boolean;
+  readonly agentFuseVersion?: string;
   readonly preDispatchSeamAvailable: boolean;
+  readonly productionObserverAvailable: boolean;
   readonly governedProfileValid: boolean;
   readonly evidenceCaptureAvailable: boolean;
 }

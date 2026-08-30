@@ -17,6 +17,7 @@ describe("product agent backends", () => {
     await expect(backend.probeCapabilities()).resolves.toMatchObject({
       version: "codex-cli 1.2.3",
       capabilities: {
+        supportsStreaming: false,
         governanceTier: "OBSERVED",
         governanceMode: "none",
       },
@@ -39,6 +40,7 @@ describe("product agent backends", () => {
     await expect(backend.probeCapabilities()).resolves.toMatchObject({
       version: "0.1.2-alpha.1",
       capabilities: {
+        supportsStreaming: false,
         governanceTier: "GOVERNED",
         governanceMode: "pre_dispatch_plugin",
       },
@@ -47,6 +49,15 @@ describe("product agent backends", () => {
 
   it("classifies a runnable DSH with an incomplete evidence path as observed", () => {
     const probe = dshProbe({ evidenceCaptureAvailable: false });
+
+    expect(classifyDshGovernanceTier(probe)).toBe("OBSERVED");
+  });
+
+  it("does not admit a proof fixture in place of the production observer", () => {
+    const probe = dshProbe({
+      productionObserverAvailable: false,
+      governedProfileValid: false,
+    });
 
     expect(classifyDshGovernanceTier(probe)).toBe("OBSERVED");
   });
@@ -101,7 +112,7 @@ function codexProbe(): AgentProcessRuntimeProbe {
   return {
     available: true,
     version: "codex-cli 1.2.3",
-    supportsStreaming: true,
+    supportsStreaming: false,
     supportsCancel: true,
     supportsToolEvents: true,
     supportsResume: false,
@@ -117,7 +128,7 @@ function dshProbe(
     runtimeRevision: "audited-revision",
     providerRoute: "deepseek-official",
     model: "deepseek-v4-flash",
-    supportsStreaming: true,
+    supportsStreaming: false,
     supportsCancel: false,
     supportsToolEvents: true,
     supportsResume: false,
@@ -125,7 +136,9 @@ function dshProbe(
       mode: "pre_dispatch_plugin",
       compatibleRuntime: true,
       agentFuseAdapterAvailable: true,
+      agentFuseVersion: "0.2.1",
       preDispatchSeamAvailable: true,
+      productionObserverAvailable: true,
       governedProfileValid: true,
       evidenceCaptureAvailable: true,
       ...overrides,

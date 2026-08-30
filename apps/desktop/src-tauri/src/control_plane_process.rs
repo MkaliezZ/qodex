@@ -12,6 +12,7 @@ use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 const AUDITED_DSH_VERSION: &str = "0.1.2-alpha.1";
 const AUDITED_DSH_REVISION: &str = "cd5ef8148158c3a752a658978873241fdf8e2bbc";
 const AGENTFUSE_PACKAGE: &str = "@dhms-agentfuse/dsh-agentfuse";
+const PRODUCTION_OBSERVER_PACKAGE: &str = "@kerniq/dsh-control-plane-observer";
 const PROCESS_TIMEOUT: Duration = Duration::from_secs(300);
 const OUTPUT_LIMIT: usize = 1024 * 1024;
 
@@ -47,7 +48,9 @@ struct DshGovernanceProbe {
     mode: &'static str,
     compatible_runtime: bool,
     agent_fuse_adapter_available: bool,
+    agent_fuse_version: Option<String>,
     pre_dispatch_seam_available: bool,
+    production_observer_available: bool,
     governed_profile_valid: bool,
     evidence_capture_available: bool,
 }
@@ -110,9 +113,11 @@ struct GovernanceEvent {
 #[derive(Debug, Default)]
 struct GovernanceCall {
     tool_name: String,
+    model_request: bool,
     pre_execute: bool,
     decision: Option<String>,
     dispatch: bool,
+    result: bool,
 }
 
 pub fn probe_backend(backend_id: &str) -> Result<AgentRuntimeProbe, String> {
@@ -147,7 +152,7 @@ fn probe_codex() -> AgentRuntimeProbe {
         available: version.is_some(),
         version: version.unwrap_or_else(|| "unavailable".into()),
         model: None,
-        supports_streaming: true,
+        supports_streaming: false,
         supports_cancel: false,
         supports_tool_events: true,
         supports_resume: false,
@@ -175,18 +180,20 @@ fn probe_dsh() -> AgentRuntimeProbe {
     let compatible_runtime =
         version == AUDITED_DSH_VERSION && revision.as_deref() == Some(AUDITED_DSH_REVISION);
     let profile = configured_profile_dir();
-    let package_text = profile
-        .as_ref()
-        .and_then(|path| fs::read_to_string(path.join("package.json")).ok())
-        .unwrap_or_default();
-    let agent_fuse_adapter_available = package_text.contains(AGENTFUSE_PACKAGE);
     let dump = entrypoint.as_ref().and_then(|path| dump_dsh_profile(path));
+    let agent_fuse_version = profile.as_deref().and_then(installed_agent_fuse_version);
+    let agent_fuse_adapter_available = agent_fuse_version.is_some()
+        && dump
+            .as_deref()
+            .is_some_and(|value| dump_has_plugin(value, AGENTFUSE_PACKAGE));
     let pre_dispatch_seam_available = compatible_runtime;
-    let governed_profile_valid = dump.as_ref().is_some_and(|value| {
-        value.contains(AGENTFUSE_PACKAGE)
-            && (value.contains("kerniq-governance-proof")
-                || value.contains("kerniq-control-plane-observer"))
+    let production_observer_available = dump
+        .as_deref()
+        .is_some_and(|value| dump_has_plugin(value, PRODUCTION_OBSERVER_PACKAGE));
+    let governed_profile_valid = dump.as_deref().is_some_and(|value| {
+        governed_profile_is_product_ready(value, agent_fuse_adapter_available)
     });
+    let (provider_route, model) = dump.as_deref().map(dsh_default_model).unwrap_or_default();
     let evidence_capture_available = configured_path("KERNIQ_DSH_EVIDENCE_PATH")
         .and_then(|path| path.parent().map(Path::to_path_buf))
         .is_some_and(|parent| parent.is_dir());
@@ -194,18 +201,20 @@ fn probe_dsh() -> AgentRuntimeProbe {
     AgentRuntimeProbe {
         available: runtime_available,
         version,
-        model: Some("deepseek-v4-flash".into()),
-        supports_streaming: true,
+        model,
+        supports_streaming: false,
         supports_cancel: false,
         supports_tool_events: true,
         supports_resume: false,
         runtime_revision: revision,
-        provider_route: Some("deepseek-official".into()),
+        provider_route,
         governance: Some(DshGovernanceProbe {
             mode: "pre_dispatch_plugin",
             compatible_runtime,
             agent_fuse_adapter_available,
+            agent_fuse_version,
             pre_dispatch_seam_available,
+            production_observer_available,
             governed_profile_valid,
             evidence_capture_available,
         }),
@@ -277,6 +286,7 @@ fn run_dsh(request: RunBackendRequest, workspace: &Path) -> Result<BackendRunOut
     let governed = governance.compatible_runtime
         && governance.agent_fuse_adapter_available
         && governance.pre_dispatch_seam_available
+        && governance.production_observer_available
         && governance.governed_profile_valid
         && governance.evidence_capture_available;
     if request.governance_required && !governed {
@@ -340,6 +350,7 @@ fn governance_evidence_inputs(
         let call = calls.entry(event.tool_call_id).or_default();
         call.tool_name = event.tool_name;
         match event.phase.as_str() {
+            "model_request" => call.model_request = true,
             "pre_execute" => {
                 call.pre_execute = true;
                 if let Some(decision) = event.decision {
@@ -347,6 +358,7 @@ fn governance_evidence_inputs(
                 }
             }
             "dispatch" => call.dispatch = true,
+            "result" => call.result = true,
             _ => {}
         }
     }
@@ -367,12 +379,28 @@ fn governance_evidence_inputs(
             } else {
                 (Value::String("unknown".into()), "unknown")
             };
-            let outcome = match decision.as_str() {
-                "block" if !call.dispatch && !body_started && !side_effect => "blocked",
-                "allow" if call.dispatch && body_started && side_effect => "succeeded",
-                "ask" if !call.dispatch && !body_started && !side_effect => "failed_closed",
-                "error-deny" if !call.dispatch && !body_started && !side_effect => "failed_closed",
-                _ => "unknown",
+            let (model_request_value, model_request_provenance) = if call.model_request {
+                (Value::Bool(true), "observed")
+            } else {
+                (Value::String("unknown".into()), "unknown")
+            };
+            let (dispatch_value, dispatch_provenance) = if call.dispatch {
+                (Value::Bool(true), "observed")
+            } else if call.result {
+                (Value::Bool(false), "observed")
+            } else {
+                (Value::String("unknown".into()), "unknown")
+            };
+            let outcome = if diagnostic {
+                match decision.as_str() {
+                    "block" if call.result && !call.dispatch && !body_started && !side_effect => "blocked",
+                    "allow" if call.dispatch && body_started && side_effect => "succeeded",
+                    "ask" if call.result && !call.dispatch && !body_started && !side_effect => "failed_closed",
+                    "error-deny" if call.result && !call.dispatch && !body_started && !side_effect => "failed_closed",
+                    _ => "unknown",
+                }
+            } else {
+                "unknown"
             };
             let reason = match decision.as_str() {
                 "block" => "explicit_denylist",
@@ -390,20 +418,20 @@ fn governance_evidence_inputs(
                 "toolCallId": call_id,
                 "toolName": call.tool_name,
                 "actionSummary": "DeepSeek Harness requested a governed tool.",
-                "modelToolCallObserved": { "value": true, "provenance": "observed" },
+                "modelToolCallObserved": { "value": model_request_value, "provenance": model_request_provenance },
                 "policyDecision": { "value": decision, "provenance": "observed" },
                 "policyReason": reason,
                 "preExecuteObserved": { "value": call.pre_execute, "provenance": "observed" },
-                "dispatchOccurred": { "value": call.dispatch, "provenance": "observed" },
+                "dispatchOccurred": { "value": dispatch_value, "provenance": dispatch_provenance },
                 "toolBodyStarted": { "value": body_value, "provenance": body_provenance },
                 "physicalSideEffect": { "value": effect_value, "provenance": effect_provenance },
                 "outcome": outcome,
                 "provenance": {
                     "runtimeSource": format!("deepseek-ai/deepseek-harness@{}", probe.runtime_revision.as_deref().unwrap_or("unknown")),
-                    "modelProvider": "deepseek-official",
+                    "modelProvider": probe.provider_route.as_deref().unwrap_or("unknown"),
                     "model": probe.model.as_deref().unwrap_or("unknown"),
-                    "policyAdapter": "@dhms-agentfuse/dsh-agentfuse@0.2.1",
-                    "captureMethod": "configured pre-execute and dispatch observer with bounded diagnostic markers"
+                    "policyAdapter": format!("{}@{}", AGENTFUSE_PACKAGE, probe.governance.as_ref().and_then(|value| value.agent_fuse_version.as_deref()).unwrap_or("unknown")),
+                    "captureMethod": "production observer session and tool lifecycle events; diagnostic markers only for the validation proof tool"
                 }
             }))
         })
@@ -626,6 +654,92 @@ fn command_text(executable: &str, args: &[&str]) -> Option<String> {
         .then(|| String::from_utf8_lossy(&output.stdout).trim().to_string())
 }
 
+fn installed_agent_fuse_version(profile: &Path) -> Option<String> {
+    let path = profile
+        .join("node_modules")
+        .join("@dhms-agentfuse")
+        .join("dsh-agentfuse")
+        .join("package.json");
+    let package = serde_json::from_str::<Value>(&fs::read_to_string(path).ok()?).ok()?;
+    if package.get("name").and_then(Value::as_str) != Some(AGENTFUSE_PACKAGE) {
+        return None;
+    }
+    package
+        .get("version")
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(str::to_string)
+}
+
+fn dump_has_plugin(dump: &str, package_name: &str) -> bool {
+    dump.lines().any(|line| {
+        line.trim()
+            .strip_prefix("name:")
+            .and_then(yaml_plain_scalar)
+            .is_some_and(|value| value == package_name)
+    })
+}
+
+fn governed_profile_is_product_ready(dump: &str, agent_fuse_available: bool) -> bool {
+    agent_fuse_available && dump_has_plugin(dump, PRODUCTION_OBSERVER_PACKAGE)
+}
+
+fn dsh_default_model(dump: &str) -> (Option<String>, Option<String>) {
+    let mut in_default_model = false;
+    let mut in_config = false;
+    let mut provider = None;
+    let mut model = None;
+    for line in dump.lines() {
+        let trimmed = line.trim();
+        if trimmed.starts_with("- id:") {
+            if in_default_model {
+                break;
+            }
+            in_default_model = trimmed == "- id: agent-default-model";
+            in_config = false;
+            continue;
+        }
+        if !in_default_model {
+            continue;
+        }
+        if trimmed == "config:" {
+            in_config = true;
+            continue;
+        }
+        if !in_config {
+            continue;
+        }
+        if let Some(value) = trimmed
+            .strip_prefix("provider:")
+            .and_then(yaml_plain_scalar)
+        {
+            provider = Some(value.to_string());
+        } else if let Some(value) = trimmed.strip_prefix("model:").and_then(yaml_plain_scalar) {
+            model = Some(value.to_string());
+        }
+    }
+    (provider, model)
+}
+
+fn yaml_plain_scalar(value: &str) -> Option<&str> {
+    let value = value.trim();
+    if value.is_empty() || value.starts_with("!!") {
+        return None;
+    }
+    Some(
+        value
+            .strip_prefix('\'')
+            .and_then(|inner| inner.strip_suffix('\''))
+            .or_else(|| {
+                value
+                    .strip_prefix('"')
+                    .and_then(|inner| inner.strip_suffix('"'))
+            })
+            .unwrap_or(value),
+    )
+}
+
 fn marker_contains(name: &str, call_id: &str) -> bool {
     configured_path(name)
         .and_then(|path| fs::read_to_string(path).ok())
@@ -716,5 +830,157 @@ mod tests {
         assert_eq!(canonical_policy_decision("deny"), "block");
         assert_eq!(canonical_policy_decision("allow"), "allow");
         assert_eq!(canonical_policy_decision("unexpected"), "unknown");
+    }
+
+    #[test]
+    fn production_admission_rejects_the_validation_proof_as_an_observer() {
+        let proof_only = r#"
+- id: agentfuse
+  name: '@dhms-agentfuse/dsh-agentfuse'
+- id: kerniq-governance-proof
+  name: '@kerniq/dsh-governance-proof'
+"#;
+        let production = format!(
+            "{proof_only}\n- id: kerniq-control-plane-observer\n  name: '{PRODUCTION_OBSERVER_PACKAGE}'\n"
+        );
+
+        assert!(!governed_profile_is_product_ready(proof_only, true));
+        assert!(governed_profile_is_product_ready(&production, true));
+        assert!(!governed_profile_is_product_ready(&production, false));
+    }
+
+    #[test]
+    fn resolves_model_and_provider_from_the_admitted_profile_dump() {
+        let dump = r#"
+- id: agent-default-model
+  name: '@deepseek-ai/dsh-agent-default-model'
+  config:
+    provider: provider-from-profile
+    model: 'model-from-profile'
+- id: next
+  name: next
+"#;
+
+        assert_eq!(
+            dsh_default_model(dump),
+            (
+                Some("provider-from-profile".into()),
+                Some("model-from-profile".into())
+            )
+        );
+        assert_eq!(
+            dsh_default_model(
+                "- id: agent-default-model\n  config:\n    model: !!js process.env.MODEL"
+            ),
+            (None, None)
+        );
+    }
+
+    #[test]
+    fn resolves_agentfuse_version_from_installed_package_metadata() {
+        let root = std::env::temp_dir().join(format!(
+            "kerniq-agentfuse-version-{}",
+            temporary_token("package-metadata-test")
+        ));
+        let package_dir = root
+            .join("node_modules")
+            .join("@dhms-agentfuse")
+            .join("dsh-agentfuse");
+        fs::create_dir_all(&package_dir).unwrap();
+        fs::write(
+            package_dir.join("package.json"),
+            r#"{"name":"@dhms-agentfuse/dsh-agentfuse","version":"9.8.7"}"#,
+        )
+        .unwrap();
+
+        assert_eq!(
+            installed_agent_fuse_version(&root).as_deref(),
+            Some("9.8.7")
+        );
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn keeps_model_request_provenance_independent_from_pre_execute() {
+        let request = test_request();
+        let probe = test_dsh_probe();
+        let events = vec![
+            test_governance_event("model_request", "call-observed", "read", None),
+            test_governance_event("pre_execute", "call-observed", "read", Some("allow")),
+            test_governance_event("result", "call-observed", "read", None),
+            test_governance_event("pre_execute", "call-unknown", "read", Some("deny")),
+            test_governance_event("result", "call-unknown", "read", None),
+        ];
+
+        let evidence = governance_evidence_inputs(&request, &probe, events);
+        assert_eq!(evidence.len(), 2);
+        assert!(evidence
+            .iter()
+            .all(|item| item.get("outcome") == Some(&Value::String("unknown".into()))));
+        assert_eq!(
+            evidence[0].pointer("/modelToolCallObserved/value"),
+            Some(&Value::Bool(true))
+        );
+        assert_eq!(
+            evidence[1].pointer("/modelToolCallObserved/value"),
+            Some(&Value::String("unknown".into()))
+        );
+        assert_eq!(
+            evidence[0].pointer("/provenance/modelProvider"),
+            Some(&Value::String("provider-from-profile".into()))
+        );
+        assert_eq!(
+            evidence[0].pointer("/provenance/policyAdapter"),
+            Some(&Value::String(format!("{AGENTFUSE_PACKAGE}@9.8.7")))
+        );
+    }
+
+    fn test_request() -> RunBackendRequest {
+        RunBackendRequest {
+            backend_id: "dsh-deepseek".into(),
+            task_id: "task-test".into(),
+            worker_run_id: "worker-test".into(),
+            workspace: "/tmp/project".into(),
+            prompt: "Review".into(),
+            governance_required: true,
+        }
+    }
+
+    fn test_dsh_probe() -> AgentRuntimeProbe {
+        AgentRuntimeProbe {
+            available: true,
+            version: AUDITED_DSH_VERSION.into(),
+            model: Some("model-from-profile".into()),
+            supports_streaming: false,
+            supports_cancel: false,
+            supports_tool_events: true,
+            supports_resume: false,
+            runtime_revision: Some(AUDITED_DSH_REVISION.into()),
+            provider_route: Some("provider-from-profile".into()),
+            governance: Some(DshGovernanceProbe {
+                mode: "pre_dispatch_plugin",
+                compatible_runtime: true,
+                agent_fuse_adapter_available: true,
+                agent_fuse_version: Some("9.8.7".into()),
+                pre_dispatch_seam_available: true,
+                production_observer_available: true,
+                governed_profile_valid: true,
+                evidence_capture_available: true,
+            }),
+        }
+    }
+
+    fn test_governance_event(
+        phase: &str,
+        call_id: &str,
+        tool_name: &str,
+        decision: Option<&str>,
+    ) -> GovernanceEvent {
+        GovernanceEvent {
+            phase: phase.into(),
+            tool_call_id: call_id.into(),
+            tool_name: tool_name.into(),
+            decision: decision.map(str::to_string),
+        }
     }
 }
