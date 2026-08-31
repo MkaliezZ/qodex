@@ -40,15 +40,22 @@ F:\DSH-Home\profiles\headless
     └── @kerniq/dsh-control-plane-observer      (real files, local 0.3.1)
 ```
 
+**Historical initial v0.3.3 state (`a5431ea`) — superseded by v0.3.3.1+**:
+the first seal covered only first-party content (2012 files, ~14.5 MB).
+The current seal covers 21175 entries including the full third-party
+closure; the initial inventory below is retained as history.
+
 The headless profile's composed `--dump-config` lists 87 loaded
 `@deepseek-ai/*` packages; each maps to a `packages/*/*/` or `vendor/*`
-implementation directory. The governed closure chosen for sealing is the
-actual loaded set — the CLI entrypoint directory, every loaded package's
-`lib/` output plus its `package.json`, the vendored framework packages, and
-the two governance plugin implementations installed in the profile:
+implementation directory. The initial first-party closure was the actual
+loaded set — the CLI entrypoint directory, every loaded package's `lib`
+output plus its `package.json`, the vendored framework packages, and the
+two governance plugin implementations installed in the profile:
 
 ```text
-2012 files, ~14.5 MB, verified with SHA-256 on every governed admission
+historical initial state: 2012 files, ~14.5 MB
+current state (v0.3.3.1+): 21175 entries, ~204 MB, verified with SHA-256 on
+every governed admission
 ```
 
 > **SUPERSEDED BY v0.3.3.1** — the paragraph below describes the initial
@@ -183,7 +190,8 @@ roots, roots outside a repo, and unresolvable identities all yield
 (`resources/dsh-runtime-seal-0.1.2-alpha.1.json`) — the trust anchor never
 lives beside the runtime it verifies. The manifest is version-specific
 (schema `kerniq.governed-runtime-manifest.v0.1`, pinned to source revision
-`cd5ef814…` and runtime version `0.1.2-alpha.1`) with 2012 entries of
+`cd5ef814…` and runtime version `0.1.2-alpha.1`; historical initial
+manifest — 2012 entries, superseded by v0.3.3.1+'s 21175) with entries of
 `root (runtime|profile) / relative path / size / sha256`, sorted, plus an
 aggregate `runtime_seal_sha256` over the canonical entry serialization
 (unit-separator fields, record-separator joins) that the verifier recomputes
@@ -234,7 +242,8 @@ governed_runtime_seal unit regressions
 cargo test -- --ignored
   real_audited_runtime_matches_pinned_seal   PASS
       (F:\DSH-Runtime + F:\DSH-Home closure matches the pinned manifest
-       byte for byte, 2012 entries)
+       byte for byte — 2012 entries in the historical initial state;
+       the v0.3.3.1+ manifest verifies 21175)
   tampered_copy_of_real_closure_fails_the_seal PASS
       (a throwaway copy of the real closure with one tampered byte in
        bin.js fails the seal; the real runtime is untouched)
@@ -257,8 +266,9 @@ KerniQ independently verifies the governed runtime bundle against a pinned
 content manifest before governed admission. This is not a claim of
 tamper-proofing, supply-chain security, or an immutable runtime: an attacker
 who can rewrite files concurrently during verification remains a documented
-local-TOCTOU limitation, and third-party `.pnpm` store contents are pinned
-by lockfile rather than content-sealed.
+local-TOCTOU limitation. (An earlier revision of this section stated that
+`.pnpm` contents were only lockfile-pinned; that described the initial
+v0.3.3 state and was superseded by the v0.3.3.1 content seal.)
 
 ## Not changed
 
@@ -359,3 +369,70 @@ KerniQ verifies expected runtime bytes, expected Node resolution topology,
 and the approved governed executable-plugin composition before governed
 process start. Patch-content and runtime-filesystem TOCTOU remain accepted
 P2 timing boundaries; no supply-chain/hostile-admin claims.
+
+## v0.3.3.3 — Profile Package Resolution Closure
+
+Codex release-gate review confirmed one P1:
+
+```text
+the AgentFuse adapter's sealed executable imports @dhms-agentfuse/core
+(bare specifier); a closer package-local node_modules entry on the
+adapter's resolution ancestry could shadow the expected core while every
+sealed hash, the Git revision, the runtime version, the plugin identity,
+and the v0.3.3.2 topology inventory all stayed unchanged.
+```
+
+Reproduced first with a controlled fixture (real runtime untouched): the
+adapter's real resolution returned the expected core; after dropping
+`<adapter>/node_modules/@dhms-agentfuse/core`, real Node execution loaded
+the attacker bytes (`MARK=ATTACKER`), and none of the three relevant
+candidate directories were covered by the 340-record topology.
+
+### Fix
+
+The topology generator now derives profile-package Node resolution
+ancestry as a first-class input: for every directory inside the
+profile-installed package trees that contains files, its `node_modules`
+child is a real candidate on the importing file's ancestor chain (scope
+directory levels included), and every candidate is bound as `absent` or
+`exact`. No package-specific paths are hand-listed; the same derivation
+covers the observer and every other profile-installed package.
+
+```text
+topology records: 340 → 363 (+23 profile-package ancestry candidates)
+profile ancestry candidates: 23 derived, 23 closed, 0 uncovered
+bare-specifier dependencies in profile packages: 3
+  adapter → @dhms-agentfuse/core, adapter → @deepseek-ai/schemastery,
+  schemastery → @deepseek-ai/cosmokit
+observer package-local bare-specifier dependency: NONE
+  (its ancestry candidate is still enforced — an unexpected member there
+   rejects admission)
+```
+
+### Causal regressions
+
+```text
+agentfuse_closer_core_shadow_refuses_admission
+  known-good (expected dependency layout) → admitted, agent starts
+  closer package-local core injected (all sealed bytes unchanged)
+    → compatible_runtime=false → admission refused → process not started
+  observer ancestry candidate violated (unexpected member)
+    → compatible_runtime=false → refused
+workspace_link_target_substitution_refuses_admission (Windows-gated)
+```
+
+### Portability cleanup (P3-B)
+
+Junction creation and the junction-target-substitution regression are now
+`#[cfg(windows)]`; on non-Windows the substitution test is not compiled
+(explicit platform gate, no mutex poisoning cascade) and the fixture
+provisions the `apps/cli/node_modules` directory without a link.
+
+### Real validation
+
+```text
+real_audited_runtime_matches_pinned_seal  PASS (21175 entries + 363
+  topology records + composition over the real runtime)
+real positive governed run unchanged (see v0.3.3.2 evidence; no new
+  product behavior was added in this milestone)
+```

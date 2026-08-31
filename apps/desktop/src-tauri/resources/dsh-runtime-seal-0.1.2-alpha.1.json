@@ -127457,12 +127457,62 @@
   },
   {
    "root": "profile",
+   "path": "node_modules/.pnpm/node_modules",
+   "mode": "absent"
+  },
+  {
+   "root": "profile",
    "path": "node_modules/@deepseek-ai",
    "mode": "exact",
    "entries": [
     "cosmokit",
     "schemastery"
    ]
+  },
+  {
+   "root": "profile",
+   "path": "node_modules/@deepseek-ai/cosmokit/lib/node_modules",
+   "mode": "absent"
+  },
+  {
+   "root": "profile",
+   "path": "node_modules/@deepseek-ai/cosmokit/lib/types/node_modules",
+   "mode": "absent"
+  },
+  {
+   "root": "profile",
+   "path": "node_modules/@deepseek-ai/cosmokit/node_modules",
+   "mode": "absent"
+  },
+  {
+   "root": "profile",
+   "path": "node_modules/@deepseek-ai/cosmokit/src/node_modules",
+   "mode": "absent"
+  },
+  {
+   "root": "profile",
+   "path": "node_modules/@deepseek-ai/node_modules",
+   "mode": "absent"
+  },
+  {
+   "root": "profile",
+   "path": "node_modules/@deepseek-ai/schemastery/lib/node_modules",
+   "mode": "absent"
+  },
+  {
+   "root": "profile",
+   "path": "node_modules/@deepseek-ai/schemastery/lib/types/node_modules",
+   "mode": "absent"
+  },
+  {
+   "root": "profile",
+   "path": "node_modules/@deepseek-ai/schemastery/node_modules",
+   "mode": "absent"
+  },
+  {
+   "root": "profile",
+   "path": "node_modules/@deepseek-ai/schemastery/src/node_modules",
+   "mode": "absent"
   },
   {
    "root": "profile",
@@ -127475,6 +127525,41 @@
   },
   {
    "root": "profile",
+   "path": "node_modules/@dhms-agentfuse/core/lib/node_modules",
+   "mode": "absent"
+  },
+  {
+   "root": "profile",
+   "path": "node_modules/@dhms-agentfuse/core/lib/types/node_modules",
+   "mode": "absent"
+  },
+  {
+   "root": "profile",
+   "path": "node_modules/@dhms-agentfuse/core/node_modules",
+   "mode": "absent"
+  },
+  {
+   "root": "profile",
+   "path": "node_modules/@dhms-agentfuse/core/src/node_modules",
+   "mode": "absent"
+  },
+  {
+   "root": "profile",
+   "path": "node_modules/@dhms-agentfuse/dsh-agentfuse/lib/node_modules",
+   "mode": "absent"
+  },
+  {
+   "root": "profile",
+   "path": "node_modules/@dhms-agentfuse/dsh-agentfuse/node_modules",
+   "mode": "absent"
+  },
+  {
+   "root": "profile",
+   "path": "node_modules/@dhms-agentfuse/node_modules",
+   "mode": "absent"
+  },
+  {
+   "root": "profile",
    "path": "node_modules/@kerniq",
    "mode": "exact",
    "entries": [
@@ -127483,11 +127568,41 @@
   },
   {
    "root": "profile",
+   "path": "node_modules/@kerniq/dsh-control-plane-observer/node_modules",
+   "mode": "absent"
+  },
+  {
+   "root": "profile",
+   "path": "node_modules/@kerniq/dsh-control-plane-observer/test/node_modules",
+   "mode": "absent"
+  },
+  {
+   "root": "profile",
+   "path": "node_modules/@kerniq/node_modules",
+   "mode": "absent"
+  },
+  {
+   "root": "profile",
    "path": "node_modules/@standard-schema",
    "mode": "exact",
    "entries": [
     "spec"
    ]
+  },
+  {
+   "root": "profile",
+   "path": "node_modules/@standard-schema/node_modules",
+   "mode": "absent"
+  },
+  {
+   "root": "profile",
+   "path": "node_modules/@standard-schema/spec/dist/node_modules",
+   "mode": "absent"
+  },
+  {
+   "root": "profile",
+   "path": "node_modules/@standard-schema/spec/node_modules",
+   "mode": "absent"
   },
   {
    "root": "runtime",

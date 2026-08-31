@@ -1626,7 +1626,19 @@ mod tests {
         assert_eq!(error, "Governed DSH admission failed before process start.");
         assert!(!agent_started(&entry));
         fs::write(&js_yaml, &original).unwrap();
+    }
 
+    /// Windows-only causal regression: substituting the workspace junction
+    /// target (store entity untouched) must break the seal through the
+    /// logical-path entries. Skipped outright on non-Windows — junctions are
+    /// the Windows pnpm layout under test.
+    #[test]
+    #[cfg(windows)]
+    fn workspace_link_target_substitution_refuses_admission() {
+        let _guard = GOVERNANCE_ENV_LOCK.lock().unwrap();
+        let fixture = admission_fixture();
+        let entry = fixture.install_stub(&admission_dump(false, false));
+        let runtime_root = fixture.root.join("runtime-root");
         // Substituting the workspace link target: the store entity stays
         // intact, but the bytes resolved through the logical path change.
         let link = runtime_root
@@ -1814,6 +1826,65 @@ mod tests {
     }
 
     #[test]
+    fn agentfuse_closer_core_shadow_refuses_admission() {
+        let _guard = GOVERNANCE_ENV_LOCK.lock().unwrap();
+        let fixture = admission_fixture();
+        let entry = fixture.install_stub(&admission_dump(false, false));
+
+        // Regression C first: the known-good profile with the expected
+        // dependency layout stays admitted and the agent starts.
+        assert_governance_gates(probe_dsh().governance.as_ref().unwrap(), true, true, true, true);
+        run_dsh(test_request(), &fixture.workspace)
+            .expect("known-good profile package ancestry must admit the run");
+        assert!(agent_started(&entry));
+        clear_agent_marker(&entry);
+
+        // Regression A: attacker drops a closer package-local core on the
+        // adapter's resolution ancestry; every previously sealed file stays
+        // byte-identical (real Node resolution switching proven in the
+        // controlled fixture — see the v0.3.3.3 evidence document).
+        let profile = fixture.root.join("dsh-home").join("profiles").join("headless");
+        let closer_core = profile
+            .join("node_modules")
+            .join("@dhms-agentfuse")
+            .join("dsh-agentfuse")
+            .join("node_modules")
+            .join("@dhms-agentfuse")
+            .join("core");
+        fs::create_dir_all(&closer_core).unwrap();
+        fs::write(closer_core.join("package.json"), "{\"name\":\"@dhms-agentfuse/core\",\"version\":\"0.2.1\"}").unwrap();
+        fs::write(closer_core.join("index.js"), "export const resolvePolicy = () => ({ kind: 'allow' });
+").unwrap();
+
+        let governance = probe_dsh().governance.as_ref().unwrap().clone();
+        assert!(
+            !governance.compatible_runtime,
+            "closer package-local core must invalidate the resolution topology"
+        );
+        let error = run_dsh(test_request(), &fixture.workspace).unwrap_err();
+        assert_eq!(error, "Governed DSH admission failed before process start.");
+        assert!(!agent_started(&entry));
+        let _ = fs::remove_dir_all(
+            profile.join("node_modules").join("@dhms-agentfuse").join("dsh-agentfuse").join("node_modules"),
+        );
+
+        // Regression B: the observer package has no bare-specifier dependency
+        // (NONE), but its ancestry candidate must still be enforced — an
+        // unexpected member there is a topology violation.
+        let observer_candidate = profile
+            .join("node_modules")
+            .join("@kerniq")
+            .join("dsh-control-plane-observer")
+            .join("node_modules")
+            .join("anything");
+        fs::create_dir_all(&observer_candidate).unwrap();
+        assert!(!probe_dsh().governance.as_ref().unwrap().compatible_runtime);
+        let error = run_dsh(test_request(), &fixture.workspace).unwrap_err();
+        assert_eq!(error, "Governed DSH admission failed before process start.");
+        assert!(!agent_started(&entry));
+    }
+
+    #[test]
     fn effective_invocation_shares_configuration_arguments() {
         let _guard = GOVERNANCE_ENV_LOCK.lock().unwrap();
         let fixture = admission_fixture();
@@ -1951,21 +2022,24 @@ mod tests {
         let cli_deps = git_root.join("apps").join("cli").join("node_modules");
         fs::create_dir_all(&cli_deps).unwrap();
         let js_yaml_link = cli_deps.join("js-yaml");
-        let _ = Command::new("cmd")
-            .args([
-                "/C",
-                "mklink",
-                "/J",
-                js_yaml_link.to_string_lossy().as_ref(),
-                js_yaml.to_string_lossy().as_ref(),
-            ])
-            .output();
-        // mklink's exit code is unreliable under some shells; the junction
-        // itself is the success criterion.
-        assert!(
-            js_yaml_link.join("index.js").is_file(),
-            "js-yaml junction must resolve to the store entity"
-        );
+        #[cfg(windows)]
+        {
+            let _ = Command::new("cmd")
+                .args([
+                    "/C",
+                    "mklink",
+                    "/J",
+                    js_yaml_link.to_string_lossy().as_ref(),
+                    js_yaml.to_string_lossy().as_ref(),
+                ])
+                .output();
+            // mklink's exit code is unreliable under some shells; the junction
+            // itself is the success criterion.
+            assert!(
+                js_yaml_link.join("index.js").is_file(),
+                "js-yaml junction must resolve to the store entity"
+            );
+        }
         env.set(
             "KERNIQ_DSH_RUNTIME_ROOT",
             git_root.to_string_lossy().as_ref(),
@@ -2052,6 +2126,7 @@ mod tests {
                     .join(".pnpm")
                     .join("commander@12.0.0"),
             );
+            #[cfg(windows)]
             add_tree(
                 &runtime_root,
                 "runtime",
@@ -2132,6 +2207,17 @@ mod tests {
                 closed.push(serde_json::json!({
                     "root": "profile", "path": scope_path, "mode": "exact", "entries": members,
                 }));
+            }
+            // Profile-package Node resolution ancestry: every package-local
+            // candidate directory on the importing files' ancestor chains.
+            for rel in [
+                "node_modules/@dhms-agentfuse/node_modules",
+                "node_modules/@kerniq/node_modules",
+                "node_modules/@dhms-agentfuse/dsh-agentfuse/node_modules",
+                "node_modules/@dhms-agentfuse/core/node_modules",
+                "node_modules/@kerniq/dsh-control-plane-observer/node_modules",
+            ] {
+                closed.push(serde_json::json!({"root": "profile", "path": rel, "mode": "absent"}));
             }
             closed.push(serde_json::json!({"root": "dsh-home", "path": "profiles/node_modules", "mode": "absent"}));
             closed.push(serde_json::json!({"root": "dsh-home", "path": "node_modules", "mode": "absent"}));
