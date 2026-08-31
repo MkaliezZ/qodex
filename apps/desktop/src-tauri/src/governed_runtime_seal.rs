@@ -31,6 +31,19 @@ struct Manifest {
     runtime_version: String,
     runtime_seal_sha256: String,
     entries: Vec<Entry>,
+    #[serde(default)]
+    closed_resolution_directories: Vec<ClosedResolutionDirectory>,
+    #[serde(default)]
+    approved_executable_plugins: Vec<String>,
+}
+
+#[derive(Deserialize)]
+struct ClosedResolutionDirectory {
+    root: String,
+    path: String,
+    mode: String,
+    #[serde(default)]
+    entries: Vec<String>,
 }
 
 #[derive(Deserialize)]
@@ -49,8 +62,15 @@ pub(crate) fn verify_runtime_seal(
     runtime_root: &Path,
     profile_root: Option<&Path>,
     user_cache_root: Option<&Path>,
+    dsh_home_root: Option<&Path>,
 ) -> bool {
-    verify_manifest(&expected_manifest(), runtime_root, profile_root, user_cache_root)
+    verify_manifest(
+        &expected_manifest(),
+        runtime_root,
+        profile_root,
+        user_cache_root,
+        dsh_home_root,
+    )
 }
 
 /// The seal check proper: parse-and-validate `manifest_text`, then hash every
@@ -61,11 +81,13 @@ pub(crate) fn verify_manifest(
     runtime_root: &Path,
     profile_root: Option<&Path>,
     user_cache_root: Option<&Path>,
+    dsh_home_root: Option<&Path>,
 ) -> bool {
     let Some(manifest) = parse_and_validate_manifest(manifest_text) else {
         return false;
     };
     verify_manifest_against_roots(&manifest, runtime_root, profile_root, user_cache_root)
+        && verify_resolution_topology(&manifest, runtime_root, profile_root, dsh_home_root)
 }
 
 fn expected_manifest() -> String {
@@ -109,6 +131,45 @@ fn parse_and_validate_manifest(text: &str) -> Option<Manifest> {
     // The aggregate seal must match the canonical serialization of the
     // entries themselves, so the pinned manifest cannot be internally
     // inconsistent.
+    // Resolution-topology metadata integrity: safe paths, valid roots and
+    // modes, no duplicate directories or case-ambiguous members.
+    let mut closed_seen = std::collections::BTreeSet::new();
+    for closed in &manifest.closed_resolution_directories {
+        if !matches!(
+            closed.root.as_str(),
+            "runtime" | "profile" | "user-cache" | "dsh-home"
+        ) || !is_safe_relative_path(&closed.path)
+            || !matches!(closed.mode.as_str(), "absent" | "exact")
+        {
+            return None;
+        }
+        if !closed_seen.insert((closed.root.as_str(), closed.path.to_lowercase())) {
+            return None;
+        }
+        let mut member_seen = std::collections::BTreeSet::new();
+        for member in &closed.entries {
+            if member.is_empty()
+                || member.contains('/')
+                || member.contains('\\')
+                || member == "."
+                || member == ".."
+                || !member_seen.insert(member.to_lowercase())
+            {
+                return None;
+            }
+        }
+    }
+    // The pinned trust document always carries a topology section; an empty
+    // one is malformed (and the standalone verify path also rejects it).
+    if manifest.closed_resolution_directories.is_empty() {
+        return None;
+    }
+    let mut approved_seen = std::collections::BTreeSet::new();
+    for name in &manifest.approved_executable_plugins {
+        if name.is_empty() || !approved_seen.insert(name.as_str()) {
+            return None;
+        }
+    }
     let canonical = canonical_manifest_bytes(
         &manifest
             .entries
@@ -121,6 +182,85 @@ fn parse_and_validate_manifest(text: &str) -> Option<Manifest> {
         return None;
     }
     Some(manifest)
+}
+
+/// Verifies the closed resolution directories: `absent` directories must not
+/// exist, `exact` directories must have exactly the pinned direct membership
+/// (case-insensitive on Windows). Membership binds names only — unexpected
+/// entries of any type reject; content bytes stay the file seal's job.
+fn verify_resolution_topology(
+    manifest: &Manifest,
+    runtime_root: &Path,
+    profile_root: Option<&Path>,
+    dsh_home_root: Option<&Path>,
+) -> bool {
+    if manifest.closed_resolution_directories.is_empty() {
+        // The pinned manifest always carries topology; an empty section is a
+        // malformed trust document.
+        return false;
+    }
+    let mut sorted: Vec<&ClosedResolutionDirectory> =
+        manifest.closed_resolution_directories.iter().collect();
+    sorted.sort_by(|a, b| (&a.root, &a.path).cmp(&(&b.root, &b.path)));
+    for closed in sorted {
+        let base = match closed.root.as_str() {
+            "runtime" => runtime_root,
+            "profile" => match profile_root {
+                Some(profile) => profile,
+                None => return false,
+            },
+            "dsh-home" => match dsh_home_root {
+                Some(home) => home,
+                None => return false,
+            },
+            _ => return false,
+        };
+        let dir = base.join(&closed.path);
+        match closed.mode.as_str() {
+            "absent" => {
+                if dir.symlink_metadata().is_ok() {
+                    return false;
+                }
+            }
+            "exact" => {
+                let Ok(read) = fs::read_dir(&dir) else {
+                    return false;
+                };
+                let actual: Option<Vec<String>> = read
+                    .map(|entry| entry.map(|entry| entry.file_name().to_string_lossy().into_owned()))
+                    .collect::<Result<Vec<_>, _>>()
+                    .ok();
+                let mut actual: Vec<String> = match actual {
+                    Some(names) => names,
+                    None => return false,
+                };
+                actual.sort_by_key(|name| name.to_lowercase());
+                let mut expected: Vec<String> = closed.entries.clone();
+                expected.sort_by_key(|name| name.to_lowercase());
+                if actual.len() != expected.len() {
+                    return false;
+                }
+                for (a, b) in actual.iter().zip(expected.iter()) {
+                    if !a.eq_ignore_ascii_case(b) {
+                        return false;
+                    }
+                }
+            }
+            _ => return false,
+        }
+    }
+    true
+}
+
+/// The approved governed executable plugin identities pinned inside the
+/// trusted manifest. `None` means the trust document is malformed and the
+/// caller must fail closed.
+pub(crate) fn approved_executable_plugins() -> Option<Vec<String>> {
+    let manifest = parse_and_validate_manifest(&expected_manifest())?;
+    if manifest.approved_executable_plugins.is_empty() {
+        return None;
+    }
+    Some(manifest.approved_executable_plugins)
 }
 
 fn verify_manifest_against_roots(
@@ -224,6 +364,12 @@ mod tests {
                     "root": root, "path": path, "size": size, "sha256": sha256,
                 }))
                 .collect::<Vec<_>>(),
+            "closed_resolution_directories": [
+                {"root": "runtime", "path": "apps/cli/lib/node_modules", "mode": "absent"},
+                {"root": "profile", "path": "node_modules", "mode": "exact", "entries": ["p"]},
+                {"root": "dsh-home", "path": "node_modules", "mode": "absent"},
+            ],
+            "approved_executable_plugins": ["@dhms-agentfuse/dsh-agentfuse"],
         })
         .to_string()
     }
@@ -280,7 +426,60 @@ mod tests {
     }
 
     #[test]
+    fn rejects_malformed_topology_metadata() {
+        let bin_digest = digest_of(b"abc");
+        let good = ("runtime", "apps/cli/lib/bin.js", 3u64, bin_digest.as_str());
+        let good_seal = digest_of(canonical_manifest_bytes(&[good]).as_bytes());
+        let base = serde_json::from_str::<serde_json::Value>(&manifest_json(&[good], &good_seal))
+            .unwrap();
+        let broken_topology = |value: serde_json::Value| {
+            let mut doc = base.clone();
+            doc["closed_resolution_directories"] = value;
+            parse_and_validate_manifest(&doc.to_string()).is_none()
+        };
+        // invalid root / invalid mode / absolute / traversal / backslash paths
+        assert!(broken_topology(serde_json::json!([
+            {"root": "elsewhere", "path": "x", "mode": "absent"},
+        ])));
+        assert!(broken_topology(serde_json::json!([
+            {"root": "runtime", "path": "x", "mode": "sometimes"},
+        ])));
+        assert!(broken_topology(serde_json::json!([
+            {"root": "runtime", "path": "/abs", "mode": "absent"},
+        ])));
+        assert!(broken_topology(serde_json::json!([
+            {"root": "runtime", "path": "../up", "mode": "absent"},
+        ])));
+        assert!(broken_topology(serde_json::json!([
+            {"root": "runtime", "path": "a\\b", "mode": "absent"},
+        ])));
+        // duplicate directory records (exact and case-insensitive)
+        assert!(broken_topology(serde_json::json!([
+            {"root": "runtime", "path": "x", "mode": "absent"},
+            {"root": "runtime", "path": "X", "mode": "absent"},
+        ])));
+        // case-duplicate expected members and traversal members
+        assert!(broken_topology(serde_json::json!([
+            {"root": "runtime", "path": "d", "mode": "exact", "entries": ["a", "A"]},
+        ])));
+        assert!(broken_topology(serde_json::json!([
+            {"root": "runtime", "path": "d", "mode": "exact", "entries": [".."]},
+        ])));
+        // empty topology section is a malformed trust document
+        let mut doc = base.clone();
+        doc["closed_resolution_directories"] = serde_json::json!([]);
+        assert!(parse_and_validate_manifest(&doc.to_string()).is_none());
+        // duplicate approved identities reject
+        let mut doc = base.clone();
+        doc["approved_executable_plugins"] = serde_json::json!(["@a/b", "@a/b"]);
+        assert!(parse_and_validate_manifest(&doc.to_string()).is_none());
+    }
+
+    #[test]
     fn verifies_and_rejects_content_at_the_roots() {
+        let home = std::env::temp_dir().join("kerniq-seal-verify-home");
+        let _ = std::fs::remove_dir_all(&home);
+        std::fs::create_dir_all(&home).unwrap();
         let dir = std::env::temp_dir().join(format!(
             "kerniq-seal-verify-{:x}",
             Sha256::digest(
@@ -307,16 +506,17 @@ mod tests {
         let seal = digest_of(canonical_manifest_bytes(&entries).as_bytes());
         let manifest_text = manifest_json(&entries, &seal);
 
-        assert!(verify_manifest(&manifest_text, &runtime, Some(&profile), None));
+        assert!(verify_manifest(&manifest_text, &runtime, Some(&profile), None, Some(&home)));
         // Modified content, missing file, and absent profile root all fail.
         std::fs::write(runtime.join("apps/cli/lib/bin.js"), b"abd").unwrap();
-        assert!(!verify_manifest(&manifest_text, &runtime, Some(&profile), None));
+        assert!(!verify_manifest(&manifest_text, &runtime, Some(&profile), None, Some(&home)));
         std::fs::write(runtime.join("apps/cli/lib/bin.js"), b"abc").unwrap();
         std::fs::remove_file(profile.join("node_modules/p/index.js")).unwrap();
-        assert!(!verify_manifest(&manifest_text, &runtime, Some(&profile), None));
+        assert!(!verify_manifest(&manifest_text, &runtime, Some(&profile), None, Some(&home)));
         std::fs::write(profile.join("node_modules/p/index.js"), b"xyz").unwrap();
-        assert!(!verify_manifest(&manifest_text, &runtime, None, None));
+        assert!(!verify_manifest(&manifest_text, &runtime, None, None, Some(&home)));
         let _ = std::fs::remove_dir_all(&dir);
+        let _ = std::fs::remove_dir_all(&home);
     }
 
     /// Real-machine verification: the audited Windows runtime must match the
@@ -329,6 +529,7 @@ mod tests {
             std::path::Path::new("F:/DSH-Runtime"),
             Some(std::path::Path::new("F:/DSH-Home/profiles/headless")),
             user_native_cache_root_for_real_machine().as_deref(),
+            Some(std::path::Path::new("F:/DSH-Home")),
         );
         println!("real seal verification: {}ms", started.elapsed().as_millis());
         assert!(ok, "real audited runtime must match the pinned seal");
@@ -352,6 +553,7 @@ mod tests {
         ));
         let runtime = dir.join("runtime");
         let profile = dir.join("profile");
+        std::fs::create_dir_all(dir.join("dsh-home")).unwrap();
         let real_runtime = std::path::Path::new("F:/DSH-Runtime");
         let real_profile = std::path::Path::new("F:/DSH-Home/profiles/headless");
         for entry in &manifest.entries {
@@ -381,6 +583,7 @@ mod tests {
             &runtime,
             Some(&profile),
             Some(dir.join("user-cache").as_path()),
+            Some(dir.join("dsh-home").as_path()),
         ));
         let _ = std::fs::remove_dir_all(&dir);
     }

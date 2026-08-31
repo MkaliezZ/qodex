@@ -127056,5 +127056,3884 @@
    "size": 338432,
    "sha256": "57845c9e7c184b564b35a59c9012f7682f06f33877bb01c550e01f48210f98d5"
   }
+ ],
+ "closed_resolution_directories": [
+  {
+   "root": "dsh-home",
+   "path": "node_modules",
+   "mode": "absent"
+  },
+  {
+   "root": "dsh-home",
+   "path": "profiles/node_modules",
+   "mode": "exact",
+   "entries": [
+    "@agentclientprotocol",
+    "@babel",
+    "@deepseek-ai",
+    "@earendil-works",
+    "@joplin",
+    "@lexical",
+    "@modelcontextprotocol",
+    "@octokit",
+    "@opentelemetry",
+    "@standard-schema",
+    "@tanstack",
+    "@vscode",
+    "@xterm",
+    "chokidar",
+    "clsx",
+    "commander",
+    "compression",
+    "diff",
+    "eventsource-parser",
+    "fflate",
+    "ipaddr.js",
+    "js-yaml",
+    "koffi",
+    "lexical",
+    "negotiator",
+    "node-addon-require-builtin",
+    "node-pty",
+    "open",
+    "picomatch",
+    "react",
+    "react-dom",
+    "resolve.exports",
+    "sharp",
+    "turndown",
+    "typescript",
+    "undici",
+    "use-sync-external-store",
+    "ws",
+    "yaml",
+    "zod"
+   ]
+  },
+  {
+   "root": "dsh-home",
+   "path": "profiles/node_modules/@agentclientprotocol",
+   "mode": "exact",
+   "entries": [
+    "sdk"
+   ]
+  },
+  {
+   "root": "dsh-home",
+   "path": "profiles/node_modules/@babel",
+   "mode": "exact",
+   "entries": [
+    "code-frame"
+   ]
+  },
+  {
+   "root": "dsh-home",
+   "path": "profiles/node_modules/@deepseek-ai",
+   "mode": "exact",
+   "entries": [
+    "cordis",
+    "cordis-plugin-group",
+    "cordis-plugin-hmr",
+    "cordis-plugin-include",
+    "cordis-plugin-loader",
+    "cordis-plugin-timer",
+    "cosmokit",
+    "dsh",
+    "dsh-acp",
+    "dsh-acp-app",
+    "dsh-agent",
+    "dsh-agent-default-model",
+    "dsh-agent-instructions",
+    "dsh-agent-loop",
+    "dsh-agent-presets",
+    "dsh-agent-spine-demo",
+    "dsh-agent-tool-presentation",
+    "dsh-anonymous-user-id",
+    "dsh-api-gateway",
+    "dsh-api-remotes",
+    "dsh-api-session-controller",
+    "dsh-api-settings-controller",
+    "dsh-api-workspace-controller",
+    "dsh-app-boot",
+    "dsh-atomic-write",
+    "dsh-attachment",
+    "dsh-attachment-local",
+    "dsh-authorization",
+    "dsh-base",
+    "dsh-bash-local",
+    "dsh-bash-sandbox",
+    "dsh-brand",
+    "dsh-client-connection",
+    "dsh-client-hmr",
+    "dsh-client-locale",
+    "dsh-client-modules",
+    "dsh-client-ui-agent-preset",
+    "dsh-client-ui-approval",
+    "dsh-client-ui-attachment",
+    "dsh-client-ui-brand-official",
+    "dsh-client-ui-chat",
+    "dsh-client-ui-commands",
+    "dsh-client-ui-conversation",
+    "dsh-client-ui-cordis",
+    "dsh-client-ui-deliverables",
+    "dsh-client-ui-directory-picker-browse",
+    "dsh-client-ui-directory-picker-native",
+    "dsh-client-ui-goal",
+    "dsh-client-ui-input-trigger",
+    "dsh-client-ui-jobs",
+    "dsh-client-ui-layout",
+    "dsh-client-ui-message-feedback",
+    "dsh-client-ui-model-selection",
+    "dsh-client-ui-permission-presets",
+    "dsh-client-ui-plan",
+    "dsh-client-ui-reference",
+    "dsh-client-ui-renderer",
+    "dsh-client-ui-session",
+    "dsh-client-ui-settings",
+    "dsh-client-ui-settings-general",
+    "dsh-client-ui-settings-models",
+    "dsh-client-ui-settings-plugin-inventory",
+    "dsh-client-ui-settings-plugins",
+    "dsh-client-ui-sidebar",
+    "dsh-client-ui-skill",
+    "dsh-client-ui-subagent",
+    "dsh-client-ui-theme",
+    "dsh-client-ui-tool",
+    "dsh-client-ui-trajectory",
+    "dsh-client-ui-user-questions",
+    "dsh-client-ui-workflow-run",
+    "dsh-client-ui-workspace",
+    "dsh-cmdline",
+    "dsh-code-runtime",
+    "dsh-code-runtime-worker-thread",
+    "dsh-command-compact",
+    "dsh-command-feedback",
+    "dsh-command-goal",
+    "dsh-commands",
+    "dsh-compaction",
+    "dsh-compaction-basic",
+    "dsh-compaction-tool-result-pruner",
+    "dsh-cordis-client-runner",
+    "dsh-cordis-host-runner",
+    "dsh-credentials",
+    "dsh-credentials-local",
+    "dsh-deepseek-llm-api-extensions",
+    "dsh-file-reference",
+    "dsh-file-reference-local",
+    "dsh-fs",
+    "dsh-fs-local",
+    "dsh-fs-observation-policy",
+    "dsh-fs-sandbox",
+    "dsh-goal",
+    "dsh-goal-round-driver",
+    "dsh-headless",
+    "dsh-home-paths",
+    "dsh-hook-protocol",
+    "dsh-hooks-claude-code",
+    "dsh-hooks-codex",
+    "dsh-host-directory-picker",
+    "dsh-host-directory-picker-auto",
+    "dsh-host-directory-picker-browse",
+    "dsh-host-directory-picker-native",
+    "dsh-host-frontend-static",
+    "dsh-host-plugin-inventory",
+    "dsh-host-webserver",
+    "dsh-invariants",
+    "dsh-jobs",
+    "dsh-jobs-local",
+    "dsh-launch-environment",
+    "dsh-llm",
+    "dsh-llm-deepseek",
+    "dsh-llm-pi-ai",
+    "dsh-llm-retry",
+    "dsh-mcp-client",
+    "dsh-message-feedback",
+    "dsh-native-command",
+    "dsh-output-retention",
+    "dsh-permission-presets",
+    "dsh-persona",
+    "dsh-plan-mode",
+    "dsh-plugin-package-inventory-deepseek",
+    "dsh-pwsh-local",
+    "dsh-pwsh-sandbox",
+    "dsh-repeat-tool-reminder",
+    "dsh-sandbox",
+    "dsh-sandbox-local",
+    "dsh-sandbox-policy",
+    "dsh-sandbox-windows-acl",
+    "dsh-schedule",
+    "dsh-scope",
+    "dsh-sdk-app",
+    "dsh-sdk-jsonrpc-server",
+    "dsh-sdk-minimal",
+    "dsh-sdk-protocol",
+    "dsh-session",
+    "dsh-session-checkpoint-policy",
+    "dsh-session-log-deepseek",
+    "dsh-session-log-export",
+    "dsh-session-persistence",
+    "dsh-session-persistence-jsonl",
+    "dsh-session-projection",
+    "dsh-session-projection-cache",
+    "dsh-session-query",
+    "dsh-session-query-sqlite",
+    "dsh-session-reference",
+    "dsh-session-stats",
+    "dsh-session-telemetry",
+    "dsh-session-telemetry-otel",
+    "dsh-session-title",
+    "dsh-session-title-first-prompt-llm",
+    "dsh-session-title-llm",
+    "dsh-settings",
+    "dsh-settings-file",
+    "dsh-shell",
+    "dsh-shell-env",
+    "dsh-skill",
+    "dsh-skill-badge",
+    "dsh-skill-filesystem",
+    "dsh-spill",
+    "dsh-spill-local",
+    "dsh-spill-policy",
+    "dsh-storage",
+    "dsh-storage-domain",
+    "dsh-storage-json",
+    "dsh-subagent",
+    "dsh-subagent-fork-in-process",
+    "dsh-subagent-in-process-driver",
+    "dsh-subagent-spawn-in-process",
+    "dsh-subprocess",
+    "dsh-subprocess-local",
+    "dsh-system-prompt",
+    "dsh-terminal",
+    "dsh-terminal-bash",
+    "dsh-time-context",
+    "dsh-timeout",
+    "dsh-tmux-context",
+    "dsh-token-meter",
+    "dsh-tool-ask-user",
+    "dsh-tool-bash",
+    "dsh-tool-bash-persistent",
+    "dsh-tool-call-timeout-policy",
+    "dsh-tool-cordis",
+    "dsh-tool-fs",
+    "dsh-tool-fs-search",
+    "dsh-tool-goal",
+    "dsh-tool-jobs",
+    "dsh-tool-pwsh",
+    "dsh-tool-pwsh-persistent",
+    "dsh-tool-ralph",
+    "dsh-tool-skill",
+    "dsh-tool-str-replace-editor",
+    "dsh-tool-subagent",
+    "dsh-tool-subagent-control",
+    "dsh-tool-subagent-report",
+    "dsh-tool-todo",
+    "dsh-tool-web",
+    "dsh-tool-workflow",
+    "dsh-tools",
+    "dsh-typert-loader",
+    "dsh-typert-protocol",
+    "dsh-typert-registry",
+    "dsh-user-approval",
+    "dsh-user-questions",
+    "dsh-util-crypto",
+    "dsh-util-workspace-path",
+    "dsh-web",
+    "dsh-web-app",
+    "dsh-web-fetch-http",
+    "dsh-web-frontend",
+    "dsh-web-search-deepseek",
+    "dsh-webhook",
+    "dsh-webhook-github",
+    "dsh-win32-process",
+    "dsh-workflow",
+    "dsh-workflow-worker-thread",
+    "dsh-workspace",
+    "node-addon-landlock-run",
+    "schemastery"
+   ]
+  },
+  {
+   "root": "dsh-home",
+   "path": "profiles/node_modules/@earendil-works",
+   "mode": "exact",
+   "entries": [
+    "pi-ai"
+   ]
+  },
+  {
+   "root": "dsh-home",
+   "path": "profiles/node_modules/@joplin",
+   "mode": "exact",
+   "entries": [
+    "turndown-plugin-gfm"
+   ]
+  },
+  {
+   "root": "dsh-home",
+   "path": "profiles/node_modules/@lexical",
+   "mode": "exact",
+   "entries": [
+    "history",
+    "plain-text",
+    "text",
+    "utils"
+   ]
+  },
+  {
+   "root": "dsh-home",
+   "path": "profiles/node_modules/@modelcontextprotocol",
+   "mode": "exact",
+   "entries": [
+    "sdk"
+   ]
+  },
+  {
+   "root": "dsh-home",
+   "path": "profiles/node_modules/@octokit",
+   "mode": "exact",
+   "entries": [
+    "webhooks"
+   ]
+  },
+  {
+   "root": "dsh-home",
+   "path": "profiles/node_modules/@opentelemetry",
+   "mode": "exact",
+   "entries": [
+    "api",
+    "api-logs",
+    "exporter-logs-otlp-http",
+    "otlp-exporter-base",
+    "resources",
+    "sdk-logs"
+   ]
+  },
+  {
+   "root": "dsh-home",
+   "path": "profiles/node_modules/@standard-schema",
+   "mode": "exact",
+   "entries": [
+    "spec"
+   ]
+  },
+  {
+   "root": "dsh-home",
+   "path": "profiles/node_modules/@tanstack",
+   "mode": "exact",
+   "entries": [
+    "react-virtual"
+   ]
+  },
+  {
+   "root": "dsh-home",
+   "path": "profiles/node_modules/@vscode",
+   "mode": "exact",
+   "entries": [
+    "ripgrep"
+   ]
+  },
+  {
+   "root": "dsh-home",
+   "path": "profiles/node_modules/@xterm",
+   "mode": "exact",
+   "entries": [
+    "headless"
+   ]
+  },
+  {
+   "root": "profile",
+   "path": "node_modules",
+   "mode": "exact",
+   "entries": [
+    ".modules.yaml",
+    ".pnpm",
+    ".pnpm-workspace-state-v1.json",
+    "@deepseek-ai",
+    "@dhms-agentfuse",
+    "@kerniq",
+    "@standard-schema"
+   ]
+  },
+  {
+   "root": "profile",
+   "path": "node_modules/@deepseek-ai",
+   "mode": "exact",
+   "entries": [
+    "cosmokit",
+    "schemastery"
+   ]
+  },
+  {
+   "root": "profile",
+   "path": "node_modules/@dhms-agentfuse",
+   "mode": "exact",
+   "entries": [
+    "core",
+    "dsh-agentfuse"
+   ]
+  },
+  {
+   "root": "profile",
+   "path": "node_modules/@kerniq",
+   "mode": "exact",
+   "entries": [
+    "dsh-control-plane-observer"
+   ]
+  },
+  {
+   "root": "profile",
+   "path": "node_modules/@standard-schema",
+   "mode": "exact",
+   "entries": [
+    "spec"
+   ]
+  },
+  {
+   "root": "runtime",
+   "path": "apps/cli/lib/node_modules",
+   "mode": "absent"
+  },
+  {
+   "root": "runtime",
+   "path": "apps/cli/node_modules",
+   "mode": "exact",
+   "entries": [
+    ".bin",
+    "@agentclientprotocol",
+    "@deepseek-ai",
+    "@types",
+    "commander",
+    "execa",
+    "js-yaml",
+    "node-addon-require-builtin",
+    "ws"
+   ]
+  },
+  {
+   "root": "runtime",
+   "path": "apps/cli/node_modules/@agentclientprotocol",
+   "mode": "exact",
+   "entries": [
+    "sdk"
+   ]
+  },
+  {
+   "root": "runtime",
+   "path": "apps/cli/node_modules/@deepseek-ai",
+   "mode": "exact",
+   "entries": [
+    "cordis",
+    "cordis-plugin-hmr",
+    "cordis-plugin-include",
+    "cordis-plugin-loader",
+    "cordis-plugin-timer",
+    "dsh-acp",
+    "dsh-acp-app",
+    "dsh-agent",
+    "dsh-agent-instructions",
+    "dsh-agent-spine-demo",
+    "dsh-agent-tool-presentation",
+    "dsh-app-boot",
+    "dsh-attachment-local",
+    "dsh-base",
+    "dsh-bash-local",
+    "dsh-client-ui-agent-preset",
+    "dsh-client-ui-cordis",
+    "dsh-cmdline",
+    "dsh-command-compact",
+    "dsh-command-goal",
+    "dsh-compaction-basic",
+    "dsh-compaction-tool-result-pruner",
+    "dsh-cordis-client-runner",
+    "dsh-credentials-local",
+    "dsh-deepseek-llm-api-extensions",
+    "dsh-experimental-agent-team",
+    "dsh-experimental-agent-team-profile",
+    "dsh-experimental-tool-agent-team",
+    "dsh-fs-local",
+    "dsh-fs-observation-policy",
+    "dsh-fs-sandbox",
+    "dsh-goal",
+    "dsh-goal-round-driver",
+    "dsh-headless",
+    "dsh-home-paths",
+    "dsh-hooks-claude-code",
+    "dsh-hooks-codex",
+    "dsh-host-frontend-static",
+    "dsh-host-webserver",
+    "dsh-jobs-local",
+    "dsh-launch-environment",
+    "dsh-llm",
+    "dsh-llm-deepseek",
+    "dsh-llm-mock-server",
+    "dsh-llm-pi-ai",
+    "dsh-llm-replay",
+    "dsh-loader-smoke",
+    "dsh-mcp-client",
+    "dsh-persona",
+    "dsh-plan-mode",
+    "dsh-plugin-package-inventory-deepseek",
+    "dsh-pwsh-local",
+    "dsh-pwsh-sandbox",
+    "dsh-sandbox-local",
+    "dsh-sandbox-policy",
+    "dsh-schedule",
+    "dsh-sdk-app",
+    "dsh-sdk-minimal",
+    "dsh-session",
+    "dsh-session-checkpoint-policy",
+    "dsh-session-log-deepseek",
+    "dsh-session-persistence-jsonl",
+    "dsh-session-projection",
+    "dsh-session-query",
+    "dsh-session-reference",
+    "dsh-settings",
+    "dsh-settings-file",
+    "dsh-skill",
+    "dsh-skill-filesystem",
+    "dsh-subagent",
+    "dsh-subagent-fork-in-process",
+    "dsh-subagent-spawn-in-process",
+    "dsh-subprocess-local",
+    "dsh-system-prompt",
+    "dsh-terminal",
+    "dsh-terminal-bash",
+    "dsh-time-context",
+    "dsh-tmux-context",
+    "dsh-token-meter",
+    "dsh-tool-ask-user",
+    "dsh-tool-bash",
+    "dsh-tool-bash-persistent",
+    "dsh-tool-cordis",
+    "dsh-tool-fs",
+    "dsh-tool-fs-search",
+    "dsh-tool-goal",
+    "dsh-tool-jobs",
+    "dsh-tool-pwsh",
+    "dsh-tool-pwsh-persistent",
+    "dsh-tool-ralph",
+    "dsh-tool-skill",
+    "dsh-tool-str-replace-editor",
+    "dsh-tool-subagent",
+    "dsh-tool-subagent-control",
+    "dsh-tool-subagent-report",
+    "dsh-tool-todo",
+    "dsh-tool-web",
+    "dsh-tool-workflow",
+    "dsh-tools",
+    "dsh-user-approval",
+    "dsh-web-app",
+    "dsh-webhook",
+    "dsh-webhook-github",
+    "dsh-workflow-worker-thread",
+    "schemastery"
+   ]
+  },
+  {
+   "root": "runtime",
+   "path": "apps/cli/node_modules/@types",
+   "mode": "exact",
+   "entries": [
+    "js-yaml",
+    "ws"
+   ]
+  },
+  {
+   "root": "runtime",
+   "path": "node_modules",
+   "mode": "exact",
+   "entries": [
+    ".bin",
+    ".modules.yaml",
+    ".pnpm",
+    ".pnpm-workspace-state-v1.json",
+    "@deepseek-ai",
+    "@stylistic",
+    "@testing-library",
+    "@types",
+    "@vitest",
+    "@yarnpkg",
+    "eslint-plugin-sonarjs",
+    "execa",
+    "fast-check",
+    "istanbul-lib-report",
+    "js-yaml",
+    "jscpd",
+    "jsdom",
+    "knip",
+    "lefthook",
+    "lightningcss",
+    "mdast-util-from-markdown",
+    "mdast-util-gfm",
+    "mermaid",
+    "micromark-extension-gfm",
+    "oxlint",
+    "oxlint-tsgolint",
+    "publint",
+    "smol-toml",
+    "spdx-expression-parse",
+    "tsdown",
+    "tsx",
+    "typescript",
+    "vite-tsconfig-paths",
+    "vitest"
+   ]
+  },
+  {
+   "root": "runtime",
+   "path": "node_modules/.pnpm/@img+colour@1.1.0/node_modules",
+   "mode": "exact",
+   "entries": [
+    "@img"
+   ]
+  },
+  {
+   "root": "runtime",
+   "path": "node_modules/.pnpm/@img+sharp-win32-x64@0.35.3/node_modules",
+   "mode": "exact",
+   "entries": [
+    "@img"
+   ]
+  },
+  {
+   "root": "runtime",
+   "path": "node_modules/.pnpm/@joplin+turndown-plugin-gfm@1.0.67/node_modules",
+   "mode": "exact",
+   "entries": [
+    "@joplin"
+   ]
+  },
+  {
+   "root": "runtime",
+   "path": "node_modules/.pnpm/@koromix+koffi-win32-x64@3.1.1/node_modules",
+   "mode": "exact",
+   "entries": [
+    "@koromix"
+   ]
+  },
+  {
+   "root": "runtime",
+   "path": "node_modules/.pnpm/@mixmark-io+domino@2.2.0/node_modules",
+   "mode": "exact",
+   "entries": [
+    "@mixmark-io"
+   ]
+  },
+  {
+   "root": "runtime",
+   "path": "node_modules/.pnpm/@opentelemetry+api-logs@0.220.0/node_modules",
+   "mode": "exact",
+   "entries": [
+    "@opentelemetry"
+   ]
+  },
+  {
+   "root": "runtime",
+   "path": "node_modules/.pnpm/@opentelemetry+api@1.9.1/node_modules",
+   "mode": "exact",
+   "entries": [
+    "@opentelemetry"
+   ]
+  },
+  {
+   "root": "runtime",
+   "path": "node_modules/.pnpm/@opentelemetry+core@2.10.0_@opentelemetry+api@1.9.1/node_modules",
+   "mode": "exact",
+   "entries": [
+    "@opentelemetry"
+   ]
+  },
+  {
+   "root": "runtime",
+   "path": "node_modules/.pnpm/@opentelemetry+core@2.9.0_@opentelemetry+api@1.9.1/node_modules",
+   "mode": "exact",
+   "entries": [
+    "@opentelemetry"
+   ]
+  },
+  {
+   "root": "runtime",
+   "path": "node_modules/.pnpm/@opentelemetry+exporter-log_8841f7b0492a7fba2b5096a5d0627e99/node_modules",
+   "mode": "exact",
+   "entries": [
+    "@opentelemetry"
+   ]
+  },
+  {
+   "root": "runtime",
+   "path": "node_modules/.pnpm/@opentelemetry+otlp-exporte_063bc33666454fa371be6222dbefe9b6/node_modules",
+   "mode": "exact",
+   "entries": [
+    "@opentelemetry"
+   ]
+  },
+  {
+   "root": "runtime",
+   "path": "node_modules/.pnpm/@opentelemetry+otlp-transfo_adebf0a8d1ff4f09f266f1af6344adea/node_modules",
+   "mode": "exact",
+   "entries": [
+    "@opentelemetry"
+   ]
+  },
+  {
+   "root": "runtime",
+   "path": "node_modules/.pnpm/@opentelemetry+resources@2.10.0_@opentelemetry+api@1.9.1/node_modules",
+   "mode": "exact",
+   "entries": [
+    "@opentelemetry"
+   ]
+  },
+  {
+   "root": "runtime",
+   "path": "node_modules/.pnpm/@opentelemetry+resources@2.9.0_@opentelemetry+api@1.9.1/node_modules",
+   "mode": "exact",
+   "entries": [
+    "@opentelemetry"
+   ]
+  },
+  {
+   "root": "runtime",
+   "path": "node_modules/.pnpm/@opentelemetry+sdk-logs@0.220.0_@opentelemetry+api@1.9.1/node_modules",
+   "mode": "exact",
+   "entries": [
+    "@opentelemetry"
+   ]
+  },
+  {
+   "root": "runtime",
+   "path": "node_modules/.pnpm/@opentelemetry+sdk-metrics@2.9.0_@opentelemetry+api@1.9.1/node_modules",
+   "mode": "exact",
+   "entries": [
+    "@opentelemetry"
+   ]
+  },
+  {
+   "root": "runtime",
+   "path": "node_modules/.pnpm/@opentelemetry+semantic-conventions@1.43.0/node_modules",
+   "mode": "exact",
+   "entries": [
+    "@opentelemetry"
+   ]
+  },
+  {
+   "root": "runtime",
+   "path": "node_modules/.pnpm/chokidar@4.0.3/node_modules",
+   "mode": "exact",
+   "entries": [
+    "chokidar",
+    "readdirp"
+   ]
+  },
+  {
+   "root": "runtime",
+   "path": "node_modules/.pnpm/chokidar@5.0.0/node_modules",
+   "mode": "exact",
+   "entries": [
+    "chokidar",
+    "readdirp"
+   ]
+  },
+  {
+   "root": "runtime",
+   "path": "node_modules/.pnpm/commander@15.0.0/node_modules",
+   "mode": "exact",
+   "entries": [
+    "commander"
+   ]
+  },
+  {
+   "root": "runtime",
+   "path": "node_modules/.pnpm/detect-libc@2.1.2/node_modules",
+   "mode": "exact",
+   "entries": [
+    "detect-libc"
+   ]
+  },
+  {
+   "root": "runtime",
+   "path": "node_modules/.pnpm/diff@9.0.0/node_modules",
+   "mode": "exact",
+   "entries": [
+    "diff"
+   ]
+  },
+  {
+   "root": "runtime",
+   "path": "node_modules/.pnpm/esbuild@0.28.1/node_modules",
+   "mode": "exact",
+   "entries": [
+    "@esbuild",
+    "esbuild"
+   ]
+  },
+  {
+   "root": "runtime",
+   "path": "node_modules/.pnpm/eventsource-parser@3.1.0/node_modules",
+   "mode": "exact",
+   "entries": [
+    "eventsource-parser"
+   ]
+  },
+  {
+   "root": "runtime",
+   "path": "node_modules/.pnpm/execa@10.0.0/node_modules",
+   "mode": "exact",
+   "entries": [
+    "@sindresorhus",
+    "execa",
+    "figures",
+    "get-stream",
+    "human-signals",
+    "is-plain-obj",
+    "is-stream",
+    "npm-run-path",
+    "path-key",
+    "pretty-ms",
+    "signal-exit",
+    "strip-final-newline",
+    "which-command",
+    "yoctocolors"
+   ]
+  },
+  {
+   "root": "runtime",
+   "path": "node_modules/.pnpm/ipaddr.js@2.5.0/node_modules",
+   "mode": "exact",
+   "entries": [
+    "ipaddr.js"
+   ]
+  },
+  {
+   "root": "runtime",
+   "path": "node_modules/.pnpm/js-yaml@4.2.0/node_modules",
+   "mode": "exact",
+   "entries": [
+    "argparse",
+    "js-yaml"
+   ]
+  },
+  {
+   "root": "runtime",
+   "path": "node_modules/.pnpm/koffi@3.1.1/node_modules",
+   "mode": "exact",
+   "entries": [
+    "@koromix",
+    "koffi"
+   ]
+  },
+  {
+   "root": "runtime",
+   "path": "node_modules/.pnpm/node-addon-native-custom-loader@0.1.4/node_modules",
+   "mode": "exact",
+   "entries": [
+    "node-addon-native-custom-loader"
+   ]
+  },
+  {
+   "root": "runtime",
+   "path": "node_modules/.pnpm/node-addon-require-builtin-win32-x64-msvc@0.1.4/node_modules",
+   "mode": "exact",
+   "entries": [
+    "node-addon-native-custom-loader",
+    "node-addon-require-builtin-win32-x64-msvc"
+   ]
+  },
+  {
+   "root": "runtime",
+   "path": "node_modules/.pnpm/node-addon-require-builtin@0.1.4/node_modules",
+   "mode": "exact",
+   "entries": [
+    "node-addon-native-custom-loader",
+    "node-addon-require-builtin",
+    "node-addon-require-builtin-win32-x64-msvc"
+   ]
+  },
+  {
+   "root": "runtime",
+   "path": "node_modules/.pnpm/node-pty@1.2.0-beta.15_patc_04ea68a78398ae52b35b6f6b1ec3bdf9/node_modules",
+   "mode": "exact",
+   "entries": [
+    "node-addon-api",
+    "node-pty"
+   ]
+  },
+  {
+   "root": "runtime",
+   "path": "node_modules/.pnpm/partial-json@0.1.7/node_modules",
+   "mode": "exact",
+   "entries": [
+    "partial-json"
+   ]
+  },
+  {
+   "root": "runtime",
+   "path": "node_modules/.pnpm/picomatch@4.0.4/node_modules",
+   "mode": "exact",
+   "entries": [
+    "picomatch"
+   ]
+  },
+  {
+   "root": "runtime",
+   "path": "node_modules/.pnpm/semver@7.8.5/node_modules",
+   "mode": "exact",
+   "entries": [
+    "semver"
+   ]
+  },
+  {
+   "root": "runtime",
+   "path": "node_modules/.pnpm/sharp@0.35.3_@types+node@22.20.0/node_modules",
+   "mode": "exact",
+   "entries": [
+    "@img",
+    "@types",
+    "detect-libc",
+    "semver",
+    "sharp"
+   ]
+  },
+  {
+   "root": "runtime",
+   "path": "node_modules/.pnpm/tsx@4.22.4/node_modules",
+   "mode": "exact",
+   "entries": [
+    "esbuild",
+    "tsx"
+   ]
+  },
+  {
+   "root": "runtime",
+   "path": "node_modules/.pnpm/turndown@7.2.4/node_modules",
+   "mode": "exact",
+   "entries": [
+    "@mixmark-io",
+    "turndown"
+   ]
+  },
+  {
+   "root": "runtime",
+   "path": "node_modules/.pnpm/undici@8.10.0/node_modules",
+   "mode": "exact",
+   "entries": [
+    "undici"
+   ]
+  },
+  {
+   "root": "runtime",
+   "path": "node_modules/.pnpm/ws@8.21.0/node_modules",
+   "mode": "exact",
+   "entries": [
+    "ws"
+   ]
+  },
+  {
+   "root": "runtime",
+   "path": "node_modules/.pnpm/yaml@2.9.0/node_modules",
+   "mode": "exact",
+   "entries": [
+    "yaml"
+   ]
+  },
+  {
+   "root": "runtime",
+   "path": "node_modules/.pnpm/zod@4.4.3/node_modules",
+   "mode": "exact",
+   "entries": [
+    "zod"
+   ]
+  },
+  {
+   "root": "runtime",
+   "path": "node_modules/@deepseek-ai",
+   "mode": "exact",
+   "entries": [
+    "dsh-tool-session-query",
+    "dsh-web-fetch-http"
+   ]
+  },
+  {
+   "root": "runtime",
+   "path": "node_modules/@stylistic",
+   "mode": "exact",
+   "entries": [
+    "eslint-plugin"
+   ]
+  },
+  {
+   "root": "runtime",
+   "path": "node_modules/@testing-library",
+   "mode": "exact",
+   "entries": [
+    "dom",
+    "react"
+   ]
+  },
+  {
+   "root": "runtime",
+   "path": "node_modules/@types",
+   "mode": "exact",
+   "entries": [
+    "js-yaml",
+    "jsdom",
+    "mdast",
+    "node",
+    "spdx-expression-parse"
+   ]
+  },
+  {
+   "root": "runtime",
+   "path": "node_modules/@vitest",
+   "mode": "exact",
+   "entries": [
+    "coverage-v8"
+   ]
+  },
+  {
+   "root": "runtime",
+   "path": "node_modules/@yarnpkg",
+   "mode": "exact",
+   "entries": [
+    "cli-dist"
+   ]
+  },
+  {
+   "root": "runtime",
+   "path": "packages/api/gateway/lib/node_modules",
+   "mode": "absent"
+  },
+  {
+   "root": "runtime",
+   "path": "packages/api/gateway/node_modules",
+   "mode": "exact",
+   "entries": [
+    ".bin",
+    "@deepseek-ai",
+    "@types",
+    "ws",
+    "zod"
+   ]
+  },
+  {
+   "root": "runtime",
+   "path": "packages/api/gateway/node_modules/@deepseek-ai",
+   "mode": "exact",
+   "entries": [
+    "cordis",
+    "dsh-brand",
+    "dsh-client-connection",
+    "dsh-host-webserver",
+    "dsh-invariants",
+    "dsh-timeout",
+    "dsh-typert-protocol",
+    "dsh-typert-registry",
+    "dsh-util-crypto",
+    "schemastery"
+   ]
+  },
+  {
+   "root": "runtime",
+   "path": "packages/api/gateway/node_modules/@types",
+   "mode": "exact",
+   "entries": [
+    "ws"
+   ]
+  },
+  {
+   "root": "runtime",
+   "path": "packages/attachment/attachment-local/lib/node_modules",
+   "mode": "absent"
+  },
+  {
+   "root": "runtime",
+   "path": "packages/attachment/attachment-local/node_modules",
+   "mode": "exact",
+   "entries": [
+    ".bin",
+    "@deepseek-ai",
+    "sharp"
+   ]
+  },
+  {
+   "root": "runtime",
+   "path": "packages/attachment/attachment-local/node_modules/@deepseek-ai",
+   "mode": "exact",
+   "entries": [
+    "cordis",
+    "dsh-attachment",
+    "dsh-home-paths",
+    "dsh-invariants",
+    "schemastery"
+   ]
+  },
+  {
+   "root": "runtime",
+   "path": "packages/bundle/headless/lib/node_modules",
+   "mode": "absent"
+  },
+  {
+   "root": "runtime",
+   "path": "packages/bundle/headless/node_modules",
+   "mode": "exact",
+   "entries": [
+    ".bin",
+    "@deepseek-ai",
+    "commander"
+   ]
+  },
+  {
+   "root": "runtime",
+   "path": "packages/bundle/headless/node_modules/@deepseek-ai",
+   "mode": "exact",
+   "entries": [
+    "cordis",
+    "cordis-plugin-loader",
+    "dsh-agent",
+    "dsh-agent-default-model",
+    "dsh-cmdline",
+    "dsh-code-runtime-worker-thread",
+    "dsh-invariants",
+    "dsh-llm",
+    "dsh-session",
+    "schemastery"
+   ]
+  },
+  {
+   "root": "runtime",
+   "path": "packages/code-runtime/code-runtime-worker-thread/lib/node_modules",
+   "mode": "absent"
+  },
+  {
+   "root": "runtime",
+   "path": "packages/code-runtime/code-runtime-worker-thread/node_modules",
+   "mode": "exact",
+   "entries": [
+    ".bin",
+    "@deepseek-ai"
+   ]
+  },
+  {
+   "root": "runtime",
+   "path": "packages/code-runtime/code-runtime-worker-thread/node_modules/@deepseek-ai",
+   "mode": "exact",
+   "entries": [
+    "cordis",
+    "dsh-code-runtime",
+    "dsh-invariants",
+    "dsh-session",
+    "dsh-timeout",
+    "schemastery"
+   ]
+  },
+  {
+   "root": "runtime",
+   "path": "packages/compaction/command-compact/lib/node_modules",
+   "mode": "absent"
+  },
+  {
+   "root": "runtime",
+   "path": "packages/compaction/command-compact/node_modules",
+   "mode": "exact",
+   "entries": [
+    ".bin",
+    "@deepseek-ai"
+   ]
+  },
+  {
+   "root": "runtime",
+   "path": "packages/compaction/command-compact/node_modules/@deepseek-ai",
+   "mode": "exact",
+   "entries": [
+    "cordis",
+    "cordis-plugin-include",
+    "cordis-plugin-loader",
+    "dsh-agent",
+    "dsh-commands",
+    "dsh-compaction",
+    "dsh-invariants",
+    "dsh-llm",
+    "dsh-session"
+   ]
+  },
+  {
+   "root": "runtime",
+   "path": "packages/compaction/compaction-basic/lib/node_modules",
+   "mode": "absent"
+  },
+  {
+   "root": "runtime",
+   "path": "packages/compaction/compaction-basic/node_modules",
+   "mode": "exact",
+   "entries": [
+    ".bin",
+    "@deepseek-ai"
+   ]
+  },
+  {
+   "root": "runtime",
+   "path": "packages/compaction/compaction-basic/node_modules/@deepseek-ai",
+   "mode": "exact",
+   "entries": [
+    "cordis",
+    "cordis-plugin-include",
+    "cordis-plugin-loader",
+    "dsh-agent",
+    "dsh-agent-loop",
+    "dsh-agent-loop-testkit",
+    "dsh-commands",
+    "dsh-compaction",
+    "dsh-compaction-tool-result-pruner",
+    "dsh-invariants",
+    "dsh-llm",
+    "dsh-llm-retry",
+    "dsh-session",
+    "dsh-token-meter",
+    "dsh-tools",
+    "schemastery"
+   ]
+  },
+  {
+   "root": "runtime",
+   "path": "packages/compaction/compaction-tool-result-pruner/lib/node_modules",
+   "mode": "absent"
+  },
+  {
+   "root": "runtime",
+   "path": "packages/compaction/compaction-tool-result-pruner/node_modules",
+   "mode": "exact",
+   "entries": [
+    ".bin",
+    "@deepseek-ai"
+   ]
+  },
+  {
+   "root": "runtime",
+   "path": "packages/compaction/compaction-tool-result-pruner/node_modules/@deepseek-ai",
+   "mode": "exact",
+   "entries": [
+    "cordis",
+    "cordis-plugin-include",
+    "cordis-plugin-loader",
+    "dsh-compaction",
+    "dsh-invariants",
+    "dsh-llm",
+    "dsh-session",
+    "dsh-token-meter",
+    "schemastery"
+   ]
+  },
+  {
+   "root": "runtime",
+   "path": "packages/context/agent-instructions/lib/node_modules",
+   "mode": "absent"
+  },
+  {
+   "root": "runtime",
+   "path": "packages/context/agent-instructions/node_modules",
+   "mode": "exact",
+   "entries": [
+    ".bin",
+    "@deepseek-ai"
+   ]
+  },
+  {
+   "root": "runtime",
+   "path": "packages/context/agent-instructions/node_modules/@deepseek-ai",
+   "mode": "exact",
+   "entries": [
+    "cordis",
+    "cordis-plugin-loader",
+    "dsh-agent",
+    "dsh-agent-loop",
+    "dsh-fs",
+    "dsh-fs-local",
+    "dsh-home-paths",
+    "dsh-invariants",
+    "dsh-llm",
+    "dsh-llm-deepseek",
+    "dsh-session",
+    "dsh-system-prompt",
+    "dsh-tool-fs",
+    "dsh-tools",
+    "schemastery"
+   ]
+  },
+  {
+   "root": "runtime",
+   "path": "packages/core/agent-default-model/lib/node_modules",
+   "mode": "absent"
+  },
+  {
+   "root": "runtime",
+   "path": "packages/core/agent-default-model/node_modules",
+   "mode": "exact",
+   "entries": [
+    ".bin",
+    "@deepseek-ai"
+   ]
+  },
+  {
+   "root": "runtime",
+   "path": "packages/core/agent-default-model/node_modules/@deepseek-ai",
+   "mode": "exact",
+   "entries": [
+    "cordis",
+    "dsh-agent",
+    "dsh-invariants",
+    "dsh-llm",
+    "dsh-settings",
+    "schemastery"
+   ]
+  },
+  {
+   "root": "runtime",
+   "path": "packages/core/agent-loop/lib/node_modules",
+   "mode": "absent"
+  },
+  {
+   "root": "runtime",
+   "path": "packages/core/agent-loop/node_modules",
+   "mode": "exact",
+   "entries": [
+    ".bin",
+    "@deepseek-ai"
+   ]
+  },
+  {
+   "root": "runtime",
+   "path": "packages/core/agent-loop/node_modules/@deepseek-ai",
+   "mode": "exact",
+   "entries": [
+    "cordis",
+    "dsh-agent",
+    "dsh-invariants",
+    "dsh-llm",
+    "dsh-scope",
+    "dsh-session",
+    "dsh-session-persistence",
+    "dsh-session-persistence-jsonl",
+    "dsh-settings",
+    "dsh-system-prompt",
+    "dsh-tools",
+    "schemastery"
+   ]
+  },
+  {
+   "root": "runtime",
+   "path": "packages/core/agent/lib/node_modules",
+   "mode": "absent"
+  },
+  {
+   "root": "runtime",
+   "path": "packages/core/agent/node_modules",
+   "mode": "exact",
+   "entries": [
+    ".bin",
+    "@deepseek-ai"
+   ]
+  },
+  {
+   "root": "runtime",
+   "path": "packages/core/agent/node_modules/@deepseek-ai",
+   "mode": "exact",
+   "entries": [
+    "cordis",
+    "dsh-invariants",
+    "dsh-llm",
+    "dsh-scope",
+    "dsh-session",
+    "dsh-system-prompt",
+    "dsh-typert-protocol",
+    "dsh-typert-registry"
+   ]
+  },
+  {
+   "root": "runtime",
+   "path": "packages/core/session/lib/node_modules",
+   "mode": "absent"
+  },
+  {
+   "root": "runtime",
+   "path": "packages/core/session/node_modules",
+   "mode": "exact",
+   "entries": [
+    ".bin",
+    "@deepseek-ai"
+   ]
+  },
+  {
+   "root": "runtime",
+   "path": "packages/core/session/node_modules/@deepseek-ai",
+   "mode": "exact",
+   "entries": [
+    "cordis",
+    "dsh-brand",
+    "dsh-invariants",
+    "dsh-llm",
+    "dsh-scope",
+    "dsh-typert-protocol",
+    "dsh-typert-registry"
+   ]
+  },
+  {
+   "root": "runtime",
+   "path": "packages/core/system-prompt/lib/node_modules",
+   "mode": "absent"
+  },
+  {
+   "root": "runtime",
+   "path": "packages/core/system-prompt/node_modules",
+   "mode": "exact",
+   "entries": [
+    ".bin",
+    "@deepseek-ai"
+   ]
+  },
+  {
+   "root": "runtime",
+   "path": "packages/core/system-prompt/node_modules/@deepseek-ai",
+   "mode": "exact",
+   "entries": [
+    "cordis",
+    "dsh-invariants",
+    "dsh-llm",
+    "dsh-scope",
+    "schemastery"
+   ]
+  },
+  {
+   "root": "runtime",
+   "path": "packages/core/tools/lib/node_modules",
+   "mode": "absent"
+  },
+  {
+   "root": "runtime",
+   "path": "packages/core/tools/node_modules",
+   "mode": "exact",
+   "entries": [
+    ".bin",
+    "@deepseek-ai"
+   ]
+  },
+  {
+   "root": "runtime",
+   "path": "packages/core/tools/node_modules/@deepseek-ai",
+   "mode": "exact",
+   "entries": [
+    "cordis",
+    "dsh-agent",
+    "dsh-code-runtime",
+    "dsh-invariants",
+    "dsh-llm",
+    "dsh-scope",
+    "dsh-session",
+    "dsh-system-prompt",
+    "dsh-user-approval",
+    "schemastery"
+   ]
+  },
+  {
+   "root": "runtime",
+   "path": "packages/credentials/credentials-local/lib/node_modules",
+   "mode": "absent"
+  },
+  {
+   "root": "runtime",
+   "path": "packages/credentials/credentials-local/node_modules",
+   "mode": "exact",
+   "entries": [
+    ".bin",
+    "@deepseek-ai",
+    "chokidar",
+    "yaml"
+   ]
+  },
+  {
+   "root": "runtime",
+   "path": "packages/credentials/credentials-local/node_modules/@deepseek-ai",
+   "mode": "exact",
+   "entries": [
+    "cordis",
+    "dsh-atomic-write",
+    "dsh-credentials",
+    "dsh-home-paths",
+    "dsh-invariants",
+    "dsh-launch-environment",
+    "schemastery"
+   ]
+  },
+  {
+   "root": "runtime",
+   "path": "packages/feedback/command-feedback/lib/node_modules",
+   "mode": "absent"
+  },
+  {
+   "root": "runtime",
+   "path": "packages/feedback/command-feedback/node_modules",
+   "mode": "exact",
+   "entries": [
+    ".bin",
+    "@deepseek-ai"
+   ]
+  },
+  {
+   "root": "runtime",
+   "path": "packages/feedback/command-feedback/node_modules/@deepseek-ai",
+   "mode": "exact",
+   "entries": [
+    "cordis",
+    "cordis-plugin-include",
+    "cordis-plugin-loader",
+    "dsh-agent",
+    "dsh-anonymous-user-id",
+    "dsh-commands",
+    "dsh-invariants",
+    "dsh-llm",
+    "dsh-session",
+    "dsh-session-telemetry"
+   ]
+  },
+  {
+   "root": "runtime",
+   "path": "packages/fs/fs-observation-policy/lib/node_modules",
+   "mode": "absent"
+  },
+  {
+   "root": "runtime",
+   "path": "packages/fs/fs-observation-policy/node_modules",
+   "mode": "exact",
+   "entries": [
+    ".bin",
+    "@deepseek-ai"
+   ]
+  },
+  {
+   "root": "runtime",
+   "path": "packages/fs/fs-observation-policy/node_modules/@deepseek-ai",
+   "mode": "exact",
+   "entries": [
+    "cordis",
+    "dsh-fs",
+    "dsh-invariants",
+    "dsh-llm"
+   ]
+  },
+  {
+   "root": "runtime",
+   "path": "packages/fs/fs-sandbox/lib/node_modules",
+   "mode": "absent"
+  },
+  {
+   "root": "runtime",
+   "path": "packages/fs/fs-sandbox/node_modules",
+   "mode": "exact",
+   "entries": [
+    ".bin",
+    "@deepseek-ai"
+   ]
+  },
+  {
+   "root": "runtime",
+   "path": "packages/fs/fs-sandbox/node_modules/@deepseek-ai",
+   "mode": "exact",
+   "entries": [
+    "cordis",
+    "dsh-fs",
+    "dsh-fs-local",
+    "dsh-invariants",
+    "dsh-sandbox",
+    "dsh-sandbox-policy"
+   ]
+  },
+  {
+   "root": "runtime",
+   "path": "packages/fs/tool-fs-search/lib/node_modules",
+   "mode": "absent"
+  },
+  {
+   "root": "runtime",
+   "path": "packages/fs/tool-fs-search/node_modules",
+   "mode": "exact",
+   "entries": [
+    ".bin",
+    "@deepseek-ai",
+    "@vscode"
+   ]
+  },
+  {
+   "root": "runtime",
+   "path": "packages/fs/tool-fs-search/node_modules/@deepseek-ai",
+   "mode": "exact",
+   "entries": [
+    "cordis",
+    "dsh-agent",
+    "dsh-invariants",
+    "dsh-llm",
+    "dsh-output-retention",
+    "dsh-session",
+    "dsh-spill",
+    "dsh-subprocess",
+    "dsh-subprocess-local",
+    "dsh-system-prompt",
+    "dsh-timeout",
+    "dsh-tools",
+    "schemastery"
+   ]
+  },
+  {
+   "root": "runtime",
+   "path": "packages/fs/tool-fs-search/node_modules/@vscode",
+   "mode": "exact",
+   "entries": [
+    "ripgrep"
+   ]
+  },
+  {
+   "root": "runtime",
+   "path": "packages/fs/tool-fs/lib/node_modules",
+   "mode": "absent"
+  },
+  {
+   "root": "runtime",
+   "path": "packages/fs/tool-fs/node_modules",
+   "mode": "exact",
+   "entries": [
+    ".bin",
+    "@deepseek-ai",
+    "diff"
+   ]
+  },
+  {
+   "root": "runtime",
+   "path": "packages/fs/tool-fs/node_modules/@deepseek-ai",
+   "mode": "exact",
+   "entries": [
+    "cordis",
+    "dsh-agent",
+    "dsh-agent-loop",
+    "dsh-agent-loop-testkit",
+    "dsh-attachment",
+    "dsh-fs",
+    "dsh-fs-local",
+    "dsh-fs-observation-policy",
+    "dsh-invariants",
+    "dsh-llm",
+    "dsh-llm-deepseek",
+    "dsh-sandbox",
+    "dsh-sandbox-policy",
+    "dsh-session",
+    "dsh-system-prompt",
+    "dsh-tools",
+    "dsh-user-approval",
+    "schemastery"
+   ]
+  },
+  {
+   "root": "runtime",
+   "path": "packages/fs/tool-str-replace-editor/lib/node_modules",
+   "mode": "absent"
+  },
+  {
+   "root": "runtime",
+   "path": "packages/fs/tool-str-replace-editor/node_modules",
+   "mode": "exact",
+   "entries": [
+    ".bin",
+    "@deepseek-ai"
+   ]
+  },
+  {
+   "root": "runtime",
+   "path": "packages/fs/tool-str-replace-editor/node_modules/@deepseek-ai",
+   "mode": "exact",
+   "entries": [
+    "cordis",
+    "dsh-agent",
+    "dsh-fs",
+    "dsh-fs-local",
+    "dsh-fs-observation-policy",
+    "dsh-fs-sandbox",
+    "dsh-invariants",
+    "dsh-llm",
+    "dsh-sandbox",
+    "dsh-sandbox-policy",
+    "dsh-session",
+    "dsh-system-prompt",
+    "dsh-tools",
+    "schemastery"
+   ]
+  },
+  {
+   "root": "runtime",
+   "path": "packages/goal/command-goal/lib/node_modules",
+   "mode": "absent"
+  },
+  {
+   "root": "runtime",
+   "path": "packages/goal/command-goal/node_modules",
+   "mode": "exact",
+   "entries": [
+    ".bin",
+    "@deepseek-ai"
+   ]
+  },
+  {
+   "root": "runtime",
+   "path": "packages/goal/command-goal/node_modules/@deepseek-ai",
+   "mode": "exact",
+   "entries": [
+    "cordis",
+    "cordis-plugin-loader",
+    "dsh-agent",
+    "dsh-commands",
+    "dsh-goal",
+    "dsh-invariants",
+    "dsh-llm",
+    "dsh-session"
+   ]
+  },
+  {
+   "root": "runtime",
+   "path": "packages/goal/goal-round-driver/lib/node_modules",
+   "mode": "absent"
+  },
+  {
+   "root": "runtime",
+   "path": "packages/goal/goal-round-driver/node_modules",
+   "mode": "exact",
+   "entries": [
+    ".bin",
+    "@deepseek-ai"
+   ]
+  },
+  {
+   "root": "runtime",
+   "path": "packages/goal/goal-round-driver/node_modules/@deepseek-ai",
+   "mode": "exact",
+   "entries": [
+    "cordis",
+    "dsh-agent",
+    "dsh-agent-loop",
+    "dsh-agent-loop-testkit",
+    "dsh-goal",
+    "dsh-invariants",
+    "dsh-llm",
+    "dsh-session",
+    "dsh-system-prompt",
+    "dsh-tools"
+   ]
+  },
+  {
+   "root": "runtime",
+   "path": "packages/goal/goal/lib/node_modules",
+   "mode": "absent"
+  },
+  {
+   "root": "runtime",
+   "path": "packages/goal/goal/node_modules",
+   "mode": "exact",
+   "entries": [
+    ".bin",
+    "@deepseek-ai",
+    "zod"
+   ]
+  },
+  {
+   "root": "runtime",
+   "path": "packages/goal/goal/node_modules/@deepseek-ai",
+   "mode": "exact",
+   "entries": [
+    "cordis",
+    "dsh-agent",
+    "dsh-agent-spine-demo",
+    "dsh-bash-local",
+    "dsh-brand",
+    "dsh-invariants",
+    "dsh-llm",
+    "dsh-loader-smoke",
+    "dsh-scope",
+    "dsh-session",
+    "dsh-session-checkpoint-policy",
+    "dsh-session-persistence-jsonl",
+    "dsh-session-projection",
+    "dsh-subprocess-local",
+    "dsh-typert-protocol",
+    "schemastery"
+   ]
+  },
+  {
+   "root": "runtime",
+   "path": "packages/goal/tool-goal/lib/node_modules",
+   "mode": "absent"
+  },
+  {
+   "root": "runtime",
+   "path": "packages/goal/tool-goal/node_modules",
+   "mode": "exact",
+   "entries": [
+    ".bin",
+    "@deepseek-ai"
+   ]
+  },
+  {
+   "root": "runtime",
+   "path": "packages/goal/tool-goal/node_modules/@deepseek-ai",
+   "mode": "exact",
+   "entries": [
+    "cordis",
+    "cordis-plugin-loader",
+    "dsh-agent",
+    "dsh-goal",
+    "dsh-invariants",
+    "dsh-llm",
+    "dsh-session",
+    "dsh-system-prompt",
+    "dsh-tools",
+    "schemastery"
+   ]
+  },
+  {
+   "root": "runtime",
+   "path": "packages/guard/repeat-tool-reminder/lib/node_modules",
+   "mode": "absent"
+  },
+  {
+   "root": "runtime",
+   "path": "packages/guard/repeat-tool-reminder/node_modules",
+   "mode": "exact",
+   "entries": [
+    ".bin",
+    "@deepseek-ai"
+   ]
+  },
+  {
+   "root": "runtime",
+   "path": "packages/guard/repeat-tool-reminder/node_modules/@deepseek-ai",
+   "mode": "exact",
+   "entries": [
+    "cordis",
+    "dsh-agent",
+    "dsh-agent-loop",
+    "dsh-agent-loop-testkit",
+    "dsh-invariants",
+    "dsh-llm",
+    "dsh-session",
+    "dsh-tools",
+    "schemastery"
+   ]
+  },
+  {
+   "root": "runtime",
+   "path": "packages/guard/timeout-policy/lib/node_modules",
+   "mode": "absent"
+  },
+  {
+   "root": "runtime",
+   "path": "packages/guard/timeout-policy/node_modules",
+   "mode": "exact",
+   "entries": [
+    ".bin",
+    "@deepseek-ai"
+   ]
+  },
+  {
+   "root": "runtime",
+   "path": "packages/guard/timeout-policy/node_modules/@deepseek-ai",
+   "mode": "exact",
+   "entries": [
+    "cordis",
+    "dsh-invariants",
+    "dsh-llm",
+    "dsh-timeout",
+    "dsh-tools"
+   ]
+  },
+  {
+   "root": "runtime",
+   "path": "packages/interaction/commands/lib/node_modules",
+   "mode": "absent"
+  },
+  {
+   "root": "runtime",
+   "path": "packages/interaction/commands/node_modules",
+   "mode": "exact",
+   "entries": [
+    ".bin",
+    "@deepseek-ai",
+    "zod"
+   ]
+  },
+  {
+   "root": "runtime",
+   "path": "packages/interaction/commands/node_modules/@deepseek-ai",
+   "mode": "exact",
+   "entries": [
+    "cordis",
+    "dsh-agent",
+    "dsh-attachment",
+    "dsh-brand",
+    "dsh-invariants",
+    "dsh-llm",
+    "dsh-scope",
+    "dsh-session",
+    "dsh-typert-protocol",
+    "dsh-util-crypto"
+   ]
+  },
+  {
+   "root": "runtime",
+   "path": "packages/interaction/permission-presets/lib/node_modules",
+   "mode": "absent"
+  },
+  {
+   "root": "runtime",
+   "path": "packages/interaction/permission-presets/node_modules",
+   "mode": "exact",
+   "entries": [
+    ".bin",
+    "@deepseek-ai",
+    "zod"
+   ]
+  },
+  {
+   "root": "runtime",
+   "path": "packages/interaction/permission-presets/node_modules/@deepseek-ai",
+   "mode": "exact",
+   "entries": [
+    "cordis",
+    "dsh-commands",
+    "dsh-invariants",
+    "dsh-sandbox",
+    "dsh-sandbox-policy",
+    "dsh-session",
+    "dsh-session-projection",
+    "dsh-settings",
+    "dsh-shell",
+    "dsh-user-approval",
+    "schemastery"
+   ]
+  },
+  {
+   "root": "runtime",
+   "path": "packages/interaction/user-approval/lib/node_modules",
+   "mode": "absent"
+  },
+  {
+   "root": "runtime",
+   "path": "packages/interaction/user-approval/node_modules",
+   "mode": "exact",
+   "entries": [
+    ".bin",
+    "@deepseek-ai"
+   ]
+  },
+  {
+   "root": "runtime",
+   "path": "packages/interaction/user-approval/node_modules/@deepseek-ai",
+   "mode": "exact",
+   "entries": [
+    "cordis",
+    "dsh-agent",
+    "dsh-brand",
+    "dsh-invariants",
+    "dsh-llm",
+    "dsh-scope",
+    "dsh-session",
+    "dsh-system-prompt",
+    "schemastery"
+   ]
+  },
+  {
+   "root": "runtime",
+   "path": "packages/interaction/user-questions/lib/node_modules",
+   "mode": "absent"
+  },
+  {
+   "root": "runtime",
+   "path": "packages/interaction/user-questions/node_modules",
+   "mode": "exact",
+   "entries": [
+    ".bin",
+    "@deepseek-ai"
+   ]
+  },
+  {
+   "root": "runtime",
+   "path": "packages/interaction/user-questions/node_modules/@deepseek-ai",
+   "mode": "exact",
+   "entries": [
+    "cordis",
+    "dsh-agent",
+    "dsh-invariants",
+    "dsh-llm",
+    "dsh-scope"
+   ]
+  },
+  {
+   "root": "runtime",
+   "path": "packages/jobs/jobs-local/lib/node_modules",
+   "mode": "absent"
+  },
+  {
+   "root": "runtime",
+   "path": "packages/jobs/jobs-local/node_modules",
+   "mode": "exact",
+   "entries": [
+    ".bin",
+    "@deepseek-ai"
+   ]
+  },
+  {
+   "root": "runtime",
+   "path": "packages/jobs/jobs-local/node_modules/@deepseek-ai",
+   "mode": "exact",
+   "entries": [
+    "cordis",
+    "cordis-plugin-include",
+    "cordis-plugin-loader",
+    "dsh-agent",
+    "dsh-brand",
+    "dsh-invariants",
+    "dsh-jobs",
+    "dsh-scope",
+    "dsh-session",
+    "dsh-timeout",
+    "schemastery"
+   ]
+  },
+  {
+   "root": "runtime",
+   "path": "packages/jobs/tool-jobs/lib/node_modules",
+   "mode": "absent"
+  },
+  {
+   "root": "runtime",
+   "path": "packages/jobs/tool-jobs/node_modules",
+   "mode": "exact",
+   "entries": [
+    ".bin",
+    "@deepseek-ai"
+   ]
+  },
+  {
+   "root": "runtime",
+   "path": "packages/jobs/tool-jobs/node_modules/@deepseek-ai",
+   "mode": "exact",
+   "entries": [
+    "cordis",
+    "dsh-agent",
+    "dsh-invariants",
+    "dsh-jobs",
+    "dsh-jobs-local",
+    "dsh-llm",
+    "dsh-output-retention",
+    "dsh-session",
+    "dsh-system-prompt",
+    "dsh-tools",
+    "schemastery"
+   ]
+  },
+  {
+   "root": "runtime",
+   "path": "packages/llm/deepseek-llm-api-extensions/lib/node_modules",
+   "mode": "absent"
+  },
+  {
+   "root": "runtime",
+   "path": "packages/llm/deepseek-llm-api-extensions/node_modules",
+   "mode": "exact",
+   "entries": [
+    ".bin",
+    "@deepseek-ai"
+   ]
+  },
+  {
+   "root": "runtime",
+   "path": "packages/llm/deepseek-llm-api-extensions/node_modules/@deepseek-ai",
+   "mode": "exact",
+   "entries": [
+    "cordis",
+    "dsh-invariants"
+   ]
+  },
+  {
+   "root": "runtime",
+   "path": "packages/llm/llm-deepseek/lib/node_modules",
+   "mode": "absent"
+  },
+  {
+   "root": "runtime",
+   "path": "packages/llm/llm-deepseek/node_modules",
+   "mode": "exact",
+   "entries": [
+    ".bin",
+    "@deepseek-ai",
+    "eventsource-parser"
+   ]
+  },
+  {
+   "root": "runtime",
+   "path": "packages/llm/llm-deepseek/node_modules/@deepseek-ai",
+   "mode": "exact",
+   "entries": [
+    "cordis",
+    "dsh-agent",
+    "dsh-anonymous-user-id",
+    "dsh-atomic-write",
+    "dsh-attachment",
+    "dsh-brand",
+    "dsh-credentials",
+    "dsh-deepseek-llm-api-extensions",
+    "dsh-fs",
+    "dsh-home-paths",
+    "dsh-invariants",
+    "dsh-launch-environment",
+    "dsh-llm",
+    "dsh-plugin-package-inventory-deepseek",
+    "dsh-session",
+    "dsh-session-log-deepseek",
+    "dsh-settings",
+    "dsh-timeout",
+    "schemastery"
+   ]
+  },
+  {
+   "root": "runtime",
+   "path": "packages/llm/llm-pi-ai/lib/node_modules",
+   "mode": "absent"
+  },
+  {
+   "root": "runtime",
+   "path": "packages/llm/llm-pi-ai/node_modules",
+   "mode": "exact",
+   "entries": [
+    ".bin",
+    "@deepseek-ai",
+    "@earendil-works"
+   ]
+  },
+  {
+   "root": "runtime",
+   "path": "packages/llm/llm-pi-ai/node_modules/@deepseek-ai",
+   "mode": "exact",
+   "entries": [
+    "cordis",
+    "dsh-attachment",
+    "dsh-authorization",
+    "dsh-credentials",
+    "dsh-fs",
+    "dsh-invariants",
+    "dsh-launch-environment",
+    "dsh-llm",
+    "dsh-llm-deepseek",
+    "dsh-settings",
+    "dsh-timeout",
+    "schemastery"
+   ]
+  },
+  {
+   "root": "runtime",
+   "path": "packages/llm/llm-pi-ai/node_modules/@earendil-works",
+   "mode": "exact",
+   "entries": [
+    "pi-ai"
+   ]
+  },
+  {
+   "root": "runtime",
+   "path": "packages/llm/llm-retry/lib/node_modules",
+   "mode": "absent"
+  },
+  {
+   "root": "runtime",
+   "path": "packages/llm/llm-retry/node_modules",
+   "mode": "exact",
+   "entries": [
+    ".bin",
+    "@deepseek-ai"
+   ]
+  },
+  {
+   "root": "runtime",
+   "path": "packages/llm/llm-retry/node_modules/@deepseek-ai",
+   "mode": "exact",
+   "entries": [
+    "cordis",
+    "cordis-plugin-include",
+    "cordis-plugin-loader",
+    "dsh-agent",
+    "dsh-agent-loop",
+    "dsh-agent-loop-testkit",
+    "dsh-brand",
+    "dsh-invariants",
+    "dsh-llm",
+    "dsh-llm-deepseek",
+    "dsh-llm-mock-server",
+    "dsh-session",
+    "dsh-session-persistence-jsonl",
+    "dsh-session-persistence-sqlite",
+    "dsh-system-prompt",
+    "dsh-timeout",
+    "dsh-tools",
+    "schemastery"
+   ]
+  },
+  {
+   "root": "runtime",
+   "path": "packages/llm/llm/lib/node_modules",
+   "mode": "absent"
+  },
+  {
+   "root": "runtime",
+   "path": "packages/llm/llm/node_modules",
+   "mode": "exact",
+   "entries": [
+    ".bin",
+    "@deepseek-ai",
+    "zod"
+   ]
+  },
+  {
+   "root": "runtime",
+   "path": "packages/llm/llm/node_modules/@deepseek-ai",
+   "mode": "exact",
+   "entries": [
+    "cordis",
+    "dsh-attachment",
+    "dsh-brand",
+    "dsh-invariants",
+    "dsh-timeout",
+    "dsh-typert-protocol",
+    "dsh-util-crypto",
+    "schemastery"
+   ]
+  },
+  {
+   "root": "runtime",
+   "path": "packages/llm/plugin-package-inventory-deepseek/lib/node_modules",
+   "mode": "absent"
+  },
+  {
+   "root": "runtime",
+   "path": "packages/llm/plugin-package-inventory-deepseek/node_modules",
+   "mode": "exact",
+   "entries": [
+    ".bin",
+    "@deepseek-ai"
+   ]
+  },
+  {
+   "root": "runtime",
+   "path": "packages/llm/plugin-package-inventory-deepseek/node_modules/@deepseek-ai",
+   "mode": "exact",
+   "entries": [
+    "cordis",
+    "cordis-plugin-include",
+    "cordis-plugin-loader",
+    "dsh-agent",
+    "dsh-agent-presets",
+    "dsh-deepseek-llm-api-extensions",
+    "dsh-invariants",
+    "dsh-scope",
+    "dsh-session",
+    "schemastery"
+   ]
+  },
+  {
+   "root": "runtime",
+   "path": "packages/llm/token-meter/lib/node_modules",
+   "mode": "absent"
+  },
+  {
+   "root": "runtime",
+   "path": "packages/llm/token-meter/node_modules",
+   "mode": "exact",
+   "entries": [
+    ".bin",
+    "@deepseek-ai",
+    "zod"
+   ]
+  },
+  {
+   "root": "runtime",
+   "path": "packages/llm/token-meter/node_modules/@deepseek-ai",
+   "mode": "exact",
+   "entries": [
+    "cordis",
+    "dsh-compaction",
+    "dsh-invariants",
+    "dsh-llm",
+    "dsh-llm-retry",
+    "dsh-session",
+    "dsh-session-projection",
+    "schemastery"
+   ]
+  },
+  {
+   "root": "runtime",
+   "path": "packages/plan/plan-mode/lib/node_modules",
+   "mode": "absent"
+  },
+  {
+   "root": "runtime",
+   "path": "packages/plan/plan-mode/node_modules",
+   "mode": "exact",
+   "entries": [
+    ".bin",
+    "@deepseek-ai",
+    "zod"
+   ]
+  },
+  {
+   "root": "runtime",
+   "path": "packages/plan/plan-mode/node_modules/@deepseek-ai",
+   "mode": "exact",
+   "entries": [
+    "cordis",
+    "dsh-agent",
+    "dsh-agent-loop",
+    "dsh-code-runtime",
+    "dsh-commands",
+    "dsh-invariants",
+    "dsh-llm",
+    "dsh-session",
+    "dsh-session-projection",
+    "dsh-system-prompt",
+    "dsh-tools",
+    "dsh-user-questions"
+   ]
+  },
+  {
+   "root": "runtime",
+   "path": "packages/sandbox/sandbox-local/lib/node_modules",
+   "mode": "absent"
+  },
+  {
+   "root": "runtime",
+   "path": "packages/sandbox/sandbox-local/node_modules",
+   "mode": "exact",
+   "entries": [
+    ".bin",
+    "@deepseek-ai"
+   ]
+  },
+  {
+   "root": "runtime",
+   "path": "packages/sandbox/sandbox-local/node_modules/@deepseek-ai",
+   "mode": "exact",
+   "entries": [
+    "cordis",
+    "dsh-invariants",
+    "dsh-llm",
+    "dsh-sandbox",
+    "dsh-sandbox-windows-acl",
+    "dsh-session",
+    "node-addon-landlock-run",
+    "schemastery"
+   ]
+  },
+  {
+   "root": "runtime",
+   "path": "packages/sandbox/sandbox-policy/lib/node_modules",
+   "mode": "absent"
+  },
+  {
+   "root": "runtime",
+   "path": "packages/sandbox/sandbox-policy/node_modules",
+   "mode": "exact",
+   "entries": [
+    ".bin",
+    "@deepseek-ai"
+   ]
+  },
+  {
+   "root": "runtime",
+   "path": "packages/sandbox/sandbox-policy/node_modules/@deepseek-ai",
+   "mode": "exact",
+   "entries": [
+    "cordis",
+    "dsh-agent",
+    "dsh-invariants",
+    "dsh-sandbox",
+    "dsh-session",
+    "dsh-system-prompt",
+    "schemastery"
+   ]
+  },
+  {
+   "root": "runtime",
+   "path": "packages/session-query/session-query-sqlite/lib/node_modules",
+   "mode": "absent"
+  },
+  {
+   "root": "runtime",
+   "path": "packages/session-query/session-query-sqlite/node_modules",
+   "mode": "exact",
+   "entries": [
+    ".bin",
+    "@deepseek-ai"
+   ]
+  },
+  {
+   "root": "runtime",
+   "path": "packages/session-query/session-query-sqlite/node_modules/@deepseek-ai",
+   "mode": "exact",
+   "entries": [
+    "cordis",
+    "cordis-plugin-loader",
+    "dsh-invariants",
+    "dsh-session",
+    "dsh-session-persistence",
+    "dsh-session-persistence-sqlite",
+    "dsh-session-query",
+    "schemastery"
+   ]
+  },
+  {
+   "root": "runtime",
+   "path": "packages/session/session-checkpoint-policy/lib/node_modules",
+   "mode": "absent"
+  },
+  {
+   "root": "runtime",
+   "path": "packages/session/session-checkpoint-policy/node_modules",
+   "mode": "exact",
+   "entries": [
+    ".bin",
+    "@deepseek-ai"
+   ]
+  },
+  {
+   "root": "runtime",
+   "path": "packages/session/session-checkpoint-policy/node_modules/@deepseek-ai",
+   "mode": "exact",
+   "entries": [
+    "cordis",
+    "cordis-plugin-loader",
+    "dsh-agent",
+    "dsh-agent-loop",
+    "dsh-agent-loop-testkit",
+    "dsh-invariants",
+    "dsh-llm",
+    "dsh-session",
+    "dsh-session-persistence",
+    "dsh-session-persistence-jsonl",
+    "dsh-system-prompt",
+    "dsh-tools"
+   ]
+  },
+  {
+   "root": "runtime",
+   "path": "packages/session/session-log-deepseek/lib/node_modules",
+   "mode": "absent"
+  },
+  {
+   "root": "runtime",
+   "path": "packages/session/session-log-deepseek/node_modules",
+   "mode": "exact",
+   "entries": [
+    ".bin",
+    "@deepseek-ai"
+   ]
+  },
+  {
+   "root": "runtime",
+   "path": "packages/session/session-log-deepseek/node_modules/@deepseek-ai",
+   "mode": "exact",
+   "entries": [
+    "cordis",
+    "dsh-deepseek-llm-api-extensions",
+    "dsh-invariants",
+    "dsh-session",
+    "schemastery"
+   ]
+  },
+  {
+   "root": "runtime",
+   "path": "packages/session/session-persistence-jsonl/lib/node_modules",
+   "mode": "absent"
+  },
+  {
+   "root": "runtime",
+   "path": "packages/session/session-persistence-jsonl/node_modules",
+   "mode": "exact",
+   "entries": [
+    ".bin",
+    "@deepseek-ai",
+    "koffi"
+   ]
+  },
+  {
+   "root": "runtime",
+   "path": "packages/session/session-persistence-jsonl/node_modules/@deepseek-ai",
+   "mode": "exact",
+   "entries": [
+    "cordis",
+    "dsh-invariants",
+    "dsh-session",
+    "dsh-session-persistence",
+    "schemastery"
+   ]
+  },
+  {
+   "root": "runtime",
+   "path": "packages/session/session-projection-cache/lib/node_modules",
+   "mode": "absent"
+  },
+  {
+   "root": "runtime",
+   "path": "packages/session/session-projection-cache/node_modules",
+   "mode": "exact",
+   "entries": [
+    ".bin",
+    "@deepseek-ai",
+    "zod"
+   ]
+  },
+  {
+   "root": "runtime",
+   "path": "packages/session/session-projection-cache/node_modules/@deepseek-ai",
+   "mode": "exact",
+   "entries": [
+    "cordis",
+    "dsh-invariants",
+    "dsh-session",
+    "dsh-session-projection",
+    "dsh-storage",
+    "dsh-storage-domain",
+    "dsh-storage-json",
+    "schemastery"
+   ]
+  },
+  {
+   "root": "runtime",
+   "path": "packages/session/session-projection/lib/node_modules",
+   "mode": "absent"
+  },
+  {
+   "root": "runtime",
+   "path": "packages/session/session-projection/node_modules",
+   "mode": "exact",
+   "entries": [
+    ".bin",
+    "@deepseek-ai",
+    "zod"
+   ]
+  },
+  {
+   "root": "runtime",
+   "path": "packages/session/session-projection/node_modules/@deepseek-ai",
+   "mode": "exact",
+   "entries": [
+    "cordis",
+    "dsh-invariants",
+    "dsh-session"
+   ]
+  },
+  {
+   "root": "runtime",
+   "path": "packages/session/session-telemetry-otel/lib/node_modules",
+   "mode": "absent"
+  },
+  {
+   "root": "runtime",
+   "path": "packages/session/session-telemetry-otel/node_modules",
+   "mode": "exact",
+   "entries": [
+    ".bin",
+    "@deepseek-ai",
+    "@opentelemetry"
+   ]
+  },
+  {
+   "root": "runtime",
+   "path": "packages/session/session-telemetry-otel/node_modules/@deepseek-ai",
+   "mode": "exact",
+   "entries": [
+    "cordis",
+    "cordis-plugin-loader",
+    "cordis-plugin-logger-console",
+    "dsh-agent-spine-demo",
+    "dsh-anonymous-user-id",
+    "dsh-app-boot",
+    "dsh-bash-local",
+    "dsh-command-feedback",
+    "dsh-invariants",
+    "dsh-llm",
+    "dsh-loader-smoke",
+    "dsh-session",
+    "dsh-session-checkpoint-policy",
+    "dsh-session-persistence-jsonl",
+    "dsh-session-telemetry",
+    "dsh-subprocess-local",
+    "schemastery"
+   ]
+  },
+  {
+   "root": "runtime",
+   "path": "packages/session/session-telemetry-otel/node_modules/@opentelemetry",
+   "mode": "exact",
+   "entries": [
+    "api",
+    "api-logs",
+    "exporter-logs-otlp-http",
+    "otlp-exporter-base",
+    "resources",
+    "sdk-logs"
+   ]
+  },
+  {
+   "root": "runtime",
+   "path": "packages/session/session-title-first-prompt-llm/lib/node_modules",
+   "mode": "absent"
+  },
+  {
+   "root": "runtime",
+   "path": "packages/session/session-title-first-prompt-llm/node_modules",
+   "mode": "exact",
+   "entries": [
+    ".bin",
+    "@deepseek-ai"
+   ]
+  },
+  {
+   "root": "runtime",
+   "path": "packages/session/session-title-first-prompt-llm/node_modules/@deepseek-ai",
+   "mode": "exact",
+   "entries": [
+    "cordis",
+    "cordis-plugin-include",
+    "cordis-plugin-loader",
+    "dsh-invariants",
+    "dsh-llm",
+    "dsh-llm-deepseek",
+    "dsh-session",
+    "dsh-session-title",
+    "dsh-session-title-llm",
+    "schemastery"
+   ]
+  },
+  {
+   "root": "runtime",
+   "path": "packages/session/session-title/lib/node_modules",
+   "mode": "absent"
+  },
+  {
+   "root": "runtime",
+   "path": "packages/session/session-title/node_modules",
+   "mode": "exact",
+   "entries": [
+    ".bin",
+    "@deepseek-ai",
+    "zod"
+   ]
+  },
+  {
+   "root": "runtime",
+   "path": "packages/session/session-title/node_modules/@deepseek-ai",
+   "mode": "exact",
+   "entries": [
+    "cordis",
+    "dsh-brand",
+    "dsh-invariants",
+    "dsh-llm",
+    "dsh-session",
+    "dsh-session-persistence-jsonl",
+    "dsh-session-persistence-sqlite",
+    "dsh-session-projection",
+    "schemastery"
+   ]
+  },
+  {
+   "root": "runtime",
+   "path": "packages/settings/settings-file/lib/node_modules",
+   "mode": "absent"
+  },
+  {
+   "root": "runtime",
+   "path": "packages/settings/settings-file/node_modules",
+   "mode": "exact",
+   "entries": [
+    ".bin",
+    "@deepseek-ai",
+    "chokidar",
+    "yaml"
+   ]
+  },
+  {
+   "root": "runtime",
+   "path": "packages/settings/settings-file/node_modules/@deepseek-ai",
+   "mode": "exact",
+   "entries": [
+    "cordis",
+    "dsh-atomic-write",
+    "dsh-home-paths",
+    "dsh-invariants",
+    "dsh-settings",
+    "schemastery"
+   ]
+  },
+  {
+   "root": "runtime",
+   "path": "packages/shell/bash-sandbox/lib/node_modules",
+   "mode": "absent"
+  },
+  {
+   "root": "runtime",
+   "path": "packages/shell/bash-sandbox/node_modules",
+   "mode": "exact",
+   "entries": [
+    ".bin",
+    "@deepseek-ai"
+   ]
+  },
+  {
+   "root": "runtime",
+   "path": "packages/shell/bash-sandbox/node_modules/@deepseek-ai",
+   "mode": "exact",
+   "entries": [
+    "cordis",
+    "dsh-bash-local",
+    "dsh-invariants",
+    "dsh-sandbox",
+    "dsh-sandbox-local",
+    "dsh-sandbox-policy",
+    "dsh-shell",
+    "dsh-subprocess-local",
+    "node-addon-landlock-run"
+   ]
+  },
+  {
+   "root": "runtime",
+   "path": "packages/shell/pwsh-sandbox/lib/node_modules",
+   "mode": "absent"
+  },
+  {
+   "root": "runtime",
+   "path": "packages/shell/pwsh-sandbox/node_modules",
+   "mode": "exact",
+   "entries": [
+    ".bin",
+    "@deepseek-ai"
+   ]
+  },
+  {
+   "root": "runtime",
+   "path": "packages/shell/pwsh-sandbox/node_modules/@deepseek-ai",
+   "mode": "exact",
+   "entries": [
+    "cordis",
+    "dsh-invariants",
+    "dsh-pwsh-local",
+    "dsh-sandbox",
+    "dsh-sandbox-local",
+    "dsh-sandbox-policy",
+    "dsh-shell",
+    "dsh-subprocess-local"
+   ]
+  },
+  {
+   "root": "runtime",
+   "path": "packages/shell/shell-env/lib/node_modules",
+   "mode": "absent"
+  },
+  {
+   "root": "runtime",
+   "path": "packages/shell/shell-env/node_modules",
+   "mode": "exact",
+   "entries": [
+    ".bin",
+    "@deepseek-ai"
+   ]
+  },
+  {
+   "root": "runtime",
+   "path": "packages/shell/shell-env/node_modules/@deepseek-ai",
+   "mode": "exact",
+   "entries": [
+    "cordis",
+    "dsh-agent",
+    "dsh-home-paths",
+    "dsh-invariants",
+    "dsh-llm",
+    "dsh-session-persistence",
+    "dsh-shell",
+    "dsh-tools",
+    "schemastery"
+   ]
+  },
+  {
+   "root": "runtime",
+   "path": "packages/shell/tool-bash/lib/node_modules",
+   "mode": "absent"
+  },
+  {
+   "root": "runtime",
+   "path": "packages/shell/tool-bash/node_modules",
+   "mode": "exact",
+   "entries": [
+    ".bin",
+    "@deepseek-ai"
+   ]
+  },
+  {
+   "root": "runtime",
+   "path": "packages/shell/tool-bash/node_modules/@deepseek-ai",
+   "mode": "exact",
+   "entries": [
+    "cordis",
+    "dsh-agent",
+    "dsh-agent-loop",
+    "dsh-agent-loop-testkit",
+    "dsh-bash-local",
+    "dsh-invariants",
+    "dsh-jobs",
+    "dsh-jobs-local",
+    "dsh-llm",
+    "dsh-sandbox",
+    "dsh-sandbox-policy",
+    "dsh-session",
+    "dsh-session-persistence-jsonl",
+    "dsh-shell",
+    "dsh-shell-env",
+    "dsh-subprocess-local",
+    "dsh-system-prompt",
+    "dsh-tool-jobs",
+    "dsh-tools",
+    "dsh-user-approval",
+    "schemastery"
+   ]
+  },
+  {
+   "root": "runtime",
+   "path": "packages/shell/tool-pwsh/lib/node_modules",
+   "mode": "absent"
+  },
+  {
+   "root": "runtime",
+   "path": "packages/shell/tool-pwsh/node_modules",
+   "mode": "exact",
+   "entries": [
+    ".bin",
+    "@deepseek-ai"
+   ]
+  },
+  {
+   "root": "runtime",
+   "path": "packages/shell/tool-pwsh/node_modules/@deepseek-ai",
+   "mode": "exact",
+   "entries": [
+    "cordis",
+    "dsh-agent",
+    "dsh-app-boot",
+    "dsh-invariants",
+    "dsh-jobs",
+    "dsh-jobs-local",
+    "dsh-llm",
+    "dsh-loader-smoke",
+    "dsh-pwsh-local",
+    "dsh-sandbox",
+    "dsh-sandbox-policy",
+    "dsh-shell",
+    "dsh-shell-env",
+    "dsh-subprocess-local",
+    "dsh-system-prompt",
+    "dsh-tool-jobs",
+    "dsh-tools",
+    "dsh-user-approval",
+    "schemastery"
+   ]
+  },
+  {
+   "root": "runtime",
+   "path": "packages/skill/skill-badge/lib/node_modules",
+   "mode": "absent"
+  },
+  {
+   "root": "runtime",
+   "path": "packages/skill/skill-badge/node_modules",
+   "mode": "exact",
+   "entries": [
+    ".bin",
+    "@deepseek-ai"
+   ]
+  },
+  {
+   "root": "runtime",
+   "path": "packages/skill/skill-badge/node_modules/@deepseek-ai",
+   "mode": "exact",
+   "entries": [
+    "cordis",
+    "dsh-invariants",
+    "dsh-skill"
+   ]
+  },
+  {
+   "root": "runtime",
+   "path": "packages/skill/skill-filesystem/lib/node_modules",
+   "mode": "absent"
+  },
+  {
+   "root": "runtime",
+   "path": "packages/skill/skill-filesystem/node_modules",
+   "mode": "exact",
+   "entries": [
+    ".bin",
+    "@deepseek-ai",
+    "chokidar",
+    "yaml"
+   ]
+  },
+  {
+   "root": "runtime",
+   "path": "packages/skill/skill-filesystem/node_modules/@deepseek-ai",
+   "mode": "exact",
+   "entries": [
+    "cordis",
+    "dsh-fs",
+    "dsh-home-paths",
+    "dsh-invariants",
+    "dsh-skill",
+    "schemastery"
+   ]
+  },
+  {
+   "root": "runtime",
+   "path": "packages/skill/skill/lib/node_modules",
+   "mode": "absent"
+  },
+  {
+   "root": "runtime",
+   "path": "packages/skill/skill/node_modules",
+   "mode": "exact",
+   "entries": [
+    ".bin",
+    "@deepseek-ai"
+   ]
+  },
+  {
+   "root": "runtime",
+   "path": "packages/skill/skill/node_modules/@deepseek-ai",
+   "mode": "exact",
+   "entries": [
+    "cordis",
+    "dsh-invariants",
+    "dsh-llm",
+    "dsh-scope",
+    "schemastery"
+   ]
+  },
+  {
+   "root": "runtime",
+   "path": "packages/skill/tool-skill/lib/node_modules",
+   "mode": "absent"
+  },
+  {
+   "root": "runtime",
+   "path": "packages/skill/tool-skill/node_modules",
+   "mode": "exact",
+   "entries": [
+    ".bin",
+    "@deepseek-ai"
+   ]
+  },
+  {
+   "root": "runtime",
+   "path": "packages/skill/tool-skill/node_modules/@deepseek-ai",
+   "mode": "exact",
+   "entries": [
+    "cordis",
+    "dsh-agent",
+    "dsh-invariants",
+    "dsh-llm",
+    "dsh-scope",
+    "dsh-session",
+    "dsh-skill",
+    "dsh-skill-filesystem",
+    "dsh-tools",
+    "schemastery"
+   ]
+  },
+  {
+   "root": "runtime",
+   "path": "packages/spill/spill-local/lib/node_modules",
+   "mode": "absent"
+  },
+  {
+   "root": "runtime",
+   "path": "packages/spill/spill-local/node_modules",
+   "mode": "exact",
+   "entries": [
+    ".bin",
+    "@deepseek-ai"
+   ]
+  },
+  {
+   "root": "runtime",
+   "path": "packages/spill/spill-local/node_modules/@deepseek-ai",
+   "mode": "exact",
+   "entries": [
+    "cordis",
+    "cordis-plugin-include",
+    "cordis-plugin-loader",
+    "dsh-brand",
+    "dsh-invariants",
+    "dsh-llm",
+    "dsh-session",
+    "dsh-spill",
+    "schemastery"
+   ]
+  },
+  {
+   "root": "runtime",
+   "path": "packages/spill/spill-policy/lib/node_modules",
+   "mode": "absent"
+  },
+  {
+   "root": "runtime",
+   "path": "packages/spill/spill-policy/node_modules",
+   "mode": "exact",
+   "entries": [
+    ".bin",
+    "@deepseek-ai"
+   ]
+  },
+  {
+   "root": "runtime",
+   "path": "packages/spill/spill-policy/node_modules/@deepseek-ai",
+   "mode": "exact",
+   "entries": [
+    "cordis",
+    "dsh-agent",
+    "dsh-code-runtime-worker-thread",
+    "dsh-invariants",
+    "dsh-llm",
+    "dsh-output-retention",
+    "dsh-session",
+    "dsh-spill",
+    "dsh-tools",
+    "schemastery"
+   ]
+  },
+  {
+   "root": "runtime",
+   "path": "packages/storage/storage-domain/lib/node_modules",
+   "mode": "absent"
+  },
+  {
+   "root": "runtime",
+   "path": "packages/storage/storage-domain/node_modules",
+   "mode": "exact",
+   "entries": [
+    ".bin",
+    "@deepseek-ai",
+    "zod"
+   ]
+  },
+  {
+   "root": "runtime",
+   "path": "packages/storage/storage-domain/node_modules/@deepseek-ai",
+   "mode": "exact",
+   "entries": [
+    "cordis",
+    "dsh-invariants",
+    "dsh-storage",
+    "schemastery"
+   ]
+  },
+  {
+   "root": "runtime",
+   "path": "packages/storage/storage-json/lib/node_modules",
+   "mode": "absent"
+  },
+  {
+   "root": "runtime",
+   "path": "packages/storage/storage-json/node_modules",
+   "mode": "exact",
+   "entries": [
+    ".bin",
+    "@deepseek-ai"
+   ]
+  },
+  {
+   "root": "runtime",
+   "path": "packages/storage/storage-json/node_modules/@deepseek-ai",
+   "mode": "exact",
+   "entries": [
+    "cordis",
+    "dsh-invariants",
+    "dsh-storage",
+    "schemastery"
+   ]
+  },
+  {
+   "root": "runtime",
+   "path": "packages/storage/storage/lib/node_modules",
+   "mode": "absent"
+  },
+  {
+   "root": "runtime",
+   "path": "packages/storage/storage/node_modules",
+   "mode": "exact",
+   "entries": [
+    ".bin",
+    "@deepseek-ai"
+   ]
+  },
+  {
+   "root": "runtime",
+   "path": "packages/storage/storage/node_modules/@deepseek-ai",
+   "mode": "exact",
+   "entries": [
+    "cordis",
+    "dsh-invariants"
+   ]
+  },
+  {
+   "root": "runtime",
+   "path": "packages/subagent/subagent-fork-in-process/lib/node_modules",
+   "mode": "absent"
+  },
+  {
+   "root": "runtime",
+   "path": "packages/subagent/subagent-fork-in-process/node_modules",
+   "mode": "exact",
+   "entries": [
+    ".bin",
+    "@deepseek-ai"
+   ]
+  },
+  {
+   "root": "runtime",
+   "path": "packages/subagent/subagent-fork-in-process/node_modules/@deepseek-ai",
+   "mode": "exact",
+   "entries": [
+    "cordis",
+    "cordis-plugin-loader",
+    "dsh-agent",
+    "dsh-agent-loop",
+    "dsh-agent-loop-testkit",
+    "dsh-invariants",
+    "dsh-llm",
+    "dsh-session",
+    "dsh-subagent",
+    "dsh-subagent-in-process-driver",
+    "dsh-subagent-spawn-in-process",
+    "schemastery"
+   ]
+  },
+  {
+   "root": "runtime",
+   "path": "packages/subagent/subagent-spawn-in-process/lib/node_modules",
+   "mode": "absent"
+  },
+  {
+   "root": "runtime",
+   "path": "packages/subagent/subagent-spawn-in-process/node_modules",
+   "mode": "exact",
+   "entries": [
+    ".bin",
+    "@deepseek-ai"
+   ]
+  },
+  {
+   "root": "runtime",
+   "path": "packages/subagent/subagent-spawn-in-process/node_modules/@deepseek-ai",
+   "mode": "exact",
+   "entries": [
+    "cordis",
+    "cordis-plugin-loader",
+    "dsh-agent",
+    "dsh-agent-loop",
+    "dsh-agent-loop-testkit",
+    "dsh-bash-local",
+    "dsh-invariants",
+    "dsh-llm",
+    "dsh-llm-deepseek",
+    "dsh-session",
+    "dsh-subagent",
+    "dsh-subagent-in-process-driver",
+    "dsh-subprocess-local",
+    "dsh-tool-bash",
+    "dsh-tool-subagent",
+    "schemastery"
+   ]
+  },
+  {
+   "root": "runtime",
+   "path": "packages/subagent/subagent/lib/node_modules",
+   "mode": "absent"
+  },
+  {
+   "root": "runtime",
+   "path": "packages/subagent/subagent/node_modules",
+   "mode": "exact",
+   "entries": [
+    ".bin",
+    "@deepseek-ai",
+    "zod"
+   ]
+  },
+  {
+   "root": "runtime",
+   "path": "packages/subagent/subagent/node_modules/@deepseek-ai",
+   "mode": "exact",
+   "entries": [
+    "cordis",
+    "dsh-agent",
+    "dsh-agent-presets",
+    "dsh-brand",
+    "dsh-invariants",
+    "dsh-jobs",
+    "dsh-llm",
+    "dsh-sandbox",
+    "dsh-sandbox-policy",
+    "dsh-scope",
+    "dsh-session",
+    "dsh-session-persistence",
+    "dsh-session-projection",
+    "dsh-session-projection-cache",
+    "dsh-session-query",
+    "dsh-storage",
+    "dsh-storage-domain",
+    "dsh-storage-json",
+    "dsh-system-prompt",
+    "dsh-tools",
+    "dsh-typert-protocol",
+    "dsh-user-approval"
+   ]
+  },
+  {
+   "root": "runtime",
+   "path": "packages/subagent/tool-subagent-control/lib/node_modules",
+   "mode": "absent"
+  },
+  {
+   "root": "runtime",
+   "path": "packages/subagent/tool-subagent-control/node_modules",
+   "mode": "exact",
+   "entries": [
+    ".bin",
+    "@deepseek-ai"
+   ]
+  },
+  {
+   "root": "runtime",
+   "path": "packages/subagent/tool-subagent-control/node_modules/@deepseek-ai",
+   "mode": "exact",
+   "entries": [
+    "cordis",
+    "dsh-agent",
+    "dsh-agent-loop",
+    "dsh-agent-loop-testkit",
+    "dsh-invariants",
+    "dsh-llm",
+    "dsh-session",
+    "dsh-session-persistence",
+    "dsh-session-persistence-jsonl",
+    "dsh-session-projection",
+    "dsh-session-query",
+    "dsh-subagent",
+    "dsh-subagent-spawn-in-process",
+    "dsh-tools"
+   ]
+  },
+  {
+   "root": "runtime",
+   "path": "packages/subagent/tool-subagent-report/lib/node_modules",
+   "mode": "absent"
+  },
+  {
+   "root": "runtime",
+   "path": "packages/subagent/tool-subagent-report/node_modules",
+   "mode": "exact",
+   "entries": [
+    ".bin",
+    "@deepseek-ai"
+   ]
+  },
+  {
+   "root": "runtime",
+   "path": "packages/subagent/tool-subagent-report/node_modules/@deepseek-ai",
+   "mode": "exact",
+   "entries": [
+    "cordis",
+    "dsh-agent",
+    "dsh-agent-loop",
+    "dsh-agent-loop-testkit",
+    "dsh-invariants",
+    "dsh-llm",
+    "dsh-session",
+    "dsh-session-persistence",
+    "dsh-session-persistence-jsonl",
+    "dsh-subagent",
+    "dsh-subagent-spawn-in-process",
+    "dsh-system-prompt",
+    "dsh-tool-subagent-control",
+    "dsh-tools",
+    "schemastery"
+   ]
+  },
+  {
+   "root": "runtime",
+   "path": "packages/subagent/tool-subagent/lib/node_modules",
+   "mode": "absent"
+  },
+  {
+   "root": "runtime",
+   "path": "packages/subagent/tool-subagent/node_modules",
+   "mode": "exact",
+   "entries": [
+    ".bin",
+    "@deepseek-ai"
+   ]
+  },
+  {
+   "root": "runtime",
+   "path": "packages/subagent/tool-subagent/node_modules/@deepseek-ai",
+   "mode": "exact",
+   "entries": [
+    "cordis",
+    "cordis-plugin-loader",
+    "dsh-agent",
+    "dsh-invariants",
+    "dsh-jobs",
+    "dsh-jobs-local",
+    "dsh-llm",
+    "dsh-scope",
+    "dsh-session",
+    "dsh-session-persistence",
+    "dsh-session-persistence-jsonl",
+    "dsh-settings",
+    "dsh-subagent",
+    "dsh-subagent-spawn-in-process",
+    "dsh-system-prompt",
+    "dsh-tool-jobs",
+    "dsh-tools",
+    "schemastery"
+   ]
+  },
+  {
+   "root": "runtime",
+   "path": "packages/subprocess/subprocess-local/lib/node_modules",
+   "mode": "absent"
+  },
+  {
+   "root": "runtime",
+   "path": "packages/subprocess/subprocess-local/node_modules",
+   "mode": "exact",
+   "entries": [
+    ".bin",
+    "@deepseek-ai",
+    "koffi",
+    "node-pty"
+   ]
+  },
+  {
+   "root": "runtime",
+   "path": "packages/subprocess/subprocess-local/node_modules/@deepseek-ai",
+   "mode": "exact",
+   "entries": [
+    "cordis",
+    "dsh-invariants",
+    "dsh-loader-smoke",
+    "dsh-subprocess",
+    "dsh-timeout"
+   ]
+  },
+  {
+   "root": "runtime",
+   "path": "packages/todo/tool-todo/lib/node_modules",
+   "mode": "absent"
+  },
+  {
+   "root": "runtime",
+   "path": "packages/todo/tool-todo/node_modules",
+   "mode": "exact",
+   "entries": [
+    ".bin",
+    "@deepseek-ai",
+    "zod"
+   ]
+  },
+  {
+   "root": "runtime",
+   "path": "packages/todo/tool-todo/node_modules/@deepseek-ai",
+   "mode": "exact",
+   "entries": [
+    "cordis",
+    "cordis-plugin-include",
+    "cordis-plugin-loader",
+    "dsh-agent",
+    "dsh-agent-loop",
+    "dsh-agent-loop-testkit",
+    "dsh-invariants",
+    "dsh-llm",
+    "dsh-session",
+    "dsh-session-projection",
+    "dsh-system-prompt",
+    "dsh-tools",
+    "dsh-user-questions",
+    "schemastery"
+   ]
+  },
+  {
+   "root": "runtime",
+   "path": "packages/typert/loader/lib/node_modules",
+   "mode": "absent"
+  },
+  {
+   "root": "runtime",
+   "path": "packages/typert/loader/node_modules",
+   "mode": "exact",
+   "entries": [
+    ".bin",
+    "@deepseek-ai",
+    "zod"
+   ]
+  },
+  {
+   "root": "runtime",
+   "path": "packages/typert/loader/node_modules/@deepseek-ai",
+   "mode": "exact",
+   "entries": [
+    "cordis",
+    "cordis-plugin-loader",
+    "dsh-invariants",
+    "dsh-typert-registry",
+    "schemastery"
+   ]
+  },
+  {
+   "root": "runtime",
+   "path": "packages/typert/registry/lib/node_modules",
+   "mode": "absent"
+  },
+  {
+   "root": "runtime",
+   "path": "packages/typert/registry/node_modules",
+   "mode": "exact",
+   "entries": [
+    ".bin",
+    "@deepseek-ai",
+    "zod"
+   ]
+  },
+  {
+   "root": "runtime",
+   "path": "packages/typert/registry/node_modules/@deepseek-ai",
+   "mode": "exact",
+   "entries": [
+    "cordis",
+    "dsh-invariants",
+    "dsh-typert-protocol"
+   ]
+  },
+  {
+   "root": "runtime",
+   "path": "packages/web/tool-web/lib/node_modules",
+   "mode": "absent"
+  },
+  {
+   "root": "runtime",
+   "path": "packages/web/tool-web/node_modules",
+   "mode": "exact",
+   "entries": [
+    ".bin",
+    "@deepseek-ai",
+    "@joplin",
+    "@types",
+    "turndown"
+   ]
+  },
+  {
+   "root": "runtime",
+   "path": "packages/web/tool-web/node_modules/@deepseek-ai",
+   "mode": "exact",
+   "entries": [
+    "cordis",
+    "dsh-agent",
+    "dsh-invariants",
+    "dsh-llm",
+    "dsh-session",
+    "dsh-spill-local",
+    "dsh-spill-policy",
+    "dsh-system-prompt",
+    "dsh-tool-call-timeout-policy",
+    "dsh-tools",
+    "dsh-web",
+    "dsh-web-fetch-http",
+    "dsh-web-search-exa",
+    "schemastery"
+   ]
+  },
+  {
+   "root": "runtime",
+   "path": "packages/web/tool-web/node_modules/@joplin",
+   "mode": "exact",
+   "entries": [
+    "turndown-plugin-gfm"
+   ]
+  },
+  {
+   "root": "runtime",
+   "path": "packages/web/tool-web/node_modules/@types",
+   "mode": "exact",
+   "entries": [
+    "turndown"
+   ]
+  },
+  {
+   "root": "runtime",
+   "path": "packages/web/web-fetch-http/lib/node_modules",
+   "mode": "absent"
+  },
+  {
+   "root": "runtime",
+   "path": "packages/web/web-fetch-http/node_modules",
+   "mode": "exact",
+   "entries": [
+    ".bin",
+    "@deepseek-ai",
+    "ipaddr.js",
+    "undici"
+   ]
+  },
+  {
+   "root": "runtime",
+   "path": "packages/web/web-fetch-http/node_modules/@deepseek-ai",
+   "mode": "exact",
+   "entries": [
+    "cordis",
+    "dsh-invariants",
+    "dsh-timeout",
+    "dsh-web",
+    "schemastery"
+   ]
+  },
+  {
+   "root": "runtime",
+   "path": "packages/web/web-search-deepseek/lib/node_modules",
+   "mode": "absent"
+  },
+  {
+   "root": "runtime",
+   "path": "packages/web/web-search-deepseek/node_modules",
+   "mode": "exact",
+   "entries": [
+    ".bin",
+    "@deepseek-ai"
+   ]
+  },
+  {
+   "root": "runtime",
+   "path": "packages/web/web-search-deepseek/node_modules/@deepseek-ai",
+   "mode": "exact",
+   "entries": [
+    "cordis",
+    "dsh-agent",
+    "dsh-credentials",
+    "dsh-credentials-local",
+    "dsh-invariants",
+    "dsh-launch-environment",
+    "dsh-session",
+    "dsh-settings",
+    "dsh-web",
+    "schemastery"
+   ]
+  },
+  {
+   "root": "runtime",
+   "path": "packages/web/web/lib/node_modules",
+   "mode": "absent"
+  },
+  {
+   "root": "runtime",
+   "path": "packages/web/web/node_modules",
+   "mode": "exact",
+   "entries": [
+    ".bin",
+    "@deepseek-ai"
+   ]
+  },
+  {
+   "root": "runtime",
+   "path": "packages/web/web/node_modules/@deepseek-ai",
+   "mode": "exact",
+   "entries": [
+    "cordis",
+    "dsh-invariants",
+    "dsh-llm",
+    "schemastery"
+   ]
+  },
+  {
+   "root": "runtime",
+   "path": "packages/workflow/tool-ralph/lib/node_modules",
+   "mode": "absent"
+  },
+  {
+   "root": "runtime",
+   "path": "packages/workflow/tool-ralph/node_modules",
+   "mode": "exact",
+   "entries": [
+    ".bin",
+    "@deepseek-ai"
+   ]
+  },
+  {
+   "root": "runtime",
+   "path": "packages/workflow/tool-ralph/node_modules/@deepseek-ai",
+   "mode": "exact",
+   "entries": [
+    "cordis",
+    "cordis-plugin-loader",
+    "dsh-agent",
+    "dsh-agent-loop",
+    "dsh-agent-loop-testkit",
+    "dsh-invariants",
+    "dsh-llm",
+    "dsh-session",
+    "dsh-subagent",
+    "dsh-subagent-in-process-driver",
+    "dsh-subagent-spawn-in-process",
+    "dsh-system-prompt",
+    "dsh-tools",
+    "dsh-workflow",
+    "dsh-workflow-worker-thread",
+    "schemastery"
+   ]
+  },
+  {
+   "root": "runtime",
+   "path": "packages/workflow/tool-workflow/lib/node_modules",
+   "mode": "absent"
+  },
+  {
+   "root": "runtime",
+   "path": "packages/workflow/tool-workflow/node_modules",
+   "mode": "exact",
+   "entries": [
+    ".bin",
+    "@deepseek-ai"
+   ]
+  },
+  {
+   "root": "runtime",
+   "path": "packages/workflow/tool-workflow/node_modules/@deepseek-ai",
+   "mode": "exact",
+   "entries": [
+    "cordis",
+    "dsh-agent",
+    "dsh-invariants",
+    "dsh-llm",
+    "dsh-session",
+    "dsh-subagent",
+    "dsh-system-prompt",
+    "dsh-tools",
+    "dsh-workflow",
+    "dsh-workflow-worker-thread",
+    "schemastery"
+   ]
+  },
+  {
+   "root": "runtime",
+   "path": "packages/workflow/workflow-worker-thread/lib/node_modules",
+   "mode": "absent"
+  },
+  {
+   "root": "runtime",
+   "path": "packages/workflow/workflow-worker-thread/node_modules",
+   "mode": "exact",
+   "entries": [
+    ".bin",
+    "@deepseek-ai",
+    "tsx"
+   ]
+  },
+  {
+   "root": "runtime",
+   "path": "packages/workflow/workflow-worker-thread/node_modules/@deepseek-ai",
+   "mode": "exact",
+   "entries": [
+    "cordis",
+    "dsh-agent",
+    "dsh-agent-loop",
+    "dsh-agent-loop-testkit",
+    "dsh-brand",
+    "dsh-invariants",
+    "dsh-llm",
+    "dsh-session",
+    "dsh-subagent",
+    "dsh-subagent-spawn-in-process",
+    "dsh-system-prompt",
+    "dsh-tools",
+    "dsh-workflow",
+    "schemastery"
+   ]
+  },
+  {
+   "root": "runtime",
+   "path": "vendor/hmr/lib/node_modules",
+   "mode": "absent"
+  },
+  {
+   "root": "runtime",
+   "path": "vendor/hmr/node_modules",
+   "mode": "exact",
+   "entries": [
+    ".bin",
+    "@babel",
+    "@deepseek-ai",
+    "@types",
+    "chokidar",
+    "esbuild",
+    "picomatch"
+   ]
+  },
+  {
+   "root": "runtime",
+   "path": "vendor/hmr/node_modules/@babel",
+   "mode": "exact",
+   "entries": [
+    "code-frame"
+   ]
+  },
+  {
+   "root": "runtime",
+   "path": "vendor/hmr/node_modules/@deepseek-ai",
+   "mode": "exact",
+   "entries": [
+    "cordis",
+    "cordis-plugin-timer",
+    "cosmokit",
+    "schemastery"
+   ]
+  },
+  {
+   "root": "runtime",
+   "path": "vendor/hmr/node_modules/@types",
+   "mode": "exact",
+   "entries": [
+    "babel__code-frame",
+    "picomatch"
+   ]
+  },
+  {
+   "root": "runtime",
+   "path": "vendor/timer/lib/node_modules",
+   "mode": "absent"
+  },
+  {
+   "root": "runtime",
+   "path": "vendor/timer/node_modules",
+   "mode": "exact",
+   "entries": [
+    ".bin",
+    "@deepseek-ai"
+   ]
+  },
+  {
+   "root": "runtime",
+   "path": "vendor/timer/node_modules/@deepseek-ai",
+   "mode": "exact",
+   "entries": [
+    "cordis",
+    "cosmokit"
+   ]
+  }
+ ],
+ "approved_executable_plugins": [
+  "@deepseek-ai/cordis-plugin-hmr",
+  "@deepseek-ai/cordis-plugin-timer",
+  "@deepseek-ai/dsh-agent",
+  "@deepseek-ai/dsh-agent-default-model",
+  "@deepseek-ai/dsh-agent-instructions",
+  "@deepseek-ai/dsh-agent-loop",
+  "@deepseek-ai/dsh-api-gateway",
+  "@deepseek-ai/dsh-attachment-local",
+  "@deepseek-ai/dsh-bash-sandbox",
+  "@deepseek-ai/dsh-code-runtime-worker-thread",
+  "@deepseek-ai/dsh-command-compact",
+  "@deepseek-ai/dsh-command-feedback",
+  "@deepseek-ai/dsh-command-goal",
+  "@deepseek-ai/dsh-commands",
+  "@deepseek-ai/dsh-compaction-basic",
+  "@deepseek-ai/dsh-compaction-tool-result-pruner",
+  "@deepseek-ai/dsh-credentials-local",
+  "@deepseek-ai/dsh-deepseek-llm-api-extensions",
+  "@deepseek-ai/dsh-fs-observation-policy",
+  "@deepseek-ai/dsh-fs-sandbox",
+  "@deepseek-ai/dsh-goal",
+  "@deepseek-ai/dsh-goal-round-driver",
+  "@deepseek-ai/dsh-headless",
+  "@deepseek-ai/dsh-headless/startup",
+  "@deepseek-ai/dsh-jobs-local",
+  "@deepseek-ai/dsh-llm",
+  "@deepseek-ai/dsh-llm-deepseek",
+  "@deepseek-ai/dsh-llm-pi-ai",
+  "@deepseek-ai/dsh-llm-retry",
+  "@deepseek-ai/dsh-permission-presets",
+  "@deepseek-ai/dsh-plan-mode",
+  "@deepseek-ai/dsh-plugin-package-inventory-deepseek",
+  "@deepseek-ai/dsh-pwsh-sandbox",
+  "@deepseek-ai/dsh-repeat-tool-reminder",
+  "@deepseek-ai/dsh-sandbox-local",
+  "@deepseek-ai/dsh-sandbox-policy",
+  "@deepseek-ai/dsh-session",
+  "@deepseek-ai/dsh-session-checkpoint-policy",
+  "@deepseek-ai/dsh-session-log-deepseek",
+  "@deepseek-ai/dsh-session-persistence-jsonl",
+  "@deepseek-ai/dsh-session-projection",
+  "@deepseek-ai/dsh-session-projection-cache",
+  "@deepseek-ai/dsh-session-query-sqlite",
+  "@deepseek-ai/dsh-session-telemetry-otel",
+  "@deepseek-ai/dsh-session-title",
+  "@deepseek-ai/dsh-session-title-first-prompt-llm",
+  "@deepseek-ai/dsh-settings-file",
+  "@deepseek-ai/dsh-shell-env",
+  "@deepseek-ai/dsh-skill",
+  "@deepseek-ai/dsh-skill-badge",
+  "@deepseek-ai/dsh-skill-filesystem",
+  "@deepseek-ai/dsh-spill-local",
+  "@deepseek-ai/dsh-spill-policy",
+  "@deepseek-ai/dsh-storage",
+  "@deepseek-ai/dsh-storage-domain",
+  "@deepseek-ai/dsh-storage-json",
+  "@deepseek-ai/dsh-subagent",
+  "@deepseek-ai/dsh-subagent-fork-in-process",
+  "@deepseek-ai/dsh-subagent-spawn-in-process",
+  "@deepseek-ai/dsh-subprocess-local",
+  "@deepseek-ai/dsh-system-prompt",
+  "@deepseek-ai/dsh-token-meter",
+  "@deepseek-ai/dsh-tool-bash",
+  "@deepseek-ai/dsh-tool-call-timeout-policy",
+  "@deepseek-ai/dsh-tool-fs",
+  "@deepseek-ai/dsh-tool-fs-search",
+  "@deepseek-ai/dsh-tool-goal",
+  "@deepseek-ai/dsh-tool-jobs",
+  "@deepseek-ai/dsh-tool-pwsh",
+  "@deepseek-ai/dsh-tool-ralph",
+  "@deepseek-ai/dsh-tool-skill",
+  "@deepseek-ai/dsh-tool-str-replace-editor",
+  "@deepseek-ai/dsh-tool-subagent",
+  "@deepseek-ai/dsh-tool-subagent-control",
+  "@deepseek-ai/dsh-tool-subagent-control/list-agents",
+  "@deepseek-ai/dsh-tool-subagent-report",
+  "@deepseek-ai/dsh-tool-todo",
+  "@deepseek-ai/dsh-tool-web",
+  "@deepseek-ai/dsh-tool-workflow",
+  "@deepseek-ai/dsh-tools",
+  "@deepseek-ai/dsh-typert-loader",
+  "@deepseek-ai/dsh-typert-registry",
+  "@deepseek-ai/dsh-user-approval",
+  "@deepseek-ai/dsh-user-questions",
+  "@deepseek-ai/dsh-web",
+  "@deepseek-ai/dsh-web-fetch-http",
+  "@deepseek-ai/dsh-web-search-deepseek",
+  "@deepseek-ai/dsh-workflow-worker-thread",
+  "@dhms-agentfuse/dsh-agentfuse",
+  "@kerniq/dsh-control-plane-observer"
  ]
 }

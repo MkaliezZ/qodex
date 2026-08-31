@@ -288,12 +288,7 @@ fn probe_dsh() -> AgentRuntimeProbe {
     let version = invocation
         .as_ref()
         .filter(|_| runtime_available)
-        .and_then(|effective| {
-            command_text(
-                "node",
-                &[effective.entrypoint.to_string_lossy().as_ref(), "--version"],
-            )
-        })
+        .and_then(|effective| hardened_node_text(&effective.entrypoint, "--version"))
         .unwrap_or_else(|| "unavailable".into());
     let revision =
         dsh_runtime_revision(invocation.as_ref().map(|effective| effective.runtime_root.as_path()));
@@ -310,6 +305,7 @@ fn probe_dsh() -> AgentRuntimeProbe {
             &effective.runtime_root,
             profile_dir_for_seal().as_deref(),
             user_native_cache_root().as_deref(),
+            configured_path("DSH_HOME").as_deref(),
         )
     });
     let compatible_runtime = runtime_available
@@ -330,6 +326,7 @@ fn probe_dsh() -> AgentRuntimeProbe {
         .is_some_and(|value| dump_has_enabled_plugin(value, PRODUCTION_OBSERVER_PACKAGE));
     let governed_profile_valid = dump.as_deref().is_some_and(|value| {
         governed_profile_is_product_ready(value, agent_fuse_adapter_available)
+            && effective_executable_composition_is_approved(value)
     });
     let (provider_route, model) = dump.as_deref().map(dsh_default_model).unwrap_or_default();
     let evidence_capture_available = configured_path("KERNIQ_DSH_EVIDENCE_PATH")
@@ -682,6 +679,11 @@ fn configure_agent_environment(command: &mut Command, dsh: bool) {
         "LANG",
         "LC_ALL",
         "CODEX_HOME",
+        // The governed child must resolve the same native-addon cache root
+        // KerniQ verified (node-addon-native-custom-loader derives its cache
+        // from LOCALAPPDATA); without it the child would use a different
+        // cache location than the one under seal.
+        "LOCALAPPDATA",
     ] {
         if let Some(value) = std::env::var_os(key) {
             command.env(key, value);
@@ -798,6 +800,20 @@ fn dump_dsh_profile(invocation: &EffectiveDshInvocation) -> Option<String> {
         .status
         .success()
         .then(|| String::from_utf8_lossy(&output.stdout).into_owned())
+}
+
+/// Like `command_text` for node invocations, but through the hardened
+/// allowlisted environment so parent-side `NODE_OPTIONS`/`NODE_PATH` cannot
+/// alter what the admission probe observes.
+fn hardened_node_text(entrypoint: &Path, arg: &str) -> Option<String> {
+    let mut command = Command::new("node");
+    command.arg(entrypoint).arg(arg);
+    configure_agent_environment(&mut command, true);
+    let output = command.output().ok()?;
+    output
+        .status
+        .success()
+        .then(|| String::from_utf8_lossy(&output.stdout).trim().to_string())
 }
 
 fn command_text(executable: &str, args: &[&str]) -> Option<String> {
@@ -955,6 +971,27 @@ fn plugin_record_state(disabled_values: &[Option<&str>]) -> PluginRecordState {
         return PluginRecordState::Disabled;
     }
     PluginRecordState::Enabled
+}
+
+/// The effective executable plugin composition must stay inside the pinned
+/// approved governed set (established from the known-good audited effective
+/// dump). Any plugin record whose identity is ambiguous, unresolvable, or
+/// outside the approved list makes the governed profile invalid — including
+/// identities introduced by product patches or profile/home patch layers,
+/// because this reads the same effective dump admission and execution use.
+fn effective_executable_composition_is_approved(dump: &str) -> bool {
+    let Some(approved) = crate::governed_runtime_seal::approved_executable_plugins() else {
+        return false;
+    };
+    for record in plugin_records(dump) {
+        let [Some(name)] = record.name_fields.as_slice() else {
+            return false;
+        };
+        if !approved.iter().any(|candidate| candidate == name) {
+            return false;
+        }
+    }
+    true
 }
 
 fn governed_profile_is_product_ready(dump: &str, agent_fuse_available: bool) -> bool {
@@ -1631,6 +1668,152 @@ mod tests {
     }
 
     #[test]
+    fn closer_resolution_locations_refuse_admission() {
+        let _guard = GOVERNANCE_ENV_LOCK.lock().unwrap();
+        let fixture = admission_fixture();
+        let entry = fixture.install_stub(&admission_dump(false, false));
+
+        // Positive control: known-good topology admits and starts.
+        assert_governance_gates(probe_dsh().governance.as_ref().unwrap(), true, true, true, true);
+        run_dsh(test_request(), &fixture.workspace)
+            .expect("known-good topology must admit the governed run");
+        assert!(agent_started(&entry));
+        clear_agent_marker(&entry);
+
+        let runtime_root = fixture.root.join("runtime-root");
+        // Attacker drops a closer resolution location over the CLI build
+        // output; every sealed entry stays byte-identical.
+        let closer = runtime_root
+            .join("apps")
+            .join("cli")
+            .join("lib")
+            .join("node_modules")
+            .join("commander");
+        fs::create_dir_all(&closer).unwrap();
+        fs::write(
+            closer.join("package.json"),
+            "{\"name\":\"commander\",\"version\":\"99.0.0\",\"main\":\"index.js\"}",
+        )
+        .unwrap();
+        fs::write(closer.join("index.js"), "module.exports = { evil: true };\n").unwrap();
+
+        let governance = probe_dsh().governance.as_ref().unwrap().clone();
+        assert!(
+            !governance.compatible_runtime,
+            "closer resolution location must invalidate the runtime identity"
+        );
+        let error = run_dsh(test_request(), &fixture.workspace).unwrap_err();
+        assert_eq!(error, "Governed DSH admission failed before process start.");
+        assert!(!agent_started(&entry));
+        let _ = fs::remove_dir_all(runtime_root.join("apps").join("cli").join("lib").join("node_modules"));
+
+        // A second, package-local resolution-sensitive location proves the
+        // mechanism is not hard-coded for commander's path.
+        let second = runtime_root
+            .join("packages")
+            .join("core")
+            .join("session")
+            .join("lib")
+            .join("node_modules")
+            .join("js-yaml");
+        fs::create_dir_all(&second).unwrap();
+        fs::write(second.join("index.js"), "module.exports = { evil: true };\n").unwrap();
+        assert!(!probe_dsh().governance.as_ref().unwrap().compatible_runtime);
+        let error = run_dsh(test_request(), &fixture.workspace).unwrap_err();
+        assert_eq!(error, "Governed DSH admission failed before process start.");
+        assert!(!agent_started(&entry));
+    }
+
+    #[test]
+    fn unapproved_executable_plugin_refuses_admission() {
+        let _guard = GOVERNANCE_ENV_LOCK.lock().unwrap();
+        let fixture = admission_fixture();
+        let entry = fixture.install_stub(&admission_dump(false, false));
+
+        // Positive control: the approved composition starts.
+        assert_governance_gates(probe_dsh().governance.as_ref().unwrap(), true, true, true, true);
+        run_dsh(test_request(), &fixture.workspace)
+            .expect("approved composition must admit the governed run");
+        assert!(agent_started(&entry));
+        clear_agent_marker(&entry);
+
+        // Additional executable identity in the base profile layer.
+        let with_evil = format!(
+            "{}- id: evil-plugin\n  name: '@evil/exfiltrate'\n",
+            admission_dump(false, false)
+        );
+        fixture.install_stub(&with_evil);
+        let governance = probe_dsh().governance.as_ref().unwrap().clone();
+        assert!(governance.agent_fuse_adapter_available);
+        assert!(governance.production_observer_available);
+        assert!(
+            !governance.governed_profile_valid,
+            "extra executable plugin must invalidate the governed profile"
+        );
+        let error = run_dsh(test_request(), &fixture.workspace).unwrap_err();
+        assert_eq!(error, "Governed DSH admission failed before process start.");
+        assert!(!agent_started(&entry));
+        fixture.install_stub(&admission_dump(false, false));
+
+        // The same identity introduced through the product patch layer.
+        let evil_patch = fixture.root.join("insert-evil.patch.yml");
+        fs::write(
+            &evil_patch,
+            "- insert:\n    - id: evil-plugin\n      name: '@evil/exfiltrate'\n",
+        )
+        .unwrap();
+        fixture.set_product_patch(&evil_patch);
+        let governance = probe_dsh().governance.as_ref().unwrap().clone();
+        assert!(
+            !governance.governed_profile_valid,
+            "patch-introduced executable identity must invalidate the profile"
+        );
+        let error = run_dsh(test_request(), &fixture.workspace).unwrap_err();
+        assert_eq!(error, "Governed DSH admission failed before process start.");
+        assert!(!agent_started(&entry));
+    }
+
+    #[test]
+    fn governed_child_environment_is_pinned() {
+        let _guard = GOVERNANCE_ENV_LOCK.lock().unwrap();
+        let fixture = admission_fixture();
+        let entry = fixture.install_stub(&admission_dump(false, false));
+        let marker = entry.with_file_name("agent-started-marker");
+        let parent_localappdata = std::env::var("LOCALAPPDATA").unwrap_or_default();
+
+        std::env::set_var("NODE_OPTIONS", "--require=evil.js");
+        std::env::set_var("NODE_PATH", "F:/evil");
+        let output = run_dsh(test_request(), &fixture.workspace)
+            .expect("pinned environment must still admit the governed run");
+        assert_eq!(output.result.findings.len(), 1);
+        std::env::remove_var("NODE_OPTIONS");
+        std::env::remove_var("NODE_PATH");
+
+        let facts: std::collections::BTreeMap<String, String> = fs::read_to_string(&marker)
+            .expect("child env marker")
+            .lines()
+            .filter_map(|line| line.split_once('='))
+            .map(|(key, value)| (key.to_string(), value.to_string()))
+            .collect();
+        assert_eq!(
+            facts.get("LOCALAPPDATA").map(String::as_str),
+            Some(parent_localappdata.as_str()),
+            "child must resolve the same native-cache root KerniQ verified"
+        );
+        assert_eq!(
+            facts.get("NODE_OPTIONS").map(|value| value.as_str()),
+            Some(""),
+            "NODE_OPTIONS must not leak into the governed child"
+        );
+        assert_eq!(
+            facts.get("NODE_PATH").map(|value| value.as_str()),
+            Some(""),
+            "NODE_PATH must not leak into the governed child"
+        );
+        clear_agent_marker(&entry);
+    }
+
+    #[test]
     fn effective_invocation_shares_configuration_arguments() {
         let _guard = GOVERNANCE_ENV_LOCK.lock().unwrap();
         let fixture = admission_fixture();
@@ -1900,6 +2083,59 @@ mod tests {
                     crate::governed_runtime_seal::canonical_manifest_bytes(&refs).as_bytes()
                 )
             );
+            // Resolution topology (absent/exact membership) and the approved
+            // executable plugin composition, derived from the fixture as
+            // provisioned — the same trust-establishment shape as the real
+            // pinned manifest.
+            let mut closed: Vec<serde_json::Value> = Vec::new();
+            let absent_runtime = [
+                "apps/cli/lib/node_modules",
+                "packages/core/session/lib/node_modules",
+                "packages/llm/llm-deepseek/lib/node_modules",
+            ];
+            for path in absent_runtime {
+                closed.push(serde_json::json!({"root": "runtime", "path": path, "mode": "absent"}));
+            }
+            let exact_runtime = [
+                "node_modules/.pnpm/js-yaml@4.2.0/node_modules",
+                "node_modules/.pnpm/commander@12.0.0/node_modules",
+                "apps/cli/node_modules",
+            ];
+            for path in exact_runtime {
+                let dir = runtime_root.join(path);
+                let mut members: Vec<String> = fs::read_dir(&dir)
+                    .map(|read| {
+                        read.flatten()
+                            .map(|entry| entry.file_name().to_string_lossy().into_owned())
+                            .collect()
+                    })
+                    .unwrap_or_default();
+                members.sort();
+                closed.push(serde_json::json!({
+                    "root": "runtime", "path": path, "mode": "exact", "entries": members,
+                }));
+            }
+            let profile_nm = profile.join("node_modules");
+            for (scope_path, base) in [
+                ("node_modules".to_string(), profile_nm.clone()),
+                ("node_modules/@dhms-agentfuse".to_string(), profile_nm.join("@dhms-agentfuse")),
+                ("node_modules/@kerniq".to_string(), profile_nm.join("@kerniq")),
+            ] {
+                let mut members: Vec<String> = fs::read_dir(&base)
+                    .map(|read| {
+                        read.flatten()
+                            .map(|entry| entry.file_name().to_string_lossy().into_owned())
+                            .collect()
+                    })
+                    .unwrap_or_default();
+                members.sort();
+                closed.push(serde_json::json!({
+                    "root": "profile", "path": scope_path, "mode": "exact", "entries": members,
+                }));
+            }
+            closed.push(serde_json::json!({"root": "dsh-home", "path": "profiles/node_modules", "mode": "absent"}));
+            closed.push(serde_json::json!({"root": "dsh-home", "path": "node_modules", "mode": "absent"}));
+            let approved = vec![AGENTFUSE_PACKAGE, PRODUCTION_OBSERVER_PACKAGE];
             let manifest = serde_json::json!({
                 "schema_version": crate::governed_runtime_seal::MANIFEST_SCHEMA_VERSION,
                 "source_repository": "deepseek-ai/deepseek-harness",
@@ -1913,6 +2149,8 @@ mod tests {
                         "root": root, "path": path, "size": size, "sha256": sha256,
                     }))
                     .collect::<Vec<_>>(),
+                "closed_resolution_directories": closed,
+                "approved_executable_plugins": approved,
             });
             let path = self.root.join("kerniq-test-runtime-seal.json");
             fs::write(&path, serde_json::to_string_pretty(&manifest).unwrap()).unwrap();
@@ -2034,9 +2272,28 @@ if (args.includes('--version')) {{
     if (!existsSync(patchPath)) {{ console.error('patch not found'); process.exit(1); }}
     const plines = readFileSync(patchPath, 'utf8').split(/\r?\n/);
     const disabledIds = [];
+    const inserted = [];
+    let collecting = false;
     for (let i = 0; i < plines.length; i++) {{
-      const m = (plines[i] || '').match(/^-\s*id:\s*(\S+)/);
-      if (m && /^\s+disabled:\s*true\s*$/.test(plines[i + 1] || '')) disabledIds.push(m[1]);
+      const line = plines[i] || '';
+      if (/^-\s*insert:\s*$/.test(line)) {{ collecting = true; continue; }}
+      const m = line.match(/^-\s*id:\s*(\S+)/);
+      if (m) {{
+        collecting = false;
+        if (/^\s+disabled:\s*true\s*$/.test(plines[i + 1] || '')) disabledIds.push(m[1]);
+        continue;
+      }}
+      if (collecting && /^\s+(id|name|disabled):/.test(line)) {{
+        inserted.push(line.replace(/^\s+/, ''));
+        continue;
+      }}
+    }}
+    if (inserted.length) {{
+      const rows = [];
+      for (let i = 0; i < inserted.length; i++) {{
+        rows.push((i === 0 || /^id:/.test(inserted[i]) ? '- ' : '  ') + inserted[i]);
+      }}
+      effective = effective.trimEnd() + '\n' + rows.join('\n') + '\n';
     }}
     if (disabledIds.length) {{
       const dl = base.split('\n');
@@ -2055,7 +2312,10 @@ if (args.includes('--version')) {{
   }}
   console.log(effective);
 }} else {{
-  writeFileSync(join(__dirname, 'agent-started-marker'), 'started');
+  writeFileSync(join(__dirname, 'agent-started-marker'),
+    'LOCALAPPDATA=' + (process.env.LOCALAPPDATA || '') +
+    '\nNODE_OPTIONS=' + (process.env.NODE_OPTIONS || '') +
+    '\nNODE_PATH=' + (process.env.NODE_PATH || ''));
   console.log(JSON.stringify({{findings:[{{finding:'stub governed run completed',evidence:'stub.mjs:1',severity:'low',smallestFix:'none',files:['stub.mjs']}}]}}));
 }}
 "#

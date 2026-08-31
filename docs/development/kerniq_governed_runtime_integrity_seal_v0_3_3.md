@@ -51,6 +51,11 @@ the two governance plugin implementations installed in the profile:
 2012 files, ~14.5 MB, verified with SHA-256 on every governed admission
 ```
 
+> **SUPERSEDED BY v0.3.3.1** — the paragraph below describes the initial
+> v0.3.3 state (`a5431ea`, 2012 entries) and is retained as history only;
+> the third-party closure is sealed since v0.3.3.1, and v0.3.3.2 adds
+> resolution-topology and executable-composition identity on top.
+
 Third-party packages inside `node_modules/.pnpm` are **not** content-sealed;
 their versions are pinned by the tracked `pnpm-lock.yaml` bound through the
 audited HEAD. This boundary is deliberate and documented, not hidden.
@@ -261,3 +266,96 @@ AgentFuse protocol, DSH source, production observer behavior, evidence
 semantics, the six-gate composition, `EffectiveDshInvocation` shared
 configuration arguments (all v0.3.2.x regressions remain green), and the
 test-only revision seam. No v0.4 work.
+
+## v0.3.3.2 — Governed Resolution & Composition Closure
+
+Codex review confirmed two remaining P1 gaps after v0.3.3.1:
+
+```text
+P1-A  Node module-resolution precedence: a closer, unlisted
+      node_modules location (e.g. apps/cli/lib/node_modules/commander)
+      could select different executable bytes while every one of the
+      21175 sealed entries stayed byte-identical.
+
+P1-B  Open executable composition: governed_profile_valid only required
+      AgentFuse + observer; any additional enabled executable plugin
+      (via base profile, profile/home patches, or --patch) was accepted.
+```
+
+Both were reproduced against the 0291922 semantics with a controlled
+fixture (real runtime untouched): adding the closer commander directory
+kept the pure entry-hash seal green, and a dump carrying an extra
+`@evil/exfiltrate` plugin kept governed_profile_valid true.
+
+### Resolution topology seal
+
+The pinned manifest now carries `closed_resolution_directories`
+(340 records: 88 `absent`, 252 `exact`) derived from the actual resolution
+topology: closer layers inside build outputs must not exist; every trusted
+`node_modules` layer (repo top-level + scopes, workspace packages, `.pnpm`
+store packages, the profile tree, DSH's hoisted `profiles/node_modules`
+layer and its scopes) must have exactly the pinned direct membership
+(case-insensitive comparison for Windows; unexpected entries of any type
+reject; membership binds names, the file seal still binds bytes). Paths
+obey the same safety rules as entries; duplicate directories or
+case-ambiguous members are malformed; an empty topology section is a
+malformed trust document.
+
+### Approved executable composition
+
+The manifest also pins `approved_executable_plugins`: the 90 exact plugin
+identities the known-good effective `--profile headless` dump carries
+(including sub-path export forms such as `dsh-headless/startup`). At
+admission, `effective_executable_composition_is_approved` reads the same
+effective dump admission and execution share and requires every plugin
+record to resolve to exactly one approved identity — extra identities via
+base profile or product `--patch` inserts make `governed_profile_valid`
+false, and identity ambiguity fails closed. AgentFuse and the production
+observer remain mandatory on top of this allowlist. Each approved identity
+is generation-time coupled to sealed implementation bytes (adapter and
+observer in the profile seal; DSH plugins in the runtime seal), so an
+approved name never implies trust for unsealed content.
+
+### Environment corrections (P2 and probe hardening)
+
+`configure_agent_environment` now passes `LOCALAPPDATA` to the governed
+DSH child, so the child resolves the same native-addon cache root KerniQ
+verified. Separately, the admission probes' node invocations
+(`--version`, `--dump-config`) now run through the same hardened
+allowlisted environment, closing a gap where parent-side `NODE_OPTIONS`
+could alter probe observations; `NODE_OPTIONS`/`NODE_PATH` remain absent
+from the governed child (regression-tested through the stub's recorded
+child environment).
+
+### Causal regressions
+
+```text
+closer_resolution_locations_refuse_admission
+  commander dropped at apps/cli/lib/node_modules  → compatible=false, no start
+  second location (dsh-session lib/node_modules) → compatible=false (generic)
+unapproved_executable_plugin_refuses_admission
+  extra plugin in base profile layer             → governed_profile_valid=false
+  same identity via product --patch insert       → governed_profile_valid=false
+governed_child_environment_is_pinned
+  child LOCALAPPDATA == verified root; NODE_OPTIONS/NODE_PATH empty
+rejects_malformed_topology_metadata (absent/exact metadata hostile forms)
+```
+
+### Real Windows validation
+
+```text
+real_audited_runtime_matches_pinned_seal  PASS  (entries + 340 topology
+  records + composition over the real runtime)
+tampered_copy_of_real_closure_fails_the_seal PASS
+real dump + temporary insert-patch carrying @evil/exfiltrate
+  → composition identifies the unknown identity (classified invalid)
+clean real dump → composition valid (90/90 identities)
+real positive governed run → allow/dispatch/result with preserved
+  toolCallId (call_00_Upj63pwfU9lenwNBRDq65783)
+```
+
+Bounded claim (v0.3.3.2): for the supported audited Windows DSH runtime,
+KerniQ verifies expected runtime bytes, expected Node resolution topology,
+and the approved governed executable-plugin composition before governed
+process start. Patch-content and runtime-filesystem TOCTOU remain accepted
+P2 timing boundaries; no supply-chain/hostile-admin claims.
