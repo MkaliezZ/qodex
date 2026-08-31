@@ -55,6 +55,111 @@ Third-party packages inside `node_modules/.pnpm` are **not** content-sealed;
 their versions are pinned by the tracked `pnpm-lock.yaml` bound through the
 audited HEAD. This boundary is deliberate and documented, not hidden.
 
+## v0.3.3.1 correction — the boundary above was a P1, not an acceptable bound
+
+The initial v0.3.3 implementation (`a5431ea`) reported
+`FINAL_STATUS=V0_3_3_RUNTIME_INTEGRITY_SEAL_COMPLETE` while simultaneously
+reporting `EXTERNAL_RUNTIME_PATHS_FOUND=true` and
+`UNSEALED_EXECUTED_CODE_FOUND=true`. That completion status was premature:
+an audited source revision proves expected dependency provenance, not the
+local executable bytes actually loaded. Reproduced concretely — with the
+governed-critical `js-yaml` (imported by `dsh-app-boot`, which parses
+profiles, patches, and `!!js` handling) appending one comment line on the
+real runtime, the `a5431ea` verifier still returned
+`runtime_seal_valid=true`.
+
+### Evidence-driven closure discovery
+
+The corrected closure is derived from actual resolution, not a hand-written
+allowlist:
+
+```text
+1. pnpm symlink-graph walk from the CLI and the 87 loaded workspace
+   packages → 20 reachable store packages (0 escapes, 0 broken links)
+2. runtime load trace (Node module hooks over both --dump-config and one
+   real governed run) → 28 additional store packages actually loaded,
+   including optional/platform packages the static walk missed
+   (sharp, koffi, domino, …)
+3. union: 42 third-party store packages, every package sealed whole
+4. 41 trusted workspace links additionally sealed by LOGICAL path identity:
+   each link path records the bytes it currently resolves to, so
+   substituting a link target (leaving the store entity intact) breaks
+   the seal through the logical-path entries — this also binds packages
+   reachable only through links (e.g. the vendored Cordis core)
+5. profile root: every real installed package (adapter, core, observer,
+   cosmokit, schemastery, @standard-schema/spec) — the profile layout has
+   no links
+6. user-cache root (NEW bounded manifest root): node-addon-native-custom-
+   loader copies the prebuilt .node add-in to
+   %LOCALAPPDATA%/node-addon-native-custom-loader/native-cache and
+   executes the COPY; the executed cache bytes are sealed (paths are
+   relative to the cache root, so no user name enters the manifest)
+```
+
+Runtime-load tracing showed **0 loaded-but-unsealed files** against the
+final closure (after dropping tracer artifacts resolved against the shell
+working directory). Native dependencies found and sealed: node-pty
+(conpty.dll, OpenConsole.exe, per-platform `.node` prebuilds),
+node-addon-require-builtin (win32 `.node` + its user-cache copy), sharp,
+koffi. `resolve.exports` (nominated in review) is not part of the actual
+resolved closure on this runtime and is therefore not sealed — reported
+truthfully rather than assumed.
+
+### Updated seal
+
+```text
+manifest entries: 21175 (runtime 21106 / profile 67 / user-cache 2)
+sealed bytes:    ~204 MB (double-covering linked packages by entity and
+                  logical path on purpose)
+verification:    ~2.4 s full SHA-256 pass in a release build per governed
+                  admission; no caching added (correctness first)
+aggregate seal:  6df40d7f9e3741fcdf5c9a834c81c316341dfeb87c135a3444b7d59880de3c87
+```
+
+Manifest schema stays `v0.1`; the `user-cache` root class is a bounded
+addition with unchanged entry semantics.
+
+### Causal regressions added
+
+```text
+third_party_dependency_tampering_refuses_admission
+  js-yaml store entity modified       → seal false, process never starts
+  commander store entity modified     → seal false, process never starts
+  third-party file missing            → seal false
+  workspace link target substituted   → store entity untouched, decoy bytes
+                                        resolve through the logical path →
+                                        seal false (fixture junction is
+                                        verified to read the decoy bytes
+                                        before asserting)
+```
+
+The fixture also fixed a test-isolation defect this work exposed:
+`temporary_token` is a constant hash, so admission fixtures share one temp
+directory across runs; a failed run previously leaked its tampered
+junction into the next run. Fixtures now wipe their directory before
+provisioning.
+
+### Real Windows validation (v0.3.3.1)
+
+```text
+real_audited_runtime_matches_pinned_seal   PASS (~2.4 s release)
+tampered_copy_of_real_closure_fails_the_seal PASS
+    (throwaway copy of all 21175 entries, one tampered byte in the real
+     js-yaml store implementation; the real runtime untouched)
+real positive governed run                 PASS (allow → dispatch → result,
+     preserved toolCallId call_00_tcsugtetFrFptqYKFD7S7313)
+```
+
+### Corrected claim
+
+KerniQ independently verifies the bounded governed DSH runtime closure,
+including first-party DSH build outputs, governance plugins, and the
+actual resolved third-party runtime dependencies (including executed
+native add-in copies) covered by the supported audited Windows runtime
+manifest. This is still not supply-chain security, tamper-proofing, or
+hostile-admin resistance; concurrent hostile local-FS mutation after
+hashing remains a documented local TOCTOU boundary.
+
 ## Fix
 
 ### Git top-level binding (P1-A)

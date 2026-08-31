@@ -309,6 +309,7 @@ fn probe_dsh() -> AgentRuntimeProbe {
         crate::governed_runtime_seal::verify_runtime_seal(
             &effective.runtime_root,
             profile_dir_for_seal().as_deref(),
+            user_native_cache_root().as_deref(),
         )
     });
     let compatible_runtime = runtime_available
@@ -772,6 +773,17 @@ fn configured_profile_dir() -> Option<PathBuf> {
 /// governed runtime seal.
 fn profile_dir_for_seal() -> Option<std::path::PathBuf> {
     configured_profile_dir()
+}
+
+/// The per-user native addon cache root: `node-addon-native-custom-loader`
+/// copies prebuilt `.node` add-ins here and executes the copies during
+/// governed runs, so the executed cache bytes belong to the seal.
+fn user_native_cache_root() -> Option<std::path::PathBuf> {
+    std::env::var_os("LOCALAPPDATA").map(|local| {
+        std::path::PathBuf::from(local)
+            .join("node-addon-native-custom-loader")
+            .join("native-cache")
+    })
 }
 
 fn dump_dsh_profile(invocation: &EffectiveDshInvocation) -> Option<String> {
@@ -1524,6 +1536,101 @@ mod tests {
     }
 
     #[test]
+    fn third_party_dependency_tampering_refuses_admission() {
+        let _guard = GOVERNANCE_ENV_LOCK.lock().unwrap();
+        let fixture = admission_fixture();
+        let entry = fixture.install_stub(&admission_dump(false, false));
+
+        // Positive control: the sealed closure including third-party store
+        // packages and their workspace link is admitted.
+        assert_governance_gates(probe_dsh().governance.as_ref().unwrap(), true, true, true, true);
+        run_dsh(test_request(), &fixture.workspace)
+            .expect("closure with third-party seal must admit the governed run");
+        assert!(agent_started(&entry));
+        clear_agent_marker(&entry);
+
+        let runtime_root = fixture.root.join("runtime-root");
+        let js_yaml = runtime_root
+            .join("node_modules")
+            .join(".pnpm")
+            .join("js-yaml@4.2.0")
+            .join("node_modules")
+            .join("js-yaml")
+            .join("index.js");
+        let commander = runtime_root
+            .join("node_modules")
+            .join(".pnpm")
+            .join("commander@12.0.0")
+            .join("node_modules")
+            .join("commander")
+            .join("index.js");
+
+        // Same HEAD, version, profile, patch — only third-party bytes change.
+        for target in [&js_yaml, &commander] {
+            let original = fs::read(target).unwrap();
+            fs::write(target, format!("{}\n// tampered\n", String::from_utf8_lossy(&original)))
+                .unwrap();
+            assert!(
+                !probe_dsh().governance.as_ref().unwrap().compatible_runtime,
+                "tampered third-party dependency must fail the seal: {}",
+                target.display()
+            );
+            let error = run_dsh(test_request(), &fixture.workspace).unwrap_err();
+            assert_eq!(error, "Governed DSH admission failed before process start.");
+            assert!(!agent_started(&entry));
+            fs::write(target, &original).unwrap();
+        }
+
+        // A missing third-party file fails closed.
+        let original = fs::read(&js_yaml).unwrap();
+        fs::remove_file(&js_yaml).unwrap();
+        assert!(!probe_dsh().governance.as_ref().unwrap().compatible_runtime);
+        let error = run_dsh(test_request(), &fixture.workspace).unwrap_err();
+        assert_eq!(error, "Governed DSH admission failed before process start.");
+        assert!(!agent_started(&entry));
+        fs::write(&js_yaml, &original).unwrap();
+
+        // Substituting the workspace link target: the store entity stays
+        // intact, but the bytes resolved through the logical path change.
+        let link = runtime_root
+            .join("apps")
+            .join("cli")
+            .join("node_modules")
+            .join("js-yaml");
+        let decoy_root = runtime_root
+            .join("node_modules")
+            .join(".pnpm")
+            .join("js-yaml@9.9.9")
+            .join("node_modules")
+            .join("js-yaml");
+        fs::create_dir_all(&decoy_root).unwrap();
+        fs::write(decoy_root.join("package.json"), "{\"name\":\"js-yaml\"}").unwrap();
+        fs::write(decoy_root.join("index.js"), "module.exports = { evil: true };\n").unwrap();
+        fs::remove_dir(&link).expect("junction removal must succeed");
+        assert!(!link.exists(), "junction must be gone before substitution");
+        let _ = Command::new("cmd")
+            .args([
+                "/C",
+                "mklink",
+                "/J",
+                link.to_string_lossy().as_ref(),
+                decoy_root.to_string_lossy().as_ref(),
+            ])
+            .output();
+        let resolved = fs::read_to_string(link.join("index.js"))
+            .expect("substituted junction must resolve");
+        assert!(resolved.contains("evil"), "must read the decoy bytes: {resolved}");
+
+        assert!(
+            !probe_dsh().governance.as_ref().unwrap().compatible_runtime,
+            "substituted link target must fail the seal through the logical path"
+        );
+        let error = run_dsh(test_request(), &fixture.workspace).unwrap_err();
+        assert_eq!(error, "Governed DSH admission failed before process start.");
+        assert!(!agent_started(&entry));
+    }
+
+    #[test]
     fn effective_invocation_shares_configuration_arguments() {
         let _guard = GOVERNANCE_ENV_LOCK.lock().unwrap();
         let fixture = admission_fixture();
@@ -1568,6 +1675,9 @@ mod tests {
             "kerniq-disabled-plugin-admission-{}",
             temporary_token("admission-test")
         ));
+        // A previously failed run may leave a tampered fixture behind; the
+        // fixture must start from a clean provisioning state.
+        let _ = fs::remove_dir_all(&root);
         let env = ScopedEnv::capture();
         env.set("KERNIQ_DSH_PROFILE", "headless");
 
@@ -1635,6 +1745,44 @@ mod tests {
             "export const name = 'dsh-llm-deepseek';\n",
         )
         .unwrap();
+        // Third-party runtime dependencies in their pnpm store shapes, plus
+        // the workspace link through which the CLI resolves them.
+        let js_yaml = git_root
+            .join("node_modules")
+            .join(".pnpm")
+            .join("js-yaml@4.2.0")
+            .join("node_modules")
+            .join("js-yaml");
+        let commander = git_root
+            .join("node_modules")
+            .join(".pnpm")
+            .join("commander@12.0.0")
+            .join("node_modules")
+            .join("commander");
+        fs::create_dir_all(&js_yaml).unwrap();
+        fs::create_dir_all(&commander).unwrap();
+        fs::write(js_yaml.join("package.json"), "{\"name\":\"js-yaml\"}").unwrap();
+        fs::write(js_yaml.join("index.js"), "module.exports = {};\n").unwrap();
+        fs::write(commander.join("package.json"), "{\"name\":\"commander\"}").unwrap();
+        fs::write(commander.join("index.js"), "module.exports = {};\n").unwrap();
+        let cli_deps = git_root.join("apps").join("cli").join("node_modules");
+        fs::create_dir_all(&cli_deps).unwrap();
+        let js_yaml_link = cli_deps.join("js-yaml");
+        let _ = Command::new("cmd")
+            .args([
+                "/C",
+                "mklink",
+                "/J",
+                js_yaml_link.to_string_lossy().as_ref(),
+                js_yaml.to_string_lossy().as_ref(),
+            ])
+            .output();
+        // mklink's exit code is unreliable under some shells; the junction
+        // itself is the success criterion.
+        assert!(
+            js_yaml_link.join("index.js").is_file(),
+            "js-yaml junction must resolve to the store entity"
+        );
         env.set(
             "KERNIQ_DSH_RUNTIME_ROOT",
             git_root.to_string_lossy().as_ref(),
@@ -1702,6 +1850,33 @@ mod tests {
                 &runtime_root,
                 "runtime",
                 &runtime_root.join("packages").join("llm").join("llm-deepseek").join("lib"),
+            );
+            // Third-party store entities and the workspace link path that
+            // resolves them.
+            add_tree(
+                &runtime_root,
+                "runtime",
+                &runtime_root
+                    .join("node_modules")
+                    .join(".pnpm")
+                    .join("js-yaml@4.2.0"),
+            );
+            add_tree(
+                &runtime_root,
+                "runtime",
+                &runtime_root
+                    .join("node_modules")
+                    .join(".pnpm")
+                    .join("commander@12.0.0"),
+            );
+            add_tree(
+                &runtime_root,
+                "runtime",
+                &runtime_root
+                    .join("apps")
+                    .join("cli")
+                    .join("node_modules")
+                    .join("js-yaml"),
             );
             add_tree(
                 &profile,

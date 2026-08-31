@@ -45,8 +45,12 @@ struct Entry {
 /// tests only, an injected one — hashing still runs the normal production
 /// path). Returns false for any malformed, duplicated, escaping, missing,
 /// unreadable, or content-mismatched state.
-pub(crate) fn verify_runtime_seal(runtime_root: &Path, profile_root: Option<&Path>) -> bool {
-    verify_manifest(&expected_manifest(), runtime_root, profile_root)
+pub(crate) fn verify_runtime_seal(
+    runtime_root: &Path,
+    profile_root: Option<&Path>,
+    user_cache_root: Option<&Path>,
+) -> bool {
+    verify_manifest(&expected_manifest(), runtime_root, profile_root, user_cache_root)
 }
 
 /// The seal check proper: parse-and-validate `manifest_text`, then hash every
@@ -56,11 +60,12 @@ pub(crate) fn verify_manifest(
     manifest_text: &str,
     runtime_root: &Path,
     profile_root: Option<&Path>,
+    user_cache_root: Option<&Path>,
 ) -> bool {
     let Some(manifest) = parse_and_validate_manifest(manifest_text) else {
         return false;
     };
-    verify_manifest_against_roots(&manifest, runtime_root, profile_root)
+    verify_manifest_against_roots(&manifest, runtime_root, profile_root, user_cache_root)
 }
 
 fn expected_manifest() -> String {
@@ -91,7 +96,7 @@ fn parse_and_validate_manifest(text: &str) -> Option<Manifest> {
     }
     let mut seen = std::collections::BTreeSet::new();
     for entry in &manifest.entries {
-        if !matches!(entry.root.as_str(), "runtime" | "profile") {
+        if !matches!(entry.root.as_str(), "runtime" | "profile" | "user-cache") {
             return None;
         }
         if !is_safe_relative_path(&entry.path) || !is_sha256(&entry.sha256) {
@@ -122,6 +127,7 @@ fn verify_manifest_against_roots(
     manifest: &Manifest,
     runtime_root: &Path,
     profile_root: Option<&Path>,
+    user_cache_root: Option<&Path>,
 ) -> bool {
     let mut sorted: Vec<&Entry> = manifest.entries.iter().collect();
     sorted.sort_by(|a, b| (&a.root, &a.path).cmp(&(&b.root, &b.path)));
@@ -130,6 +136,13 @@ fn verify_manifest_against_roots(
             "runtime" => runtime_root,
             "profile" => match profile_root {
                 Some(profile) => profile,
+                None => return false,
+            },
+            // The native loader copies prebuilt `.node` add-ins from the
+            // pnpm store into a per-user cache and executes the copy; the
+            // executed bytes must be sealed too.
+            "user-cache" => match user_cache_root {
+                Some(cache) => cache,
                 None => return false,
             },
             _ => return false,
@@ -185,6 +198,14 @@ fn is_sha256(value: &str) -> bool {
             .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
 }
 
+fn user_native_cache_root_for_real_machine() -> Option<std::path::PathBuf> {
+    std::env::var_os("LOCALAPPDATA").map(|local| {
+        std::path::PathBuf::from(local)
+            .join("node-addon-native-custom-loader")
+            .join("native-cache")
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -215,7 +236,7 @@ mod tests {
     fn parses_the_pinned_production_manifest() {
         let manifest = parse_and_validate_manifest(PINNED_MANIFEST)
             .expect("pinned manifest must be internally consistent");
-        assert_eq!(manifest.entries.len(), 2012);
+        assert_eq!(manifest.entries.len(), 21175);
     }
 
     #[test]
@@ -286,15 +307,15 @@ mod tests {
         let seal = digest_of(canonical_manifest_bytes(&entries).as_bytes());
         let manifest_text = manifest_json(&entries, &seal);
 
-        assert!(verify_manifest(&manifest_text, &runtime, Some(&profile)));
+        assert!(verify_manifest(&manifest_text, &runtime, Some(&profile), None));
         // Modified content, missing file, and absent profile root all fail.
         std::fs::write(runtime.join("apps/cli/lib/bin.js"), b"abd").unwrap();
-        assert!(!verify_manifest(&manifest_text, &runtime, Some(&profile)));
+        assert!(!verify_manifest(&manifest_text, &runtime, Some(&profile), None));
         std::fs::write(runtime.join("apps/cli/lib/bin.js"), b"abc").unwrap();
         std::fs::remove_file(profile.join("node_modules/p/index.js")).unwrap();
-        assert!(!verify_manifest(&manifest_text, &runtime, Some(&profile)));
+        assert!(!verify_manifest(&manifest_text, &runtime, Some(&profile), None));
         std::fs::write(profile.join("node_modules/p/index.js"), b"xyz").unwrap();
-        assert!(!verify_manifest(&manifest_text, &runtime, None));
+        assert!(!verify_manifest(&manifest_text, &runtime, None, None));
         let _ = std::fs::remove_dir_all(&dir);
     }
 
@@ -303,10 +324,13 @@ mod tests {
     #[test]
     #[ignore = "requires the real audited DSH runtime on this machine"]
     fn real_audited_runtime_matches_pinned_seal() {
+        let started = std::time::Instant::now();
         let ok = verify_runtime_seal(
             std::path::Path::new("F:/DSH-Runtime"),
             Some(std::path::Path::new("F:/DSH-Home/profiles/headless")),
+            user_native_cache_root_for_real_machine().as_deref(),
         );
+        println!("real seal verification: {}ms", started.elapsed().as_millis());
         assert!(ok, "real audited runtime must match the pinned seal");
     }
 
@@ -331,25 +355,33 @@ mod tests {
         let real_runtime = std::path::Path::new("F:/DSH-Runtime");
         let real_profile = std::path::Path::new("F:/DSH-Home/profiles/headless");
         for entry in &manifest.entries {
-            let base = if entry.root == "runtime" {
-                real_runtime
-            } else {
-                real_profile
+            let real_cache = user_native_cache_root_for_real_machine();
+            let base: &std::path::Path = match entry.root.as_str() {
+                "runtime" => real_runtime,
+                "profile" => real_profile,
+                _ => real_cache.as_deref().unwrap(),
+            };
+            let target_root: std::path::PathBuf = match entry.root.as_str() {
+                "runtime" => runtime.clone(),
+                "profile" => profile.clone(),
+                _ => dir.join("user-cache"),
             };
             let source = base.join(&entry.path);
-            let target = if entry.root == "runtime" {
-                runtime.join(&entry.path)
-            } else {
-                profile.join(&entry.path)
-            };
+            let target = target_root.join(&entry.path);
             std::fs::create_dir_all(target.parent().unwrap()).unwrap();
             std::fs::copy(&source, &target).unwrap();
         }
-        let tampered = runtime.join("apps/cli/lib/bin.js");
+        let tampered = runtime.join(
+            "node_modules/.pnpm/js-yaml@4.2.0/node_modules/js-yaml/index.js",
+        );
         let mut bytes = std::fs::read(&tampered).unwrap();
         bytes.extend_from_slice(b"// tampered\n");
         std::fs::write(&tampered, bytes).unwrap();
-        assert!(!verify_runtime_seal(&runtime, Some(&profile)));
+        assert!(!verify_runtime_seal(
+            &runtime,
+            Some(&profile),
+            Some(dir.join("user-cache").as_path()),
+        ));
         let _ = std::fs::remove_dir_all(&dir);
     }
 }
