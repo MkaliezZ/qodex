@@ -85,3 +85,6 @@ secrets/
 
 # Local Config
 qodex-config/local/
+.venv-preview/
+python/plugins/
+__pycache__/
