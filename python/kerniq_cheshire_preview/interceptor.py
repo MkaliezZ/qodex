@@ -1,27 +1,46 @@
-"""Runtime interceptor for the Cheshire Cat governed preview.
+"""Runtime interceptor for the Cheshire Cat governed preview (proof closure).
 
 Attaches to the validated seam (``Agent.call_tool`` → ``Tool.execute``) by
 patching ``call_tool`` at runtime. No user code is modified, nothing is
 imported by user code, and the original dispatcher keeps ownership of tool
 execution:
 
-- ``block`` — the original ``call_tool`` is never invoked, so
-  ``Tool.execute()`` cannot run; a host-native blocked ``Message``
-  correlated with the original ``tool_call_id`` is returned instead.
-- ``allow`` — the original ``call_tool`` runs exactly once; duplicate or
-  replayed decisions never dispatch twice.
-- sidecar timeout, unknown decision, identity mismatch, sidecar death, or
-  evidence failure — fail closed as ``block``.
+- ``block`` — the original ``call_tool`` is never invoked, so ``Tool.execute``
+  cannot run; a host-native blocked ``Message`` correlated with the original
+  ``tool_call_id`` is returned instead.
+- ``allow`` — the original ``call_tool`` runs exactly once; concurrent or
+  replayed ``tool_call_id`` requests cannot reach physical execution twice.
 
-Patch ownership (single-owner, generation controlled):
+Proof-closure hardening on top of the hardened prototype:
 
-- a second active attach on the same class is refused;
-- detach is owner-checked (stale or out-of-order handles never restore an
-  ungoverned method over an active governed attach), idempotent, and safe.
+H-01  MRO ownership domain — attaches whose classes overlap in the method
+      resolution path (base/subclass in either direction) are one governance
+      domain; overlapping active attaches are refused, install publication is
+      atomic (registry entry + wrapper under one lock, with rollback), and
+      detach verifies owner identity + generation + the currently installed
+      wrapper object before restoring anything.
 
-Evidence follows the truthfulness lifecycle (REQUESTED → AUTHORIZED/BLOCKED
-→ DISPATCH_STARTED → EXECUTED / FAILED_*): nothing about execution is
-recorded before it actually happens.
+H-02  Atomic reservation lifecycle — every tool_call_id moves
+      UNKNOWN → RESERVED → DISPATCHING → EXECUTED/FAILED under a lock; only
+      the request that wins the UNKNOWN→RESERVED transition may reach
+      physical execution, concurrent duplicates are deterministically
+      rejected.
+
+H-03  Full identity binding — the sidecar response must echo all six
+      identity fields (request_id, tool_call_id, runtime_id, session_id,
+      turn_id, protocol_version); any missing/mismatched/stale or
+      unsupported-version response fails closed.
+
+H-04  Physical execution evidence boundary — EXECUTED evidence (and its
+      executed_arguments) is emitted only from inside the real
+      ``Tool.execute`` invocation, observed through a temporary per-request
+      instance wrapper. This is an observation boundary, not a second
+      execution path: if the dispatcher returns without invoking
+      ``Tool.execute``, no EXECUTED evidence is produced.
+
+H-05  Runtime health fail-closed — when terminal (outcome) evidence cannot
+      be persisted, the attach degrades to EVIDENCE_DEGRADED and every
+      subsequent governed request is blocked; no silent continuation.
 """
 
 from __future__ import annotations
@@ -33,7 +52,7 @@ import sys
 import threading
 import uuid
 from concurrent.futures import ThreadPoolExecutor
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, Optional
 
@@ -51,7 +70,17 @@ from .sidecar_main import PROTOCOL_VERSION
 
 DEFAULT_SIDECAR_TIMEOUT_SECONDS = 2.0
 
-_PATCH_LOCK = threading.Lock()
+_PATCH_LOCK = threading.RLock()
+
+HEALTHY = "HEALTHY"
+EVIDENCE_DEGRADED = "EVIDENCE_DEGRADED"
+
+# tool_call_id lifecycle states (H-02)
+_CALL_UNKNOWN = "UNKNOWN"
+_CALL_RESERVED = "RESERVED"
+_CALL_DISPATCHING = "DISPATCHING"
+_CALL_EXECUTED = "EXECUTED"
+_CALL_FAILED = "FAILED"
 
 
 @dataclass
@@ -61,6 +90,7 @@ class _PatchOwnership:
     agent_class: type
     original_call_tool: Any
     original_identity: str
+    installed_wrapper: Any = None
     active: bool = True
 
 
@@ -68,7 +98,29 @@ _PATCH_REGISTRY: Dict[type, _PatchOwnership] = {}
 
 
 class GovernancePatchError(RuntimeError):
-    """Patch ownership violation (nested attach / out-of-order detach)."""
+    """Patch ownership violation (overlapping/nested attach, out-of-order or
+    stale detach, wrapper tampering)."""
+
+
+def _classes_overlap(first: type, second: type) -> bool:
+    """True when the two classes share a method-resolution path — i.e. an
+    attach on either could intercept calls dispatched through the other
+    (base/subclass in either direction)."""
+    return first is not second and (
+        issubclass(first, second) or issubclass(second, first)
+    )
+
+
+def _assert_no_overlapping_active_attach(agent_class: type) -> None:
+    for registered, entry in _PATCH_REGISTRY.items():
+        if not entry.active:
+            continue
+        if registered is agent_class or _classes_overlap(registered, agent_class):
+            raise GovernancePatchError(
+                "overlapping governed attach refused: "
+                f"{agent_class!r} shares a resolution path with active attach "
+                f"on {registered!r} (owner={entry.owner_id})"
+            )
 
 
 class _SidecarClient:
@@ -131,6 +183,65 @@ class _SidecarClient:
 
 
 @dataclass
+class _CallRecord:
+    state: str = _CALL_UNKNOWN
+    executed_arguments: Any = None
+    tool_result: Any = None
+
+
+@dataclass
+class _AttachState:
+    """Per-attach mutable governance state."""
+
+    calls: Dict[str, _CallRecord] = field(default_factory=dict)
+    calls_lock: threading.Lock = field(default_factory=threading.Lock)
+    health: str = HEALTHY
+    health_lock: threading.Lock = field(default_factory=threading.Lock)
+
+    def degrade(self) -> None:
+        with self.health_lock:
+            self.health = EVIDENCE_DEGRADED
+
+    @property
+    def degraded(self) -> bool:
+        with self.health_lock:
+            return self.health != HEALTHY
+
+    def reserve(self, tool_call_id: str) -> bool:
+        """Atomic UNKNOWN→RESERVED transition: exactly one concurrent caller
+        wins; everyone else (reserved/dispatching/executed/failed) is a
+        deterministic duplicate."""
+        with self.calls_lock:
+            record = self.calls.get(tool_call_id)
+            if record is None:
+                self.calls[tool_call_id] = _CallRecord(state=_CALL_RESERVED)
+                return True
+            return False
+
+    def transition(self, tool_call_id: str, expected_from: str, to: str) -> bool:
+        with self.calls_lock:
+            record = self.calls.get(tool_call_id)
+            if record is None or record.state != expected_from:
+                return False
+            record.state = to
+            return True
+
+    def finish(
+        self,
+        tool_call_id: str,
+        to: str,
+        executed_arguments: Any = None,
+        tool_result: Any = None,
+    ) -> None:
+        with self.calls_lock:
+            record = self.calls.get(tool_call_id)
+            if record is not None:
+                record.state = to
+                record.executed_arguments = executed_arguments
+                record.tool_result = tool_result
+
+
+@dataclass
 class GovernedAttach:
     """Handle over one governed runtime attach."""
 
@@ -143,31 +254,44 @@ class GovernedAttach:
     runtime_id: str
     session_id: str
     turn_id: str
+    state: _AttachState
     _agent_class: type
     _detached: bool = False
     _sidecar_closed: bool = False
 
+    @property
+    def health(self) -> str:
+        return self.state.health
+
     def detach(self) -> None:
         """Restore the original seam if — and only if — this handle still
-        owns the active patch. Idempotent; stale or out-of-order handles are
-        refused so an active governed attach can never be silently unwound
-        into an ungoverned method."""
+        owns the active patch, the generation matches, and the wrapper
+        currently installed on the class is the one this attach published.
+        Idempotent; stale, out-of-order, or tampered handles are refused."""
         with _PATCH_LOCK:
             entry = _PATCH_REGISTRY.get(self._agent_class)
             if entry is not None and entry.active and entry.owner_id != self.owner_id:
-                # Another owner governs this class now: refuse regardless of
-                # this handle's own state, so a stale handle can never unwind
-                # someone else's active governed patch.
                 raise GovernancePatchError(
                     "detach refused: handle does not own the active governed attach "
                     f"(owner={self.owner_id}, current={entry.owner_id})"
                 )
             if self._detached:
-                return  # idempotent: nothing left to restore
+                return  # idempotent
             if entry is None or not entry.active:
                 self._detached = True
                 self._close_sidecar()
                 return
+            if entry.generation != self.generation:
+                raise GovernancePatchError(
+                    "detach refused: generation changed "
+                    f"(handle={self.generation}, registry={entry.generation})"
+                )
+            installed = getattr(self._agent_class, "call_tool", None)
+            if installed is not entry.installed_wrapper:
+                raise GovernancePatchError(
+                    "detach refused: the installed wrapper is not the one this "
+                    "attach published (wrapper tampering or foreign patch)"
+                )
             setattr(self._agent_class, "call_tool", entry.original_call_tool)
             # Keep the retired entry so the next attach generation increments
             # from it (active=False makes it inert for ownership checks).
@@ -188,28 +312,44 @@ def _tool_call_fields(tool_call: Any) -> tuple[str, Any, str]:
     return (str(name) if name is not None else ""), arguments, call_id
 
 
+_IDENTITY_FIELDS = (
+    "request_id",
+    "tool_call_id",
+    "runtime_id",
+    "session_id",
+    "turn_id",
+)
+
+
 def _decision_from_response(
     response: Optional[Dict[str, Any]],
-    request_id: str,
-    tool_call_id: str,
+    request_identity: Dict[str, Any],
 ) -> tuple[str, str]:
-    """Validate the sidecar response identity, then map to a canonical
-    action. Missing, mismatched (stale or replayed), or unknown identities
-    and actions all fail closed."""
+    """Validate the full six-field identity binding (H-03), then map to a
+    canonical action. Missing, mismatched (stale or replayed), unsupported
+    protocol, or unknown actions all fail closed."""
     if response is None:
         return "block", "sidecar_unavailable"
     if response.get("type") != "decision":
         return "block", "identity_mismatch:bad_response_type"
-    if response.get("request_id") != request_id:
-        return "block", "identity_mismatch:request_id"
-    if response.get("tool_call_id") != tool_call_id:
-        return "block", "identity_mismatch:tool_call_id"
+    for field_name in _IDENTITY_FIELDS:
+        if response.get(field_name) != request_identity[field_name]:
+            return "block", f"identity_mismatch:{field_name}"
+    if response.get("protocol_version") != PROTOCOL_VERSION:
+        return "block", "identity_mismatch:protocol_version"
     candidate = response.get("decision")
     if candidate == "allow":
         return "allow", str(response.get("reason", "allowed"))
     if candidate == "block":
         return "block", str(response.get("reason", "blocked"))
     return "block", f"unknown_decision:{candidate!r}"
+
+
+def _resolve_tool(self: Any, tool_name: str) -> Optional[Any]:
+    for tool in getattr(self, "tools", []) or []:
+        if getattr(tool, "name", None) == tool_name:
+            return tool
+    return None
 
 
 def attach_governed_runtime(
@@ -226,8 +366,8 @@ def attach_governed_runtime(
     """Admit the runtime and install the governed ``call_tool`` interceptor.
 
     Fails closed: admission failure raises ``GovernanceAttachError`` and
-    nothing is patched; a second active attach on the same class raises
-    ``GovernancePatchError``.
+    nothing is patched; an overlapping active attach (same class or any
+    class sharing its resolution path) raises ``GovernancePatchError``.
     """
     runtime = admit_governed_runtime(agent_class)
     resolved_policy = policy if policy is not None else {"defaultAction": "block"}
@@ -236,156 +376,269 @@ def attach_governed_runtime(
     runtime_identity = runtime_id or f"preview_runtime_{uuid.uuid4().hex[:12]}"
     session_identity = session_id or f"preview_session_{uuid.uuid4().hex[:12]}"
     turn_identity = turn_id or f"preview_turn_{uuid.uuid4().hex[:12]}"
+    state = _AttachState()
 
+    # Serialized publication of registry entry + class wrapper (H-01): both
+    # happen under the patch lock or neither does.
     with _PATCH_LOCK:
-        existing = _PATCH_REGISTRY.get(runtime.agent_class)
-        if existing is not None and existing.active:
-            raise GovernancePatchError(
-                "nested/second governed attach refused for "
-                f"{runtime.agent_class!r} (active owner={existing.owner_id})"
-            )
+        _assert_no_overlapping_active_attach(runtime.agent_class)
+        existing_retired = _PATCH_REGISTRY.get(runtime.agent_class)
         original_call_tool = runtime.agent_class.call_tool
-        generation = (existing.generation + 1) if existing is not None else 1
+        generation = (
+            (existing_retired.generation + 1) if existing_retired is not None else 1
+        )
         owner_id = f"owner_{uuid.uuid4().hex[:16]}"
         original_identity = getattr(
             original_call_tool, "__qualname__", str(original_call_tool)
         )
+
+        async def governed_call_tool(self, tool_call, *args, **kwargs):
+            tool_name, requested_arguments, tool_call_id = _tool_call_fields(tool_call)
+            request_id = f"req_{uuid.uuid4().hex[:16]}"
+
+            def blocked(text: str) -> Any:
+                return runtime.blocked_message(
+                    f"[kerniq] tool '{tool_name}' blocked by governance "
+                    f"{text}; decision=block, dispatch=false",
+                    tool_call,
+                )
+
+            if state.degraded:
+                # H-05: terminal evidence could not be persisted earlier;
+                # this runtime no longer executes anything.
+                return blocked("(runtime_evidence_degraded)")
+
+            try:
+                record_requested(
+                    evidence_path,
+                    request_id=request_id,
+                    tool_call_id=tool_call_id,
+                    tool_name=tool_name,
+                    requested_arguments=requested_arguments,
+                )
+            except EvidenceFailure:
+                return blocked("(evidence_unavailable)")
+
+            if not state.reserve(tool_call_id):
+                # H-02: concurrent or replayed tool_call_id — deterministic
+                # duplicate rejection, never a second physical execution.
+                try:
+                    record_blocked(
+                        evidence_path,
+                        request_id=request_id,
+                        tool_call_id=tool_call_id,
+                        tool_name=tool_name,
+                        requested_arguments=requested_arguments,
+                        policy_decision="block",
+                        reason="duplicate_tool_call_replayed",
+                    )
+                except EvidenceFailure:
+                    pass
+                return blocked("(duplicate_tool_call_replayed)")
+
+            identity = {
+                "request_id": request_id,
+                "tool_call_id": tool_call_id,
+                "runtime_id": runtime_identity,
+                "session_id": session_identity,
+                "turn_id": turn_identity,
+                "protocol_version": PROTOCOL_VERSION,
+            }
+            response = sidecar.request(
+                {
+                    "type": "governance",
+                    "tool": tool_name,
+                    "arguments": requested_arguments
+                    if isinstance(requested_arguments, dict)
+                    else {},
+                    **identity,
+                },
+                timeout=sidecar_timeout_seconds,
+            )
+            decision, reason = _decision_from_response(response, identity)
+
+            if decision != "allow":
+                state.finish(tool_call_id, to=_CALL_FAILED)
+                try:
+                    record_blocked(
+                        evidence_path,
+                        request_id=request_id,
+                        tool_call_id=tool_call_id,
+                        tool_name=tool_name,
+                        requested_arguments=requested_arguments,
+                        policy_decision="block",
+                        reason=reason,
+                    )
+                except EvidenceFailure:
+                    pass  # already blocked; evidence failure cannot change that
+                return blocked(f"({reason})")
+
+            # Authorized: record the policy snapshot (no execution claims).
+            try:
+                record_authorized(
+                    evidence_path,
+                    request_id=request_id,
+                    tool_call_id=tool_call_id,
+                    tool_name=tool_name,
+                    policy_decision="allow",
+                    effective_arguments=requested_arguments,
+                    reason=reason,
+                )
+            except EvidenceFailure:
+                state.finish(tool_call_id, to=_CALL_FAILED)
+                return blocked("(evidence_unavailable)")
+
+            state.transition(tool_call_id, _CALL_RESERVED, _CALL_DISPATCHING)
+
+            tool = _resolve_tool(self, tool_name)
+            try:
+                record_dispatch_started(
+                    evidence_path,
+                    request_id=request_id,
+                    tool_call_id=tool_call_id,
+                    tool_name=tool_name,
+                )
+            except EvidenceFailure:
+                state.finish(tool_call_id, to=_CALL_FAILED)
+                return blocked("(evidence_unavailable)")
+
+            executed: Dict[str, Any] = {}
+
+            def observe_execution(arguments_at_boundary: Any, result: Any) -> None:
+                # H-04: this fires only inside the real Tool.execute — the
+                # single legitimate source of EXECUTED evidence.
+                executed["arguments"] = arguments_at_boundary
+                executed["result"] = result
+
+            try:
+                record_executed_result = None
+                if tool is not None:
+                    # Observation boundary (not a second execution path): the
+                    # dispatcher still owns execution; we only wrap the bound
+                    # execute of the resolved tool for this one dispatch, and
+                    # only to observe the physical boundary.
+                    original_execute = tool.execute
+                    observation_lock = getattr(
+                        self, "_kerniq_observation_lock", None
+                    )
+                    if observation_lock is None:
+                        observation_lock = threading.RLock()
+                        try:
+                            self._kerniq_observation_lock = observation_lock
+                        except Exception:
+                            observation_lock = None
+
+                    async def observed_execute(agent, tc, *a, **kw):
+                        result = await original_execute(agent, tc, *a, **kw)
+                        observe_execution(getattr(tc, "args", None), result)
+                        return result
+
+                    def install() -> Any:
+                        tool.execute = observed_execute
+
+                    def restore() -> None:
+                        try:
+                            del tool.execute  # instance attr: back to class lookup
+                        except AttributeError:
+                            try:
+                                tool.execute = original_execute
+                            except Exception:
+                                pass
+
+                    if observation_lock is not None:
+                        with observation_lock:
+                            install()
+                            try:
+                                record_executed_result = await original_call_tool(
+                                    self, tool_call, *args, **kwargs
+                                )
+                            finally:
+                                restore()
+                    else:  # agent instance rejected the lock attribute
+                        install()
+                        try:
+                            record_executed_result = await original_call_tool(
+                                self, tool_call, *args, **kwargs
+                            )
+                        finally:
+                            restore()
+                else:
+                    # No registered tool with this name: the dispatcher will
+                    # raise before any execution could happen.
+                    record_executed_result = await original_call_tool(
+                        self, tool_call, *args, **kwargs
+                    )
+            except Exception as error:
+                state.finish(tool_call_id, to=_CALL_FAILED)
+                try:
+                    record_failure(
+                        evidence_path,
+                        request_id=request_id,
+                        tool_call_id=tool_call_id,
+                        tool_name=tool_name,
+                        before_execution=tool is None,
+                        error=error,
+                    )
+                except EvidenceFailure:
+                    # Terminal evidence could not be persisted (H-05).
+                    state.degrade()
+                raise
+
+            if "arguments" in executed:
+                # The physical execution boundary fired: EXECUTED evidence
+                # with executed_arguments taken from the real boundary.
+                try:
+                    record_executed(
+                        evidence_path,
+                        request_id=request_id,
+                        tool_call_id=tool_call_id,
+                        tool_name=tool_name,
+                        executed_arguments=executed["arguments"],
+                        tool_result=getattr(executed["result"], "text", None)
+                        or str(executed["result"]),
+                    )
+                except EvidenceFailure:
+                    # Terminal outcome evidence failed: degrade the runtime
+                    # so no further tool executes silently (H-05).
+                    state.degrade()
+                state.finish(tool_call_id, to=_CALL_EXECUTED)
+            else:
+                # The dispatcher returned without invoking Tool.execute —
+                # no EXECUTED evidence may be fabricated (H-04). Record the
+                # fact that the dispatch completed unobserved.
+                state.finish(tool_call_id, to=_CALL_FAILED)
+                try:
+                    record_failure(
+                        evidence_path,
+                        request_id=request_id,
+                        tool_call_id=tool_call_id,
+                        tool_name=tool_name,
+                        before_execution=True,
+                        error="dispatcher returned without invoking Tool.execute",
+                    )
+                except EvidenceFailure:
+                    state.degrade()
+            return record_executed_result
+
         ownership = _PatchOwnership(
             owner_id=owner_id,
             generation=generation,
             agent_class=runtime.agent_class,
             original_call_tool=original_call_tool,
             original_identity=original_identity,
+            installed_wrapper=governed_call_tool,
         )
         _PATCH_REGISTRY[runtime.agent_class] = ownership
-
-    # Exactly-once dispatch ledger: a replayed tool_call_id (model retry or
-    # duplicate decision delivery) never dispatches Tool.execute twice.
-    dispatched_tool_call_ids: set[str] = set()
-
-    async def governed_call_tool(self, tool_call, *args, **kwargs):
-        tool_name, requested_arguments, tool_call_id = _tool_call_fields(tool_call)
-        request_id = f"req_{uuid.uuid4().hex[:16]}"
-
-        def blocked(text: str) -> Any:
-            return runtime.blocked_message(
-                f"[kerniq] tool '{tool_name}' blocked by governance "
-                f"{text}; decision=block, dispatch=false",
-                tool_call,
-            )
-
         try:
-            record_requested(
-                evidence_path,
-                request_id=request_id,
-                tool_call_id=tool_call_id,
-                tool_name=tool_name,
-                requested_arguments=requested_arguments,
-            )
-        except EvidenceFailure:
-            # Evidence failure must never degrade into an ungoverned allow.
-            return blocked("(evidence_unavailable)")
-
-        response = sidecar.request(
-            {
-                "type": "governance",
-                "request_id": request_id,
-                "tool_call_id": tool_call_id,
-                "tool": tool_name,
-                "arguments": requested_arguments
-                if isinstance(requested_arguments, dict)
-                else {},
-                "runtime_id": runtime_identity,
-                "session_id": session_identity,
-                "turn_id": turn_identity,
-                "protocol_version": PROTOCOL_VERSION,
-            },
-            timeout=sidecar_timeout_seconds,
-        )
-        decision, reason = _decision_from_response(response, request_id, tool_call_id)
-
-        if decision == "allow" and tool_call_id in dispatched_tool_call_ids:
-            decision = "block"
-            reason = "duplicate_tool_call_replayed"
-
-        if decision != "allow":
-            try:
-                record_blocked(
-                    evidence_path,
-                    request_id=request_id,
-                    tool_call_id=tool_call_id,
-                    tool_name=tool_name,
-                    requested_arguments=requested_arguments,
-                    policy_decision="block",
-                    reason=reason,
-                )
-            except EvidenceFailure:
-                pass  # already blocked; evidence failure cannot change that
-            return blocked(f"({reason})")
-
-        # Authorized: record the policy snapshot (no execution claims yet).
-        try:
-            record_authorized(
-                evidence_path,
-                request_id=request_id,
-                tool_call_id=tool_call_id,
-                tool_name=tool_name,
-                policy_decision="allow",
-                effective_arguments=requested_arguments,
-                reason=reason,
-            )
-        except EvidenceFailure:
-            return blocked("(evidence_unavailable)")
-
-        # Classify a later dispatcher raise honestly: if no tool with this
-        # name is registered, nothing could have executed.
-        known_tool = any(
-            getattr(tool, "name", None) == tool_name
-            for tool in getattr(self, "tools", []) or []
-        )
-
-        try:
-            record_dispatch_started(
-                evidence_path,
-                request_id=request_id,
-                tool_call_id=tool_call_id,
-                tool_name=tool_name,
-            )
-        except EvidenceFailure:
-            return blocked("(evidence_unavailable)")
-
-        try:
-            result = await original_call_tool(self, tool_call, *args, **kwargs)
-        except Exception as error:
-            try:
-                record_failure(
-                    evidence_path,
-                    request_id=request_id,
-                    tool_call_id=tool_call_id,
-                    tool_name=tool_name,
-                    before_execution=not known_tool,
-                    error=error,
-                )
-            except EvidenceFailure:
-                pass
+            setattr(runtime.agent_class, "call_tool", governed_call_tool)
+        except Exception:
+            # Atomic publication: registry entry never outlives a failed
+            # wrapper install (H-01 rollback).
+            _PATCH_REGISTRY[runtime.agent_class] = existing_retired
+            if existing_retired is None:
+                del _PATCH_REGISTRY[runtime.agent_class]
             raise
 
-        dispatched_tool_call_ids.add(tool_call_id)
-        try:
-            record_executed(
-                evidence_path,
-                request_id=request_id,
-                tool_call_id=tool_call_id,
-                tool_name=tool_name,
-                executed_arguments=requested_arguments,
-                tool_result=getattr(result, "text", None) or str(result),
-            )
-        except EvidenceFailure:
-            # The execution already happened; the fact cannot be unwritten.
-            pass
-        return result
-
-    setattr(runtime.agent_class, "call_tool", governed_call_tool)
     return GovernedAttach(
         runtime=runtime,
         evidence_path=evidence_path,
@@ -396,13 +649,16 @@ def attach_governed_runtime(
         runtime_id=runtime_identity,
         session_id=session_identity,
         turn_id=turn_identity,
+        state=state,
         _agent_class=runtime.agent_class,
     )
 
 
 __all__ = [
+    "EVIDENCE_DEGRADED",
     "GovernedAttach",
     "GovernancePatchError",
+    "HEALTHY",
     "attach_governed_runtime",
     "DEFAULT_SIDECAR_TIMEOUT_SECONDS",
 ]

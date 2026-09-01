@@ -91,11 +91,18 @@ class FakeDecision:
         head, self.responses = self.responses[0], self.responses[1:]
         if head is None:
             return None  # simulates timeout / dead sidecar
-        # Protocol-faithful double: echoes request identity unless the
-        # scripted response deliberately breaks it.
+        # Protocol-faithful double: echoes the full six-field identity
+        # unless the scripted response deliberately breaks one of them.
         response = dict(head)
-        response.setdefault("request_id", request.get("request_id"))
-        response.setdefault("tool_call_id", request.get("tool_call_id"))
+        for name in (
+            "request_id",
+            "tool_call_id",
+            "runtime_id",
+            "session_id",
+            "turn_id",
+            "protocol_version",
+        ):
+            response.setdefault(name, request.get(name))
         return response
 
     def close(self) -> None:

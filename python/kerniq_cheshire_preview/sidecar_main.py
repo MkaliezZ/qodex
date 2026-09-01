@@ -82,6 +82,10 @@ def main() -> int:
                     "type": "decision",
                     "request_id": request.get("request_id"),
                     "tool_call_id": request.get("tool_call_id"),
+                    "runtime_id": request.get("runtime_id"),
+                    "session_id": request.get("session_id"),
+                    "turn_id": request.get("turn_id"),
+                    "protocol_version": request.get("protocol_version"),
                     "decision": action,
                     "reason": reason,
                 }
