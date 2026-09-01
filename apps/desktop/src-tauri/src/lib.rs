@@ -1,6 +1,8 @@
 mod coding_pack_database;
 mod coding_pack_export;
 mod coding_pack_export_fs;
+mod control_plane_process;
+mod governed_runtime_seal;
 mod managed_python;
 mod session_database;
 
@@ -126,6 +128,36 @@ async fn run_project_command(
         .map_err(|_| "Command cancellation state is unavailable.")?
         .remove(&run_id);
     result
+}
+
+#[tauri::command]
+async fn control_plane_probe_backend(
+    backend_id: String,
+) -> Result<control_plane_process::AgentRuntimeProbe, String> {
+    tauri::async_runtime::spawn_blocking(move || control_plane_process::probe_backend(&backend_id))
+        .await
+        .map_err(|error| format!("Control-plane backend probe failed: {error}"))?
+}
+
+#[tauri::command]
+async fn control_plane_run_backend(
+    request: control_plane_process::RunBackendRequest,
+    state: tauri::State<'_, CommandRunState>,
+) -> Result<control_plane_process::BackendRunOutput, String> {
+    let root = validate_project_root(&request.workspace)?;
+    let authorized = state
+        .authorized_roots
+        .lock()
+        .map_err(|_| "Project authorization state is unavailable.")?
+        .contains(&root);
+    if !authorized {
+        return Err(
+            "The project root is not authorized for control-plane agents in this session.".into(),
+        );
+    }
+    tauri::async_runtime::spawn_blocking(move || control_plane_process::run_backend(request, &root))
+        .await
+        .map_err(|error| format!("Control-plane backend worker failed: {error}"))?
 }
 
 #[tauri::command]
@@ -410,6 +442,8 @@ pub fn run() {
             coding_pack_destination_pick_and_bind,
             run_project_command,
             cancel_project_command,
+            control_plane_probe_backend,
+            control_plane_run_backend,
             session_store_create,
             session_store_append,
             session_store_get,

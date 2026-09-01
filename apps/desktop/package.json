@@ -21,6 +21,7 @@
     "@qodex/context-engine": "workspace:*",
     "@qodex/diff-engine": "workspace:*",
     "@qodex/marketplace-runtime": "workspace:^",
+    "@qodex/multi-agent-runtime": "workspace:*",
     "@qodex/project-runtime": "workspace:*",
     "@qodex/provider-sdk": "workspace:*",
     "@qodex/python-runtime": "workspace:*",

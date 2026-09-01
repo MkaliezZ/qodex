@@ -1,6 +1,7 @@
 /// <reference types="vite/client" />
 
 import type { ProjectCommandRunner } from "@qodex/agent-runtime";
+import type { AgentBackend } from "@qodex/multi-agent-runtime";
 import type { AgentFuseBridgeClient } from "@qodex/agentfuse-adapter";
 import type { CodingPackAgentFuseBridgeClient } from "@qodex/coding-pack-agentfuse";
 import type { SessionStore } from "@qodex/session-runtime";
@@ -24,6 +25,8 @@ declare global {
     __kerniqTestCodingPackAgentFuseBridge?: CodingPackAgentFuseBridgeClient;
     /** Development-only deterministic persistence adapter installed by Playwright fixtures. */
     __kerniqTestSessionStore?: SessionStore;
+    /** Development-only deterministic product backends installed by UI fixtures. */
+    __kerniqTestControlPlaneBackends?: readonly [AgentBackend, AgentBackend];
   }
 }
 

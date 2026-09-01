@@ -1,0 +1,3 @@
+- insert:
+    - id: kerniq-control-plane-observer
+      name: '@kerniq/dsh-control-plane-observer'

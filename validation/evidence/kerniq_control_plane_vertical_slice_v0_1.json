@@ -1,0 +1,294 @@
+{
+  "schema_version": "kerniq.control-plane.vertical-slice.v0.1",
+  "repository": "MkaliezZ/qodex",
+  "repository_head": "b59d4eda5d091cf67becf94454234a248560cd98",
+  "task_id": "control-plane-6f1cae10-1c0f-44a4-a3d4-ea043e603e2e",
+  "task_title": "Independent KerniQ architecture review",
+  "task_status": "completed",
+  "started_at": "2026-08-29T13:52:32.638Z",
+  "ended_at": "2026-08-29T13:59:29.729Z",
+  "workers": [
+    {
+      "run_id": "control-plane-6f1cae10-1c0f-44a4-a3d4-ea043e603e2e:worker:1",
+      "agent_id": "codex-cli",
+      "agent_kind": "codex-cli",
+      "agent_version": "codex-cli 0.151.0-alpha.7.1",
+      "capabilities": {
+        "supportsStreaming": true,
+        "supportsCancel": false,
+        "supportsToolEvents": true,
+        "supportsExternalGovernance": false,
+        "supportsResume": false
+      },
+      "status": "completed",
+      "started_at": "2026-08-29T13:52:32.640Z",
+      "ended_at": "2026-08-29T13:54:00.840Z",
+      "lifecycle": [
+        {
+          "status": "queued",
+          "at": "2026-08-29T13:52:32.639Z",
+          "summary": "Worker queued by the supervisor."
+        },
+        {
+          "status": "starting",
+          "at": "2026-08-29T13:52:32.640Z",
+          "summary": "Starting the real agent adapter."
+        },
+        {
+          "status": "running",
+          "at": "2026-08-29T13:52:32.640Z",
+          "summary": "Agent process is running."
+        },
+        {
+          "status": "completed",
+          "at": "2026-08-29T13:54:00.840Z",
+          "summary": "Agent returned a structured result."
+        }
+      ],
+      "observations": [
+        {
+          "kind": "process_started",
+          "at": "2026-08-29T13:52:32.821Z",
+          "summary": "Codex thread started."
+        },
+        {
+          "kind": "message_observed",
+          "at": "2026-08-29T13:52:42.135Z",
+          "summary": "Codex emitted a model message."
+        },
+        {
+          "kind": "tool_observed",
+          "at": "2026-08-29T13:52:43.999Z",
+          "summary": "Codex read-only command tool started."
+        },
+        {
+          "kind": "tool_observed",
+          "at": "2026-08-29T13:52:49.397Z",
+          "summary": "Codex read-only command tool started."
+        },
+        {
+          "kind": "tool_observed",
+          "at": "2026-08-29T13:52:54.985Z",
+          "summary": "Codex read-only command tool started."
+        },
+        {
+          "kind": "tool_observed",
+          "at": "2026-08-29T13:53:06.871Z",
+          "summary": "Codex read-only command tool started."
+        },
+        {
+          "kind": "tool_observed",
+          "at": "2026-08-29T13:53:24.642Z",
+          "summary": "Codex read-only command tool started."
+        },
+        {
+          "kind": "tool_observed",
+          "at": "2026-08-29T13:53:30.108Z",
+          "summary": "Codex read-only command tool started."
+        },
+        {
+          "kind": "message_observed",
+          "at": "2026-08-29T13:53:58.721Z",
+          "summary": "Codex emitted a model message."
+        },
+        {
+          "kind": "process_completed",
+          "at": "2026-08-29T13:53:58.742Z",
+          "summary": "Codex turn completed."
+        }
+      ],
+      "raw_result_reference": "sha256:764d9096ad8b3a0ce4b7f2e7f3ab0aaabcd6920fa040891c34150ad9d244a271",
+      "findings": [
+        {
+          "finding": "Registry synchronization can delete entries belonging to other registry sources. Each sync initializes oldIds from the entire shared cache, but never filters those IDs by source before removing every ID absent from the current response. Syncing one source can therefore erase another source's marketplace entries.",
+          "evidence": "packages/marketplace-runtime/src/registry/sync.ts:41 builds oldIds from every cached entry; packages/marketplace-runtime/src/registry/sync.ts:61 treats all remaining IDs as removed from the current source; packages/marketplace-runtime/src/registry/sync.ts:63 deletes them from the shared cache.",
+          "severity": "high",
+          "smallestFix": "Track source ownership on cached entries and construct oldIds using only entries owned by source.id; remove only that source's absent entries.",
+          "files": [
+            "packages/marketplace-runtime/src/registry/sync.ts"
+          ]
+        },
+        {
+          "finding": "Skill updates are destructive and non-atomic. The installed directory is deleted before the replacement copy succeeds; if copying fails, the method reports failure but leaves the prior installation deleted or partially replaced while the index still describes it as installed. Although a backup is created, it is never restored.",
+          "evidence": "packages/marketplace-runtime/src/installer/installer.ts:76 begins the backup flow; packages/marketplace-runtime/src/installer/installer.ts:79 treats backup failure as non-fatal; packages/marketplace-runtime/src/installer/installer.ts:82 deletes dest before copying the replacement; packages/marketplace-runtime/src/installer/installer.ts:83 returns failure without restoring the backup or repairing the index.",
+          "severity": "high",
+          "smallestFix": "Copy and validate the update into a temporary sibling directory, atomically rename the existing installation to backup and the temporary directory to dest, and restore the backup if either rename fails.",
+          "files": [
+            "packages/marketplace-runtime/src/installer/installer.ts"
+          ]
+        },
+        {
+          "finding": "Approved project commands resolve pnpm and cargo through the inherited PATH, so the approved catalog digest does not bind the executable that will actually run. A PATH-precedence executable can receive execution under the identity of an approved catalog command.",
+          "evidence": "apps/desktop/src-tauri/src/lib.rs:480 records only the bare executable name \"pnpm\"; apps/desktop/src-tauri/src/lib.rs:496 records only the bare executable name \"cargo\"; apps/desktop/src-tauri/src/lib.rs:533 passes that bare name to Command::new; apps/desktop/src-tauri/src/lib.rs:603 defines the environment allowlist; apps/desktop/src-tauri/src/lib.rs:605 includes PATH; apps/desktop/src-tauri/src/lib.rs:617 copies the ambient PATH into the child.",
+          "severity": "high",
+          "smallestFix": "Resolve the allowed executable to a trusted absolute path before approval, bind that path or executable identity into the catalog digest, and execute that exact verified path rather than performing PATH lookup.",
+          "files": [
+            "apps/desktop/src-tauri/src/lib.rs"
+          ]
+        }
+      ],
+      "error": null
+    },
+    {
+      "run_id": "control-plane-6f1cae10-1c0f-44a4-a3d4-ea043e603e2e:worker:2",
+      "agent_id": "claude-code-deepseek-v4-pro",
+      "agent_kind": "claude-code",
+      "agent_version": "2.1.91 (Claude Code)",
+      "capabilities": {
+        "supportsStreaming": true,
+        "supportsCancel": false,
+        "supportsToolEvents": true,
+        "supportsExternalGovernance": false,
+        "supportsResume": false
+      },
+      "status": "completed",
+      "started_at": "2026-08-29T13:52:32.643Z",
+      "ended_at": "2026-08-29T13:59:29.729Z",
+      "lifecycle": [
+        {
+          "status": "queued",
+          "at": "2026-08-29T13:52:32.640Z",
+          "summary": "Worker queued by the supervisor."
+        },
+        {
+          "status": "starting",
+          "at": "2026-08-29T13:52:32.643Z",
+          "summary": "Starting the real agent adapter."
+        },
+        {
+          "status": "running",
+          "at": "2026-08-29T13:52:32.643Z",
+          "summary": "Agent process is running."
+        },
+        {
+          "status": "completed",
+          "at": "2026-08-29T13:59:29.729Z",
+          "summary": "Agent returned a structured result."
+        }
+      ],
+      "observations": [
+        {
+          "kind": "process_started",
+          "at": "2026-08-29T13:52:34.591Z",
+          "summary": "Claude Code initialized model deepseek-v4-pro[1m]."
+        },
+        {
+          "kind": "tool_observed",
+          "at": "2026-08-29T13:52:39.183Z",
+          "summary": "Claude Code invoked Read."
+        },
+        {
+          "kind": "tool_observed",
+          "at": "2026-08-29T13:52:39.586Z",
+          "summary": "Claude Code invoked Read."
+        },
+        {
+          "kind": "tool_observed",
+          "at": "2026-08-29T13:52:40.038Z",
+          "summary": "Claude Code invoked Read."
+        },
+        {
+          "kind": "tool_observed",
+          "at": "2026-08-29T13:52:40.446Z",
+          "summary": "Claude Code invoked Read."
+        },
+        {
+          "kind": "tool_observed",
+          "at": "2026-08-29T13:52:40.908Z",
+          "summary": "Claude Code invoked Read."
+        },
+        {
+          "kind": "tool_observed",
+          "at": "2026-08-29T13:54:59.685Z",
+          "summary": "Claude Code invoked Read."
+        },
+        {
+          "kind": "message_observed",
+          "at": "2026-08-29T13:59:13.295Z",
+          "summary": "Claude Code emitted a model message."
+        },
+        {
+          "kind": "tool_observed",
+          "at": "2026-08-29T13:59:24.304Z",
+          "summary": "Claude Code invoked StructuredOutput."
+        },
+        {
+          "kind": "message_observed",
+          "at": "2026-08-29T13:59:29.191Z",
+          "summary": "Claude Code emitted a model message."
+        },
+        {
+          "kind": "process_completed",
+          "at": "2026-08-29T13:59:29.197Z",
+          "summary": "Claude Code session completed."
+        }
+      ],
+      "raw_result_reference": "sha256:5e05c381109611e146a5b4157ecc157619d05be5733436785c0e512dd38205de",
+      "findings": [
+        {
+          "finding": "The native command decision gate is fail-open by default. In decideCommand, when no sideEffectLifecycle supplies beforeCommandDecision and requireCommandDecision is unset, the runtime returns decision 'allow', causing run_project_command to be dispatched with no policy gate.",
+          "evidence": "packages/agent-runtime/src/agent-loop/runtime.ts:751 (if (!lifecycle?.beforeCommandDecision)) skips the gate; packages/agent-runtime/src/agent-loop/runtime.ts:752 only throws when requireCommandDecision is set; packages/agent-runtime/src/agent-loop/runtime.ts:756-761 returns { decision: \"allow\", reasonCode: \"command_decision_gate_not_required\" }; the allow then flows into dispatch at packages/agent-runtime/src/agent-loop/runtime.ts:284 (if (decision.decision !== \"allow\")) and packages/agent-runtime/src/agent-loop/runtime.ts:329 (runner.run(dispatchCommand, runId)).",
+          "severity": "high",
+          "smallestFix": "Default requireCommandDecision to true (fail closed) or throw AgentCommandDecisionGateError when no beforeCommandDecision gate exists, requiring callers to explicitly opt out.",
+          "files": [
+            "packages/agent-runtime/src/agent-loop/runtime.ts"
+          ]
+        },
+        {
+          "finding": "Command timeout/cancellation kills only the direct child process. Descendant processes (e.g. shell/node spawned by 'pnpm run') inherit the stdout/stderr pipe write ends, so the read_bounded reader threads never observe EOF and stdout_reader.join()/stderr_reader.join() block indefinitely, hanging run_project_command past COMMAND_TIMEOUT.",
+          "evidence": "apps/desktop/src-tauri/src/lib.rs:559 begins the wait loop; apps/desktop/src-tauri/src/lib.rs:562 and apps/desktop/src-tauri/src/lib.rs:568 call child.kill() on only the direct child, then wait() on it; apps/desktop/src-tauri/src/lib.rs:581 and apps/desktop/src-tauri/src/lib.rs:584 then join() the reader threads with no secondary timeout; the readers block in the read loop at apps/desktop/src-tauri/src/lib.rs:624-642 (read_bounded) until all pipe writers close.",
+          "severity": "high",
+          "smallestFix": "Spawn in a new process group (Unix setsid/process_group, Windows CREATE_NEW_PROCESS_GROUP) and kill the whole group on timeout/cancel, and/or bound the reader joins with a secondary timeout.",
+          "files": [
+            "apps/desktop/src-tauri/src/lib.rs"
+          ]
+        },
+        {
+          "finding": "SkillInstaller validates manifest.id with only a '..' and '/' check. A malicious skill whose manifest id is '.' (or an empty string) passes, and skillPath() resolves to the storage root itself, so install cpSyncs files into the shared storage directory and uninstall rmSyncs the entire storage tree (index and all skills).",
+          "evidence": "packages/marketplace-runtime/src/installer/installer.ts:16 (skillPath returns `${storagePath}/${id}`); packages/marketplace-runtime/src/installer/installer.ts:41 only rejects '..' and '/', so '.' and '' pass; packages/marketplace-runtime/src/installer/installer.ts:46 mkdirSync(dest, {recursive:true}) and packages/marketplace-runtime/src/installer/installer.ts:47 cpSync(dirPath, dest, {recursive:true}) then write into the resolved root; packages/marketplace-runtime/src/installer/installer.ts:58 rmSync(dest, {recursive:true, force:true}) would remove that root.",
+          "severity": "high",
+          "smallestFix": "Enforce a strict identifier pattern (e.g. /^[a-z0-9][a-z0-9._-]*$/i) rejecting '.', '..', empty, and separators, and assert the resolved destination is a child of storagePath before any fs operation.",
+          "files": [
+            "packages/marketplace-runtime/src/installer/installer.ts"
+          ]
+        }
+      ],
+      "error": null
+    }
+  ],
+  "supervisor": {
+    "classification": "DISAGREEMENT",
+    "sharedFiles": [
+      "apps/desktop/src-tauri/src/lib.rs",
+      "packages/marketplace-runtime/src/installer/installer.ts"
+    ],
+    "matchedFindings": [],
+    "agentOnlyFiles": {
+      "codex-cli": [
+        "packages/marketplace-runtime/src/registry/sync.ts"
+      ],
+      "claude-code-deepseek-v4-pro": [
+        "packages/agent-runtime/src/agent-loop/runtime.ts"
+      ]
+    },
+    "summary": "The agents produced no semantically matched findings; shared file references do not imply agreement."
+  },
+  "governance": {
+    "action": "git push",
+    "interception": "not_proven",
+    "decision": "unknown",
+    "dispatchOccurred": "unknown",
+    "handlerStarted": "unknown",
+    "outcome": "not_tested",
+    "reason": "The verified CLI agents own their internal tool execution. KerniQ has no supported pre-execution interception boundary for either process."
+  },
+  "product_evaluation": {
+    "unified_task_context": "YES",
+    "parallel_agent_control": "YES",
+    "lifecycle_visibility": "PARTIAL",
+    "result_reconciliation": "YES",
+    "unified_governance": "NO",
+    "human_cognitive_load_reduction": "MODERATE",
+    "product_killer_test": "PARTIAL"
+  }
+}

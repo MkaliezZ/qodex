@@ -129,6 +129,7 @@ export function useRuntime() {
   const [streamedText, setStreamedText] = useState("");
 
   const [projectName, setProjectName] = useState<string | null>(null);
+  const [projectRoot, setProjectRoot] = useState<string | null>(null);
   const [projectSource, setProjectSource] = useState<ProjectAccessSource | null>(null);
   const [fileTree, setFileTree] = useState<ProjectTree | null>(null);
   const [selectedFileCount, setSelectedFileCount] = useState(0);
@@ -317,6 +318,7 @@ export function useRuntime() {
         ?? (import.meta.env.DEV ? window.__kerniqTestCommandRunner ?? null : null);
       diffRef.current = new DiffEngine(project.fileAccess, project.fileAccess);
       setProjectName(project.project?.name ?? opened.name);
+      setProjectRoot(opened.privateRootPath);
       setProjectSource(opened.source);
       setFileTree(project.tree);
       setSelectedFileCount(0);
@@ -1142,6 +1144,7 @@ export function useRuntime() {
     sendPrompt,
     stopTask,
     projectName,
+    projectRoot,
     projectSource,
     fileTree,
     openProject,

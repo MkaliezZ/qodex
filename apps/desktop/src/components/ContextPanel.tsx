@@ -3,7 +3,15 @@ import { useProviderContext } from "./ProviderContext";
 import { StatusIndicator } from "./WorkbenchPrimitives";
 
 export function ContextPanel() {
-  const { selectedFileCount, selectedFileSize, projectName, lastBundle, estimatedTokens } = useRuntimeContext();
+  const {
+    controlPlaneMode,
+    controlPlaneView,
+    selectedFileCount,
+    selectedFileSize,
+    projectName,
+    lastBundle,
+    estimatedTokens,
+  } = useRuntimeContext();
   const { config } = useProviderContext();
 
   const formatSize = (bytes: number): string => {
@@ -28,63 +36,99 @@ export function ContextPanel() {
         <span>Current task context</span>
       </header>
 
-      <section className="inspector-section">
-        <h3>Selected context</h3>
-        <div className="inspector-row">
-          <span>Project</span>
-          <strong>{projectName ?? "Not opened"}</strong>
-        </div>
-        <div className="inspector-row">
-          <span>Files</span>
-          <strong>{selectedFileCount > 0
-            ? `${selectedFileCount} · ${formatSize(selectedFileSize)}`
-            : "None selected"}</strong>
-        </div>
-        {sources.length > 0 ? (
-          <div className="inspector-sources">
-            {sources.map((s) => (
-              <StatusIndicator key={s.name} label={s.name} tone={s.active ? "success" : "neutral"} />
-            ))}
+      {controlPlaneMode === "supervisor" ? (
+        <section className="inspector-section">
+          <h3>Context scope</h3>
+          <div className="inspector-row">
+            <span>Authorized repository</span>
+            <strong>{projectName ?? "Not opened"}</strong>
           </div>
-        ) : (
-          <p className="inspector-empty-copy">Run a prompt to assemble context sources.</p>
-        )}
-      </section>
+          <div className="inspector-row">
+            <span>Prompt routing</span>
+            <strong>Backend-managed</strong>
+          </div>
+        </section>
+      ) : (
+        <>
+          <section className="inspector-section">
+            <h3>Selected context</h3>
+            <div className="inspector-row">
+              <span>Project</span>
+              <strong>{projectName ?? "Not opened"}</strong>
+            </div>
+            <div className="inspector-row">
+              <span>Files</span>
+              <strong>{selectedFileCount > 0
+                ? `${selectedFileCount} · ${formatSize(selectedFileSize)}`
+                : "None selected"}</strong>
+            </div>
+            {sources.length > 0 ? (
+              <div className="inspector-sources">
+                {sources.map((s) => (
+                  <StatusIndicator key={s.name} label={s.name} tone={s.active ? "success" : "neutral"} />
+                ))}
+              </div>
+            ) : (
+              <p className="inspector-empty-copy">Run a prompt to assemble context sources.</p>
+            )}
+          </section>
 
-      <section className="inspector-section">
-        <h3>Context budget</h3>
-        <div className="inspector-row">
-          <span>Estimated tokens</span>
-          <strong>{estimatedTokens > 0 ? estimatedTokens.toLocaleString() : "0"}</strong>
-        </div>
-        <div className="token-meter" aria-label={`${estimatedTokens} of 128000 estimated tokens`}>
-          <span style={{ width: `${Math.min((estimatedTokens / 128000) * 100, 100)}%` }} />
-        </div>
-        <span className="inspector-limit">128K limit</span>
-      </section>
+          <section className="inspector-section">
+            <h3>Context budget</h3>
+            <div className="inspector-row">
+              <span>Estimated tokens</span>
+              <strong>{estimatedTokens > 0 ? estimatedTokens.toLocaleString() : "0"}</strong>
+            </div>
+            <div className="token-meter" aria-label={`${estimatedTokens} of 128000 estimated tokens`}>
+              <span style={{ width: `${Math.min((estimatedTokens / 128000) * 100, 100)}%` }} />
+            </div>
+            <span className="inspector-limit">128K limit</span>
+          </section>
+        </>
+      )}
 
       <section className="inspector-section">
         <h3>Runtime</h3>
-        <div className="inspector-row">
-          <span>Provider</span>
-          <strong>{config.providerId ?? "Not configured"}</strong>
-        </div>
-        <div className="inspector-row">
-          <span>Model</span>
-          <strong>{config.modelId ?? config.manualModelId ?? "Not selected"}</strong>
-        </div>
+        {controlPlaneMode === "supervisor" ? (
+          <>
+            <div className="inspector-row"><span>Runtime</span><strong>Supervisor</strong></div>
+            <div className="inspector-row"><span>Agents</span><strong>Codex + DSH</strong></div>
+            {controlPlaneView?.workers.map((worker) => (
+              <div className="inspector-worker" key={worker.id}>
+                <div className="inspector-row"><span>{worker.label}</span><strong>{worker.status}</strong></div>
+                <div className="inspector-row"><span>Model</span><strong>{worker.model}</strong></div>
+                <div className="inspector-row"><span>Governance</span><strong>{worker.tier} · {worker.mode.replace(/_/g, " ")}</strong></div>
+              </div>
+            ))}
+          </>
+        ) : (
+          <>
+            <div className="inspector-row">
+              <span>Provider</span>
+              <strong>{config.providerId ?? "Not configured"}</strong>
+            </div>
+            <div className="inspector-row">
+              <span>Model</span>
+              <strong>{config.modelId ?? config.manualModelId ?? "Not selected"}</strong>
+            </div>
+          </>
+        )}
         <div className="inspector-row">
           <span>Access</span>
           <strong>{projectName ? "Project bound" : "No project"}</strong>
         </div>
-        <StatusIndicator label="Review Mode · approval required" tone="accent" />
+        <StatusIndicator
+          label={controlPlaneMode === "supervisor" ? "Supervisor mode" : "Review Mode · approval required"}
+          tone="accent"
+        />
       </section>
 
-      <section className="inspector-section">
-        <h3>Git</h3>
-        <div className="inspector-row"><span>Branch</span><strong className="mono-value">main</strong></div>
-        <div className="inspector-row"><span>Working tree</span><strong>0 changed</strong></div>
-      </section>
+      {controlPlaneMode === "single" ? (
+        <section className="inspector-section">
+          <h3>Git</h3>
+          <div className="inspector-row"><span>Execution facts</span><strong>Unavailable</strong></div>
+        </section>
+      ) : null}
     </aside>
   );
 }

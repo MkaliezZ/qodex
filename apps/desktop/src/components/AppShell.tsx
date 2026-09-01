@@ -5,6 +5,7 @@ import { PromptBar } from "./PromptBar";
 import { ContextPanel } from "./ContextPanel";
 import { CompactInspectorDrawer } from "./CompactInspectorDrawer";
 import { useRuntime } from "../hooks/useRuntime";
+import { useControlPlaneRuntime, type AgentExecutionMode } from "../hooks/useControlPlaneRuntime";
 import { ProviderContextProvider } from "./ProviderContext";
 import { RegistryContextProvider } from "./RegistryContext";
 import { SessionContextProvider } from "./SessionContext";
@@ -37,6 +38,7 @@ import type {
   CodingPackNativeExportErrorCode,
   CodingPackNativeExportResult,
 } from "../platform/codingPackNativeExport";
+import type { ControlPlaneViewModel } from "../controlPlane/controlPlaneViewModel";
 
 const PROJECT_COMMAND_REAL_PROOF_ENABLED =
   import.meta.env.VITE_KERNIQ_ENABLE_AGENTFUSE_PROOF === "1"
@@ -102,6 +104,12 @@ interface RuntimeContextValue {
   rollbackAllPatches: () => Promise<void>;
   approveCommand: () => Promise<void>;
   denyCommand: () => Promise<void>;
+  controlPlaneMode: AgentExecutionMode;
+  setControlPlaneMode: (mode: AgentExecutionMode) => void;
+  controlPlaneView: ControlPlaneViewModel | null;
+  controlPlaneError: string | null;
+  controlPlaneAvailable: boolean;
+  controlPlaneIsRunning: boolean;
   activeView: ActiveView;
   setActiveView: (view: ActiveView) => void;
 }
@@ -146,11 +154,25 @@ function CenterContent({
 /** Inner shell — useRuntime() must run inside ProviderContextProvider */
 function AppShellInner() {
   const runtime = useRuntime();
+  const controlPlane = useControlPlaneRuntime(runtime.projectRoot);
   const [activeView, setActiveView] = useState<ActiveView>("agent");
   const [compactInspectorOpen, setCompactInspectorOpen] = useState(false);
   const inspectorTriggerRef = useRef<HTMLButtonElement>(null);
 
-  const enhancedRuntime = { ...runtime, activeView, setActiveView };
+  const enhancedRuntime = {
+    ...runtime,
+    isRunning: runtime.isRunning || controlPlane.isRunning,
+    sendPrompt: controlPlane.mode === "supervisor" ? controlPlane.runTask : runtime.sendPrompt,
+    stopTask: controlPlane.isRunning ? async () => {} : runtime.stopTask,
+    controlPlaneMode: controlPlane.mode,
+    setControlPlaneMode: controlPlane.setMode,
+    controlPlaneView: controlPlane.view,
+    controlPlaneError: controlPlane.error,
+    controlPlaneAvailable: controlPlane.available,
+    controlPlaneIsRunning: controlPlane.isRunning,
+    activeView,
+    setActiveView,
+  };
 
   useEffect(() => {
     const media = window.matchMedia("(min-width: 1181px)");

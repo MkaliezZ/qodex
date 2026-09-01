@@ -1,0 +1,3 @@
+- insert:
+    - id: kerniq-governance-proof
+      name: '@kerniq/dsh-governance-proof'

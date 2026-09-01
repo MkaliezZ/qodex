@@ -1,4 +1,4 @@
-import type { AgentRole, Agent, AgentStatus } from "../models/agent.js";
+import type { AgentRole, Agent } from "../models/agent.js";
 
 export class SpecialistFactory {
   create(role: AgentRole, name: string): Agent {

@@ -6,7 +6,14 @@ import { useRuntimeContext } from "./AppShell";
 
 export function PromptBar() {
   const [input, setInput] = useState("");
-  const { agentTask, isRunning, sendPrompt } = useRuntimeContext();
+  const {
+    agentTask,
+    controlPlaneAvailable,
+    controlPlaneMode,
+    isRunning,
+    sendPrompt,
+    setControlPlaneMode,
+  } = useRuntimeContext();
   const taskActive = isRunning || Boolean(agentTask && !["Done", "Failed", "Cancelled", "LimitReached"].includes(agentTask.status));
 
   const handleRun = async () => {
@@ -55,9 +62,32 @@ export function PromptBar() {
 
       <div className="prompt-meta-row">
         <div className="prompt-meta-primary">
-          <ModelSwitcher />
+          {controlPlaneMode === "single" ? <ModelSwitcher /> : null}
+          <div className="agent-mode-switch" role="group" aria-label="Agent execution mode">
+            <button
+              type="button"
+              className={controlPlaneMode === "single" ? "is-active" : ""}
+              disabled={taskActive}
+              onClick={() => setControlPlaneMode("single")}
+            >
+              Single Agent
+            </button>
+            <button
+              type="button"
+              className={controlPlaneMode === "supervisor" ? "is-active" : ""}
+              disabled={taskActive || !controlPlaneAvailable}
+              title={controlPlaneAvailable ? "Run Codex and governed DSH" : "Desktop runtime required"}
+              onClick={() => setControlPlaneMode("supervisor")}
+            >
+              Codex + DSH
+            </button>
+          </div>
           <span className="prompt-mode">
-            {agentTask ? "Agent Mode" : "Review Mode"}
+            {controlPlaneMode === "supervisor"
+              ? "Supervisor"
+              : agentTask
+                ? "Agent Mode"
+                : "Review Mode"}
           </span>
         </div>
         <span className="prompt-hint">Enter to run</span>
