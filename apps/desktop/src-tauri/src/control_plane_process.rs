@@ -290,8 +290,11 @@ fn probe_dsh() -> AgentRuntimeProbe {
         .filter(|_| runtime_available)
         .and_then(|effective| hardened_node_text(&effective.entrypoint, "--version"))
         .unwrap_or_else(|| "unavailable".into());
-    let revision =
-        dsh_runtime_revision(invocation.as_ref().map(|effective| effective.runtime_root.as_path()));
+    let revision = dsh_runtime_revision(
+        invocation
+            .as_ref()
+            .map(|effective| effective.runtime_root.as_path()),
+    );
     // Version and revision are necessary but not sufficient. The runtime
     // identity must be bound to the audited checkout (the root must be its
     // own Git top-level, not a subdirectory borrowing a parent revision),
@@ -1179,7 +1182,10 @@ mod tests {
             "- id: timer\n  name: '@deepseek-ai/cordis-plugin-timer'\n  disabled: true\n- id: kerniq-control-plane-observer\n  name: '{PRODUCTION_OBSERVER_PACKAGE}'\n"
         );
 
-        assert!(dump_has_enabled_plugin(&enabled, PRODUCTION_OBSERVER_PACKAGE));
+        assert!(dump_has_enabled_plugin(
+            &enabled,
+            PRODUCTION_OBSERVER_PACKAGE
+        ));
         assert!(!dump_has_enabled_plugin(
             &disabled_after_name,
             PRODUCTION_OBSERVER_PACKAGE
@@ -1222,7 +1228,10 @@ mod tests {
         ));
         // Duplicate targets: agreeing enabled records pass, conflicting
         // records fail closed.
-        assert!(dump_has_enabled_plugin(&format!("{enabled}{enabled}"), PRODUCTION_OBSERVER_PACKAGE));
+        assert!(dump_has_enabled_plugin(
+            &format!("{enabled}{enabled}"),
+            PRODUCTION_OBSERVER_PACKAGE
+        ));
         assert!(!dump_has_enabled_plugin(
             &format!("{enabled}{disabled_after_name}"),
             PRODUCTION_OBSERVER_PACKAGE
@@ -1263,9 +1272,7 @@ mod tests {
         ));
         // Duplicate names on an unrelated record do not affect the target.
         assert!(dump_has_enabled_plugin(
-            &format!(
-                "- id: malformed\n  name: '@other/a'\n  name: '@other/b'\n{enabled}"
-            ),
+            &format!("- id: malformed\n  name: '@other/a'\n  name: '@other/b'\n{enabled}"),
             PRODUCTION_OBSERVER_PACKAGE
         ));
         // Real dumps contain blank lines inside records (block-scalar
@@ -1287,7 +1294,9 @@ mod tests {
         ));
         // A column-zero layer comment between records ends nothing.
         assert!(dump_has_enabled_plugin(
-            &format!("- id: agentfuse\n  name: '{AGENTFUSE_PACKAGE}'\n# == layer comment\n{enabled}"),
+            &format!(
+                "- id: agentfuse\n  name: '{AGENTFUSE_PACKAGE}'\n# == layer comment\n{enabled}"
+            ),
             PRODUCTION_OBSERVER_PACKAGE
         ));
     }
@@ -1311,7 +1320,13 @@ mod tests {
         let entry = fixture.install_stub(&admission_dump(false, false));
         let positive = probe_dsh();
         assert!(positive.available);
-        assert_governance_gates(positive.governance.as_ref().unwrap(), true, true, true, true);
+        assert_governance_gates(
+            positive.governance.as_ref().unwrap(),
+            true,
+            true,
+            true,
+            true,
+        );
         let output = run_dsh(test_request(), &fixture.workspace)
             .expect("all gates true must admit the governed run");
         assert!(agent_started(&entry), "stub agent did not start");
@@ -1321,7 +1336,13 @@ mod tests {
         // Negative: the disabled observer is the only gate that flips.
         fixture.install_stub(&admission_dump(true, false));
         let negative = probe_dsh();
-        assert_governance_gates(negative.governance.as_ref().unwrap(), true, true, false, false);
+        assert_governance_gates(
+            negative.governance.as_ref().unwrap(),
+            true,
+            true,
+            false,
+            false,
+        );
         let error = run_dsh(test_request(), &fixture.workspace).unwrap_err();
         assert_eq!(error, "Governed DSH admission failed before process start.");
         assert!(!agent_started(&entry));
@@ -1335,7 +1356,13 @@ mod tests {
         // Positive control: identical environment, AgentFuse enabled.
         let entry = fixture.install_stub(&admission_dump(false, false));
         let positive = probe_dsh();
-        assert_governance_gates(positive.governance.as_ref().unwrap(), true, true, true, true);
+        assert_governance_gates(
+            positive.governance.as_ref().unwrap(),
+            true,
+            true,
+            true,
+            true,
+        );
         let output = run_dsh(test_request(), &fixture.workspace)
             .expect("all gates true must admit the governed run");
         assert!(agent_started(&entry));
@@ -1346,7 +1373,13 @@ mod tests {
         // flips; the observer stays available.
         fixture.install_stub(&admission_dump(false, true));
         let negative = probe_dsh();
-        assert_governance_gates(negative.governance.as_ref().unwrap(), true, false, true, false);
+        assert_governance_gates(
+            negative.governance.as_ref().unwrap(),
+            true,
+            false,
+            true,
+            false,
+        );
         let error = run_dsh(test_request(), &fixture.workspace).unwrap_err();
         assert_eq!(error, "Governed DSH admission failed before process start.");
         assert!(!agent_started(&entry));
@@ -1359,7 +1392,13 @@ mod tests {
         let entry = fixture.install_stub(&admission_dump(false, false));
 
         // Positive control: no product patch, all gates hold, agent starts.
-        assert_governance_gates(probe_dsh().governance.as_ref().unwrap(), true, true, true, true);
+        assert_governance_gates(
+            probe_dsh().governance.as_ref().unwrap(),
+            true,
+            true,
+            true,
+            true,
+        );
         run_dsh(test_request(), &fixture.workspace)
             .expect("no-patch positive control must admit the governed run");
         assert!(agent_started(&entry));
@@ -1368,8 +1407,11 @@ mod tests {
         // Product patch disables the observer: the admission dump itself must
         // reflect the effective configuration and refuse the run.
         let observer_patch = fixture.root.join("disable-observer.patch.yml");
-        fs::write(&observer_patch, "- id: kerniq-control-plane-observer\n  disabled: true\n")
-            .unwrap();
+        fs::write(
+            &observer_patch,
+            "- id: kerniq-control-plane-observer\n  disabled: true\n",
+        )
+        .unwrap();
         fixture.set_product_patch(&observer_patch);
         assert_governance_gates(
             probe_dsh().governance.as_ref().unwrap(),
@@ -1458,7 +1500,13 @@ mod tests {
         // Positive control: the audited-shape root (its own Git top-level)
         // is admitted and the stub agent starts.
         let entry = fixture.install_stub(&admission_dump(false, false));
-        assert_governance_gates(probe_dsh().governance.as_ref().unwrap(), true, true, true, true);
+        assert_governance_gates(
+            probe_dsh().governance.as_ref().unwrap(),
+            true,
+            true,
+            true,
+            true,
+        );
         run_dsh(test_request(), &fixture.workspace)
             .expect("top-level root must admit the governed run");
         assert!(agent_started(&entry));
@@ -1473,7 +1521,10 @@ mod tests {
         fs::create_dir_all(attacker_bin.parent().unwrap()).unwrap();
         write_dsh_stub(&attacker_bin, &admission_dump(false, false));
         fixture.env.clear("KERNIQ_DSH_RUNTIME_ENTRYPOINT");
-        fixture.env.set("KERNIQ_DSH_RUNTIME_ROOT", attacker.to_string_lossy().as_ref());
+        fixture.env.set(
+            "KERNIQ_DSH_RUNTIME_ROOT",
+            attacker.to_string_lossy().as_ref(),
+        );
 
         let probe = probe_dsh();
         let governance = probe.governance.as_ref().unwrap();
@@ -1496,14 +1547,24 @@ mod tests {
         let entry = fixture.install_stub(&admission_dump(false, false));
 
         // Positive control: the sealed closure as provisioned is admitted.
-        assert_governance_gates(probe_dsh().governance.as_ref().unwrap(), true, true, true, true);
+        assert_governance_gates(
+            probe_dsh().governance.as_ref().unwrap(),
+            true,
+            true,
+            true,
+            true,
+        );
         run_dsh(test_request(), &fixture.workspace)
             .expect("sealed runtime must admit the governed run");
         assert!(agent_started(&entry));
         clear_agent_marker(&entry);
 
         let runtime_root = fixture.root.join("runtime-root");
-        let profile = fixture.root.join("dsh-home").join("profiles").join("headless");
+        let profile = fixture
+            .root
+            .join("dsh-home")
+            .join("profiles")
+            .join("headless");
         let sealed = [
             entry.clone(),
             runtime_root
@@ -1580,7 +1641,13 @@ mod tests {
 
         // Positive control: the sealed closure including third-party store
         // packages and their workspace link is admitted.
-        assert_governance_gates(probe_dsh().governance.as_ref().unwrap(), true, true, true, true);
+        assert_governance_gates(
+            probe_dsh().governance.as_ref().unwrap(),
+            true,
+            true,
+            true,
+            true,
+        );
         run_dsh(test_request(), &fixture.workspace)
             .expect("closure with third-party seal must admit the governed run");
         assert!(agent_started(&entry));
@@ -1605,8 +1672,11 @@ mod tests {
         // Same HEAD, version, profile, patch — only third-party bytes change.
         for target in [&js_yaml, &commander] {
             let original = fs::read(target).unwrap();
-            fs::write(target, format!("{}\n// tampered\n", String::from_utf8_lossy(&original)))
-                .unwrap();
+            fs::write(
+                target,
+                format!("{}\n// tampered\n", String::from_utf8_lossy(&original)),
+            )
+            .unwrap();
             assert!(
                 !probe_dsh().governance.as_ref().unwrap().compatible_runtime,
                 "tampered third-party dependency must fail the seal: {}",
@@ -1654,7 +1724,11 @@ mod tests {
             .join("js-yaml");
         fs::create_dir_all(&decoy_root).unwrap();
         fs::write(decoy_root.join("package.json"), "{\"name\":\"js-yaml\"}").unwrap();
-        fs::write(decoy_root.join("index.js"), "module.exports = { evil: true };\n").unwrap();
+        fs::write(
+            decoy_root.join("index.js"),
+            "module.exports = { evil: true };\n",
+        )
+        .unwrap();
         fs::remove_dir(&link).expect("junction removal must succeed");
         assert!(!link.exists(), "junction must be gone before substitution");
         let _ = Command::new("cmd")
@@ -1666,9 +1740,12 @@ mod tests {
                 decoy_root.to_string_lossy().as_ref(),
             ])
             .output();
-        let resolved = fs::read_to_string(link.join("index.js"))
-            .expect("substituted junction must resolve");
-        assert!(resolved.contains("evil"), "must read the decoy bytes: {resolved}");
+        let resolved =
+            fs::read_to_string(link.join("index.js")).expect("substituted junction must resolve");
+        assert!(
+            resolved.contains("evil"),
+            "must read the decoy bytes: {resolved}"
+        );
 
         assert!(
             !probe_dsh().governance.as_ref().unwrap().compatible_runtime,
@@ -1686,7 +1763,13 @@ mod tests {
         let entry = fixture.install_stub(&admission_dump(false, false));
 
         // Positive control: known-good topology admits and starts.
-        assert_governance_gates(probe_dsh().governance.as_ref().unwrap(), true, true, true, true);
+        assert_governance_gates(
+            probe_dsh().governance.as_ref().unwrap(),
+            true,
+            true,
+            true,
+            true,
+        );
         run_dsh(test_request(), &fixture.workspace)
             .expect("known-good topology must admit the governed run");
         assert!(agent_started(&entry));
@@ -1707,7 +1790,11 @@ mod tests {
             "{\"name\":\"commander\",\"version\":\"99.0.0\",\"main\":\"index.js\"}",
         )
         .unwrap();
-        fs::write(closer.join("index.js"), "module.exports = { evil: true };\n").unwrap();
+        fs::write(
+            closer.join("index.js"),
+            "module.exports = { evil: true };\n",
+        )
+        .unwrap();
 
         let governance = probe_dsh().governance.as_ref().unwrap().clone();
         assert!(
@@ -1717,7 +1804,13 @@ mod tests {
         let error = run_dsh(test_request(), &fixture.workspace).unwrap_err();
         assert_eq!(error, "Governed DSH admission failed before process start.");
         assert!(!agent_started(&entry));
-        let _ = fs::remove_dir_all(runtime_root.join("apps").join("cli").join("lib").join("node_modules"));
+        let _ = fs::remove_dir_all(
+            runtime_root
+                .join("apps")
+                .join("cli")
+                .join("lib")
+                .join("node_modules"),
+        );
 
         // A second, package-local resolution-sensitive location proves the
         // mechanism is not hard-coded for commander's path.
@@ -1729,7 +1822,11 @@ mod tests {
             .join("node_modules")
             .join("js-yaml");
         fs::create_dir_all(&second).unwrap();
-        fs::write(second.join("index.js"), "module.exports = { evil: true };\n").unwrap();
+        fs::write(
+            second.join("index.js"),
+            "module.exports = { evil: true };\n",
+        )
+        .unwrap();
         assert!(!probe_dsh().governance.as_ref().unwrap().compatible_runtime);
         let error = run_dsh(test_request(), &fixture.workspace).unwrap_err();
         assert_eq!(error, "Governed DSH admission failed before process start.");
@@ -1743,7 +1840,13 @@ mod tests {
         let entry = fixture.install_stub(&admission_dump(false, false));
 
         // Positive control: the approved composition starts.
-        assert_governance_gates(probe_dsh().governance.as_ref().unwrap(), true, true, true, true);
+        assert_governance_gates(
+            probe_dsh().governance.as_ref().unwrap(),
+            true,
+            true,
+            true,
+            true,
+        );
         run_dsh(test_request(), &fixture.workspace)
             .expect("approved composition must admit the governed run");
         assert!(agent_started(&entry));
@@ -1833,7 +1936,13 @@ mod tests {
 
         // Regression C first: the known-good profile with the expected
         // dependency layout stays admitted and the agent starts.
-        assert_governance_gates(probe_dsh().governance.as_ref().unwrap(), true, true, true, true);
+        assert_governance_gates(
+            probe_dsh().governance.as_ref().unwrap(),
+            true,
+            true,
+            true,
+            true,
+        );
         run_dsh(test_request(), &fixture.workspace)
             .expect("known-good profile package ancestry must admit the run");
         assert!(agent_started(&entry));
@@ -1843,7 +1952,11 @@ mod tests {
         // adapter's resolution ancestry; every previously sealed file stays
         // byte-identical (real Node resolution switching proven in the
         // controlled fixture — see the v0.3.3.3 evidence document).
-        let profile = fixture.root.join("dsh-home").join("profiles").join("headless");
+        let profile = fixture
+            .root
+            .join("dsh-home")
+            .join("profiles")
+            .join("headless");
         let closer_core = profile
             .join("node_modules")
             .join("@dhms-agentfuse")
@@ -1852,9 +1965,17 @@ mod tests {
             .join("@dhms-agentfuse")
             .join("core");
         fs::create_dir_all(&closer_core).unwrap();
-        fs::write(closer_core.join("package.json"), "{\"name\":\"@dhms-agentfuse/core\",\"version\":\"0.2.1\"}").unwrap();
-        fs::write(closer_core.join("index.js"), "export const resolvePolicy = () => ({ kind: 'allow' });
-").unwrap();
+        fs::write(
+            closer_core.join("package.json"),
+            "{\"name\":\"@dhms-agentfuse/core\",\"version\":\"0.2.1\"}",
+        )
+        .unwrap();
+        fs::write(
+            closer_core.join("index.js"),
+            "export const resolvePolicy = () => ({ kind: 'allow' });
+",
+        )
+        .unwrap();
 
         let governance = probe_dsh().governance.as_ref().unwrap().clone();
         assert!(
@@ -1865,7 +1986,11 @@ mod tests {
         assert_eq!(error, "Governed DSH admission failed before process start.");
         assert!(!agent_started(&entry));
         let _ = fs::remove_dir_all(
-            profile.join("node_modules").join("@dhms-agentfuse").join("dsh-agentfuse").join("node_modules"),
+            profile
+                .join("node_modules")
+                .join("@dhms-agentfuse")
+                .join("dsh-agentfuse")
+                .join("node_modules"),
         );
 
         // Regression B: the observer package has no bare-specifier dependency
@@ -1935,12 +2060,15 @@ mod tests {
         let env = ScopedEnv::capture();
         env.set("KERNIQ_DSH_PROFILE", "headless");
 
-        let profile = root
-            .join("dsh-home")
-            .join("profiles")
-            .join("headless");
-        let adapter = profile.join("node_modules").join("@dhms-agentfuse").join("dsh-agentfuse");
-        let adapter_core = profile.join("node_modules").join("@dhms-agentfuse").join("core");
+        let profile = root.join("dsh-home").join("profiles").join("headless");
+        let adapter = profile
+            .join("node_modules")
+            .join("@dhms-agentfuse")
+            .join("dsh-agentfuse");
+        let adapter_core = profile
+            .join("node_modules")
+            .join("@dhms-agentfuse")
+            .join("core");
         let observer = profile
             .join("node_modules")
             .join("@kerniq")
@@ -1953,7 +2081,11 @@ mod tests {
             format!("{{\"name\":\"{AGENTFUSE_PACKAGE}\",\"version\":\"0.2.1\"}}"),
         )
         .unwrap();
-        fs::write(adapter.join("index.js"), "export const name = 'agentfuse';\n").unwrap();
+        fs::write(
+            adapter.join("index.js"),
+            "export const name = 'agentfuse';\n",
+        )
+        .unwrap();
         fs::write(
             adapter_core.join("index.js"),
             "export const name = 'agentfuse-core';\n",
@@ -1985,7 +2117,11 @@ mod tests {
             .output()
             .is_ok_and(|output| output.status.success()));
         // Sealed runtime dependency implementations (real closure shapes).
-        let session_lib = git_root.join("packages").join("core").join("session").join("lib");
+        let session_lib = git_root
+            .join("packages")
+            .join("core")
+            .join("session")
+            .join("lib");
         let llm_lib = git_root
             .join("packages")
             .join("llm")
@@ -1993,7 +2129,11 @@ mod tests {
             .join("lib");
         fs::create_dir_all(&session_lib).unwrap();
         fs::create_dir_all(&llm_lib).unwrap();
-        fs::write(session_lib.join("index.js"), "export const name = 'dsh-session';\n").unwrap();
+        fs::write(
+            session_lib.join("index.js"),
+            "export const name = 'dsh-session';\n",
+        )
+        .unwrap();
         fs::write(
             llm_lib.join("index.js"),
             "export const name = 'dsh-llm-deepseek';\n",
@@ -2054,11 +2194,7 @@ mod tests {
         AdmissionFixture {
             root,
             workspace,
-            entrypoint: git_root
-                .join("apps")
-                .join("cli")
-                .join("lib")
-                .join("bin.js"),
+            entrypoint: git_root.join("apps").join("cli").join("lib").join("bin.js"),
             env,
         }
     }
@@ -2072,8 +2208,10 @@ mod tests {
             write_dsh_stub(&self.entrypoint, dump);
             self.set_entrypoint(&self.entrypoint);
             let manifest = self.write_seal_manifest();
-            self.env
-                .set("KERNIQ_TEST_RUNTIME_SEAL_MANIFEST", manifest.to_string_lossy().as_ref());
+            self.env.set(
+                "KERNIQ_TEST_RUNTIME_SEAL_MANIFEST",
+                manifest.to_string_lossy().as_ref(),
+            );
             self.entrypoint.clone()
         }
 
@@ -2091,7 +2229,10 @@ mod tests {
                     let bytes = fs::read(&file).unwrap();
                     entries.push((
                         scope.to_string(),
-                        file.strip_prefix(base).unwrap().to_string_lossy().replace('\\', "/"),
+                        file.strip_prefix(base)
+                            .unwrap()
+                            .to_string_lossy()
+                            .replace('\\', "/"),
                         bytes.len() as u64,
                         format!("{:x}", Sha256::digest(&bytes)),
                     ));
@@ -2101,12 +2242,20 @@ mod tests {
             add_tree(
                 &runtime_root,
                 "runtime",
-                &runtime_root.join("packages").join("core").join("session").join("lib"),
+                &runtime_root
+                    .join("packages")
+                    .join("core")
+                    .join("session")
+                    .join("lib"),
             );
             add_tree(
                 &runtime_root,
                 "runtime",
-                &runtime_root.join("packages").join("llm").join("llm-deepseek").join("lib"),
+                &runtime_root
+                    .join("packages")
+                    .join("llm")
+                    .join("llm-deepseek")
+                    .join("lib"),
             );
             // Third-party store entities and the workspace link path that
             // resolves them.
@@ -2193,8 +2342,14 @@ mod tests {
             let profile_nm = profile.join("node_modules");
             for (scope_path, base) in [
                 ("node_modules".to_string(), profile_nm.clone()),
-                ("node_modules/@dhms-agentfuse".to_string(), profile_nm.join("@dhms-agentfuse")),
-                ("node_modules/@kerniq".to_string(), profile_nm.join("@kerniq")),
+                (
+                    "node_modules/@dhms-agentfuse".to_string(),
+                    profile_nm.join("@dhms-agentfuse"),
+                ),
+                (
+                    "node_modules/@kerniq".to_string(),
+                    profile_nm.join("@kerniq"),
+                ),
             ] {
                 let mut members: Vec<String> = fs::read_dir(&base)
                     .map(|read| {
@@ -2220,7 +2375,9 @@ mod tests {
                 closed.push(serde_json::json!({"root": "profile", "path": rel, "mode": "absent"}));
             }
             closed.push(serde_json::json!({"root": "dsh-home", "path": "profiles/node_modules", "mode": "absent"}));
-            closed.push(serde_json::json!({"root": "dsh-home", "path": "node_modules", "mode": "absent"}));
+            closed.push(
+                serde_json::json!({"root": "dsh-home", "path": "node_modules", "mode": "absent"}),
+            );
             let approved = vec![AGENTFUSE_PACKAGE, PRODUCTION_OBSERVER_PACKAGE];
             let manifest = serde_json::json!({
                 "schema_version": crate::governed_runtime_seal::MANIFEST_SCHEMA_VERSION,
@@ -2244,8 +2401,10 @@ mod tests {
         }
 
         fn set_entrypoint(&self, entry: &Path) {
-            self.env
-                .set("KERNIQ_DSH_RUNTIME_ENTRYPOINT", entry.to_string_lossy().as_ref());
+            self.env.set(
+                "KERNIQ_DSH_RUNTIME_ENTRYPOINT",
+                entry.to_string_lossy().as_ref(),
+            );
         }
 
         fn set_product_patch(&self, patch: &Path) {
@@ -2290,10 +2449,7 @@ mod tests {
             governance.agent_fuse_adapter_available,
             agent_fuse_adapter_available
         );
-        assert_eq!(
-            governance.pre_dispatch_seam_available,
-            compatible_runtime
-        );
+        assert_eq!(governance.pre_dispatch_seam_available, compatible_runtime);
         assert_eq!(
             governance.production_observer_available,
             production_observer_available

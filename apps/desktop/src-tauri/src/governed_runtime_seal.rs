@@ -174,7 +174,14 @@ fn parse_and_validate_manifest(text: &str) -> Option<Manifest> {
         &manifest
             .entries
             .iter()
-            .map(|entry| (entry.root.as_str(), entry.path.as_str(), entry.size, entry.sha256.as_str()))
+            .map(|entry| {
+                (
+                    entry.root.as_str(),
+                    entry.path.as_str(),
+                    entry.size,
+                    entry.sha256.as_str(),
+                )
+            })
             .collect::<Vec<_>>(),
     );
     let recomputed = format!("{:x}", Sha256::digest(canonical.as_bytes()));
@@ -227,7 +234,9 @@ fn verify_resolution_topology(
                     return false;
                 };
                 let actual: Option<Vec<String>> = read
-                    .map(|entry| entry.map(|entry| entry.file_name().to_string_lossy().into_owned()))
+                    .map(|entry| {
+                        entry.map(|entry| entry.file_name().to_string_lossy().into_owned())
+                    })
                     .collect::<Result<Vec<_>, _>>()
                     .ok();
                 let mut actual: Vec<String> = match actual {
@@ -306,9 +315,7 @@ fn verify_manifest_against_roots(
 /// `(root, path)`, each encoded `root,path,size,sha256` with unit separators,
 /// joined by record separators. The provisioning generator uses the same
 /// algorithm when it derives the aggregate seal.
-pub(crate) fn canonical_manifest_bytes(
-    entries: &[(&str, &str, u64, &str)],
-) -> String {
+pub(crate) fn canonical_manifest_bytes(entries: &[(&str, &str, u64, &str)]) -> String {
     let mut sorted = entries.to_vec();
     sorted.sort();
     sorted
@@ -421,7 +428,10 @@ mod tests {
                 serde_json::from_str::<serde_json::Value>(&manifest_json(&[good], &good_seal))
                     .unwrap();
             value[field] = "wrong".into();
-            assert!(parse_and_validate_manifest(&value.to_string()).is_none(), "{field}");
+            assert!(
+                parse_and_validate_manifest(&value.to_string()).is_none(),
+                "{field}"
+            );
         }
     }
 
@@ -430,8 +440,8 @@ mod tests {
         let bin_digest = digest_of(b"abc");
         let good = ("runtime", "apps/cli/lib/bin.js", 3u64, bin_digest.as_str());
         let good_seal = digest_of(canonical_manifest_bytes(&[good]).as_bytes());
-        let base = serde_json::from_str::<serde_json::Value>(&manifest_json(&[good], &good_seal))
-            .unwrap();
+        let base =
+            serde_json::from_str::<serde_json::Value>(&manifest_json(&[good], &good_seal)).unwrap();
         let broken_topology = |value: serde_json::Value| {
             let mut doc = base.clone();
             doc["closed_resolution_directories"] = value;
@@ -501,20 +511,49 @@ mod tests {
         let plugin_digest = digest_of(b"xyz");
         let entries: [(&str, &str, u64, &str); 2] = [
             ("runtime", "apps/cli/lib/bin.js", 3, bin_digest.as_str()),
-            ("profile", "node_modules/p/index.js", 3, plugin_digest.as_str()),
+            (
+                "profile",
+                "node_modules/p/index.js",
+                3,
+                plugin_digest.as_str(),
+            ),
         ];
         let seal = digest_of(canonical_manifest_bytes(&entries).as_bytes());
         let manifest_text = manifest_json(&entries, &seal);
 
-        assert!(verify_manifest(&manifest_text, &runtime, Some(&profile), None, Some(&home)));
+        assert!(verify_manifest(
+            &manifest_text,
+            &runtime,
+            Some(&profile),
+            None,
+            Some(&home)
+        ));
         // Modified content, missing file, and absent profile root all fail.
         std::fs::write(runtime.join("apps/cli/lib/bin.js"), b"abd").unwrap();
-        assert!(!verify_manifest(&manifest_text, &runtime, Some(&profile), None, Some(&home)));
+        assert!(!verify_manifest(
+            &manifest_text,
+            &runtime,
+            Some(&profile),
+            None,
+            Some(&home)
+        ));
         std::fs::write(runtime.join("apps/cli/lib/bin.js"), b"abc").unwrap();
         std::fs::remove_file(profile.join("node_modules/p/index.js")).unwrap();
-        assert!(!verify_manifest(&manifest_text, &runtime, Some(&profile), None, Some(&home)));
+        assert!(!verify_manifest(
+            &manifest_text,
+            &runtime,
+            Some(&profile),
+            None,
+            Some(&home)
+        ));
         std::fs::write(profile.join("node_modules/p/index.js"), b"xyz").unwrap();
-        assert!(!verify_manifest(&manifest_text, &runtime, None, None, Some(&home)));
+        assert!(!verify_manifest(
+            &manifest_text,
+            &runtime,
+            None,
+            None,
+            Some(&home)
+        ));
         let _ = std::fs::remove_dir_all(&dir);
         let _ = std::fs::remove_dir_all(&home);
     }
@@ -531,7 +570,10 @@ mod tests {
             user_native_cache_root_for_real_machine().as_deref(),
             Some(std::path::Path::new("F:/DSH-Home")),
         );
-        println!("real seal verification: {}ms", started.elapsed().as_millis());
+        println!(
+            "real seal verification: {}ms",
+            started.elapsed().as_millis()
+        );
         assert!(ok, "real audited runtime must match the pinned seal");
     }
 
@@ -573,9 +615,8 @@ mod tests {
             std::fs::create_dir_all(target.parent().unwrap()).unwrap();
             std::fs::copy(&source, &target).unwrap();
         }
-        let tampered = runtime.join(
-            "node_modules/.pnpm/js-yaml@4.2.0/node_modules/js-yaml/index.js",
-        );
+        let tampered =
+            runtime.join("node_modules/.pnpm/js-yaml@4.2.0/node_modules/js-yaml/index.js");
         let mut bytes = std::fs::read(&tampered).unwrap();
         bytes.extend_from_slice(b"// tampered\n");
         std::fs::write(&tampered, bytes).unwrap();
