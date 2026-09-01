@@ -74,8 +74,11 @@ class TestRealSidecarIpc:
             attach.detach()
         assert protected_tool.execution_count == 0
         assert "blocked by governance" in str(result)
-        lines = evidence_path.read_text(encoding="utf-8").splitlines()
-        assert json.loads(lines[0])["policy_decision"] == "block"
+        statuses = [
+            json.loads(line)["status"]
+            for line in evidence_path.read_text(encoding="utf-8").splitlines()
+        ]
+        assert statuses == ["REQUESTED", "BLOCKED"]
 
     def test_allow_via_real_sidecar(self, agent, allowed_tool, evidence_path):
         attach = self._attach(agent, evidence_path)
@@ -89,8 +92,11 @@ class TestRealSidecarIpc:
             attach.detach()
         assert allowed_tool.execution_count == 1
         assert "tool_output:ran" in str(result)
-        lines = evidence_path.read_text(encoding="utf-8").splitlines()
-        assert json.loads(lines[0])["policy_decision"] == "allow"
+        statuses = [
+            json.loads(line)["status"]
+            for line in evidence_path.read_text(encoding="utf-8").splitlines()
+        ]
+        assert statuses == ["REQUESTED", "AUTHORIZED", "DISPATCH_STARTED", "EXECUTED"]
 
     def test_real_cheshire_tool_and_message_shapes(self):
         """The host-native blocked result is a real cheshire Message and the

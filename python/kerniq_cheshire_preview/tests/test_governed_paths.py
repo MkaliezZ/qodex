@@ -1,11 +1,9 @@
 """Deterministic interceptor tests: block / allow / duplicate / timeout /
 evidence failure / runtime mismatch, all against the real audited runtime
-admission path."""
+admission path, with the hardened evidence lifecycle and identity-bound
+sidecar protocol."""
 
 from __future__ import annotations
-
-import json
-from pathlib import Path
 
 import pytest
 
@@ -21,6 +19,10 @@ from .conftest import (
     requires_real_cheshire,
     run,
 )
+
+
+def statuses(evidence_path):
+    return [event["status"] for event in read_evidence(evidence_path)]
 
 
 @requires_real_cheshire
@@ -43,13 +45,15 @@ class TestBlockPath:
         assert "blocked by governance" in text
         assert "dispatch=false" in text
 
-    def test_block_evidence_records_full_request(self, agent, protected_tool, evidence_path):
+    def test_block_evidence_records_request_and_block(
+        self, agent, protected_tool, evidence_path
+    ):
         sidecar = FakeDecision(responses=[block_response("explicit_denylist")])
         attach = attach_governed_runtime(
             evidence_path, agent_class=type(agent), _sidecar=sidecar
         )
         try:
-            run(
+            result = run(
                 agent.call_tool(
                     FakeToolCall(id="call_b2", name="protected_action", args={"secret": "s"})
                 )
@@ -57,18 +61,17 @@ class TestBlockPath:
         finally:
             attach.detach()
         events = read_evidence(evidence_path)
-        assert len(events) == 1
-        event = events[0]
-        assert event["schema"] == "kerniq.cheshire-preview-evidence.v1"
-        assert event["tool_call_id"] == "call_b2"
-        assert event["tool_name"] == "protected_action"
-        assert event["requested_arguments"] == {"secret": "s"}
-        assert event["policy_decision"] == "block"
-        assert event["effective_arguments"] is None
-        assert event["dispatch"] is False
-        assert event["outcome"] == "governed_block"
-        assert event["reason"] == "explicit_denylist"
-        assert event["request_id"].startswith("req_")
+        assert statuses(evidence_path) == ["REQUESTED", "BLOCKED"]
+        requested, blocked = events
+        assert requested["requested_arguments"] == {"secret": "s"}
+        assert requested["tool_call_id"] == "call_b2"
+        assert blocked["policy_decision"] == "block"
+        assert blocked["dispatch"] is False
+        assert blocked["reason"] == "explicit_denylist"
+        # No execution claims exist anywhere in the blocked lifecycle.
+        assert all("executed_arguments" not in e for e in events)
+        assert all("effective_arguments" not in e for e in events)
+        assert result.tool_call_id == "call_b2"
 
 
 @requires_real_cheshire
@@ -88,30 +91,32 @@ class TestAllowPath:
             attach.detach()
         assert allowed_tool.execution_count == 1
         assert "tool_output:ran" in str(result)
+        assert result.tool_call_id == "call_a1"
 
-    def test_allow_evidence_records_dispatch_and_result(self, agent, allowed_tool, evidence_path):
+    def test_allow_lifecycle_evidence_is_truthful(self, agent, allowed_tool, evidence_path):
         sidecar = FakeDecision(responses=[allow_response()])
         attach = attach_governed_runtime(
             evidence_path, agent_class=type(agent), _sidecar=sidecar
         )
         try:
-            run(
-                agent.call_tool(
-                    FakeToolCall(id="call_a2", name="allowed_action", args={"v": 3})
-                )
-            )
+            run(agent.call_tool(FakeToolCall(id="call_a2", name="allowed_action", args={"v": 3})))
         finally:
             attach.detach()
-        events = read_evidence(evidence_path)
-        request, result = events
-        assert request["policy_decision"] == "allow"
-        assert request["dispatch"] is True
-        assert request["effective_arguments"] == {"v": 3}
-        assert result["phase"] == "result"
-        assert result["tool_call_id"] == "call_a2"
-        assert result["executed_arguments"] == {"v": 3}
-        assert "tool_output:ran" in result["tool_result"]
-        assert result["outcome"] == "executed"
+        assert statuses(evidence_path) == [
+            "REQUESTED",
+            "AUTHORIZED",
+            "DISPATCH_STARTED",
+            "EXECUTED",
+        ]
+        requested, authorized, dispatch_started, executed = read_evidence(evidence_path)
+        assert requested["requested_arguments"] == {"v": 3}
+        assert authorized["policy_decision"] == "allow"
+        assert authorized["effective_arguments"] == {"v": 3}
+        assert "executed_arguments" not in authorized  # no execution prediction
+        assert "executed_arguments" not in dispatch_started
+        assert executed["executed_arguments"] == {"v": 3}
+        assert "tool_output:ran" in executed["tool_result"]
+        assert executed["status"] == "EXECUTED"
 
 
 @requires_real_cheshire
@@ -132,13 +137,14 @@ class TestDuplicateDecision:
         assert allowed_tool.execution_count == 1
         assert "blocked by governance" in str(second)
         assert "duplicate_tool_call_replayed" in str(second)
-        events = read_evidence(evidence_path)
-        decisions = [e["policy_decision"] for e in events if e["phase"] == "request"]
-        assert decisions == ["allow", "block"]
+        blocked_events = [
+            e for e in read_evidence(evidence_path) if e["status"] == "BLOCKED"
+        ]
+        assert blocked_events[-1]["reason"] == "duplicate_tool_call_replayed"
 
 
 @requires_real_cheshire
-class TestTimeout:
+class TestTimeoutAndUnknown:
     def test_sidecar_timeout_fails_closed(self, agent, allowed_tool, evidence_path):
         sidecar = FakeDecision(responses=[None])  # no decision arrives in time
         attach = attach_governed_runtime(
@@ -154,10 +160,8 @@ class TestTimeout:
             attach.detach()
         assert allowed_tool.execution_count == 0
         assert "sidecar_unavailable" in str(result)
-        events = read_evidence(evidence_path)
-        assert events[0]["policy_decision"] == "block"
-        assert events[0]["reason"] == "sidecar_unavailable"
-        assert events[0]["dispatch"] is False
+        blocked = [e for e in read_evidence(evidence_path) if e["status"] == "BLOCKED"][0]
+        assert blocked["reason"] == "sidecar_unavailable"
 
     def test_unknown_decision_fails_closed(self, agent, allowed_tool, evidence_path):
         sidecar = FakeDecision(
@@ -171,9 +175,90 @@ class TestTimeout:
         finally:
             attach.detach()
         assert allowed_tool.execution_count == 0
-        events = read_evidence(evidence_path)
-        assert events[0]["policy_decision"] == "block"
-        assert "unknown_decision" in events[0]["reason"]
+        blocked = [e for e in read_evidence(evidence_path) if e["status"] == "BLOCKED"][0]
+        assert "unknown_decision" in blocked["reason"]
+
+
+@requires_real_cheshire
+class TestSidecarIdentityBinding:
+    def _attach(self, agent, evidence_path, responses):
+        sidecar = FakeDecision(responses=responses)
+        return attach_governed_runtime(
+            evidence_path, agent_class=type(agent), _sidecar=sidecar
+        )
+
+    def test_mismatched_request_id_rejected(self, agent, allowed_tool, evidence_path):
+        attach = self._attach(
+            agent,
+            evidence_path,
+            [{"type": "decision", "request_id": "req_someone_else", "decision": "allow"}],
+        )
+        try:
+            result = run(
+                agent.call_tool(
+                    FakeToolCall(id="call_i1", name="allowed_action", args={})
+                )
+            )
+        finally:
+            attach.detach()
+        assert allowed_tool.execution_count == 0
+        assert "identity_mismatch:request_id" in str(result)
+        blocked = [e for e in read_evidence(evidence_path) if e["status"] == "BLOCKED"][0]
+        assert blocked["reason"] == "identity_mismatch:request_id"
+
+    def test_mismatched_tool_call_id_rejected(self, agent, allowed_tool, evidence_path):
+        attach = self._attach(
+            agent,
+            evidence_path,
+            [
+                {
+                    "type": "decision",
+                    "decision": "allow",
+                    "tool_call_id": "call_someone_else",
+                }
+            ],
+        )
+        try:
+            run(agent.call_tool(FakeToolCall(id="call_i2", name="allowed_action", args={})))
+        finally:
+            attach.detach()
+        assert allowed_tool.execution_count == 0
+        blocked = [e for e in read_evidence(evidence_path) if e["status"] == "BLOCKED"][0]
+        assert blocked["reason"] == "identity_mismatch:tool_call_id"
+
+    def test_stale_replayed_response_rejected(self, agent, allowed_tool, evidence_path):
+        sidecar = FakeDecision(responses=[allow_response()])
+        attach = attach_governed_runtime(
+            evidence_path, agent_class=type(agent), _sidecar=sidecar
+        )
+        try:
+            run(agent.call_tool(FakeToolCall(id="call_s1", name="allowed_action", args={})))
+            # Force the next response to carry the stale first identity.
+            sidecar.responses = [
+                dict(allow_response(), request_id=sidecar.calls[0]["request_id"])
+            ]
+            run(agent.call_tool(FakeToolCall(id="call_s2", name="allowed_action", args={})))
+        finally:
+            attach.detach()
+        assert allowed_tool.execution_count == 1  # only the first request ran
+        blocked = [e for e in read_evidence(evidence_path) if e["status"] == "BLOCKED"]
+        assert blocked[-1]["reason"] == "identity_mismatch:request_id"
+
+    def test_duplicate_response_for_same_request_cannot_double_dispatch(
+        self, agent, allowed_tool, evidence_path
+    ):
+        # Two identical allow responses delivered for two identical calls:
+        # the second must be refused by the replay ledger, not dispatched.
+        sidecar = FakeDecision(responses=[allow_response(), allow_response()])
+        attach = attach_governed_runtime(
+            evidence_path, agent_class=type(agent), _sidecar=sidecar
+        )
+        try:
+            run(agent.call_tool(FakeToolCall(id="call_d1", name="allowed_action", args={})))
+            run(agent.call_tool(FakeToolCall(id="call_d1", name="allowed_action", args={})))
+        finally:
+            attach.detach()
+        assert allowed_tool.execution_count == 1
 
 
 @requires_real_cheshire
@@ -232,3 +317,54 @@ class TestEvidenceFailure:
             attach.detach()
         assert allowed_tool.execution_count == 0, "evidence failure must fail closed"
         assert "blocked by governance" in str(result)
+
+
+@requires_real_cheshire
+class TestDispatcherFailures:
+    def test_unknown_tool_is_failed_before_execution(self, agent, evidence_path):
+        sidecar = FakeDecision(responses=[allow_response()])
+        attach = attach_governed_runtime(
+            evidence_path, agent_class=type(agent), _sidecar=sidecar
+        )
+        try:
+            with pytest.raises(Exception):
+                run(
+                    agent.call_tool(
+                        FakeToolCall(id="call_f1", name="no_such_tool", args={})
+                    )
+                )
+        finally:
+            attach.detach()
+        assert statuses(evidence_path) == [
+            "REQUESTED",
+            "AUTHORIZED",
+            "DISPATCH_STARTED",
+            "FAILED_BEFORE_EXECUTION",
+        ]
+        failure = read_evidence(evidence_path)[-1]
+        assert "executed_arguments" not in failure
+
+    def test_tool_raise_after_dispatch_is_failed_after_dispatch(
+        self, agent, evidence_path
+    ):
+        def explode(**kwargs):
+            raise RuntimeError("boom")
+
+        exploding = FakeTool("exploding_action", explode)
+        agent.tools.append(exploding)
+        sidecar = FakeDecision(responses=[allow_response()])
+        attach = attach_governed_runtime(
+            evidence_path, agent_class=type(agent), _sidecar=sidecar
+        )
+        try:
+            with pytest.raises(RuntimeError):
+                run(
+                    agent.call_tool(
+                        FakeToolCall(id="call_f2", name="exploding_action", args={})
+                    )
+                )
+        finally:
+            attach.detach()
+        failure = read_evidence(evidence_path)[-1]
+        assert failure["status"] == "FAILED_AFTER_DISPATCH"
+        assert "boom" in failure["error"]

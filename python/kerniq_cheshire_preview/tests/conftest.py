@@ -48,9 +48,17 @@ class FakeTool:
         self.func = func
         self.execution_count = 0
 
-    async def execute(self, agent, tool_call) -> str:
+    async def execute(self, agent, tool_call):
         self.execution_count += 1
         result = self.func(**getattr(tool_call, "args", {}))
+        if cheshire_available():
+            from cat.types import Message, TextContent
+
+            return Message(
+                role="tool",
+                content=[TextContent(text=f"tool_output:{result}")],
+                tool_call_id=getattr(tool_call, "id", None),
+            )
         return f"tool_output:{result}"
 
 
@@ -83,7 +91,12 @@ class FakeDecision:
         head, self.responses = self.responses[0], self.responses[1:]
         if head is None:
             return None  # simulates timeout / dead sidecar
-        return dict(head, request_id=request.get("request_id"))
+        # Protocol-faithful double: echoes request identity unless the
+        # scripted response deliberately breaks it.
+        response = dict(head)
+        response.setdefault("request_id", request.get("request_id"))
+        response.setdefault("tool_call_id", request.get("tool_call_id"))
+        return response
 
     def close(self) -> None:
         pass
@@ -103,6 +116,22 @@ def run(coro):
 
 def read_evidence(path: Path) -> List[Dict[str, Any]]:
     return [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines() if line]
+
+
+@pytest.fixture(autouse=True)
+def _clean_patch_registry():
+    """Guarantee no governed patch survives a failed test."""
+    from kerniq_cheshire_preview import interceptor as _interceptor
+
+    yield
+    with _interceptor._PATCH_LOCK:
+        stale = dict(_interceptor._PATCH_REGISTRY)
+        _interceptor._PATCH_REGISTRY.clear()
+    for entry in stale.values():
+        try:
+            setattr(entry.agent_class, "call_tool", entry.original_call_tool)
+        except Exception:
+            pass
 
 
 @pytest.fixture

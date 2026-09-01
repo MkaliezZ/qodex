@@ -10,10 +10,15 @@ sidecar, timeout, and evidence failures.
 """
 
 from .admission import GovernanceAttachError, admit_governed_runtime
-from .interceptor import GovernedAttach, attach_governed_runtime
+from .interceptor import (
+    GovernedAttach,
+    GovernancePatchError,
+    attach_governed_runtime,
+)
 
 __all__ = [
     "GovernanceAttachError",
+    "GovernancePatchError",
     "admit_governed_runtime",
     "attach_governed_runtime",
     "GovernedAttach",

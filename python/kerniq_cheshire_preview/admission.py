@@ -47,10 +47,16 @@ class AdmittedRuntime:
 
     def blocked_message(self, text: str, tool_call: Any) -> Any:
         """Build the host-native blocked tool result (a ``Message`` with
-        ``role="tool"`` in the audited runtime)."""
+        ``role="tool"`` in the audited runtime), correlated with the
+        original ``tool_call_id`` so the runtime continuation can attribute
+        the blocked result exactly like a real tool result."""
         from cat.types import Message, TextContent
 
-        return Message(role="tool", content=[TextContent(text=text)])
+        return Message(
+            role="tool",
+            content=[TextContent(text=text)],
+            tool_call_id=getattr(tool_call, "id", None),
+        )
 
 
 def _parameter_names(function: Callable[..., Any]) -> tuple[str, ...]:

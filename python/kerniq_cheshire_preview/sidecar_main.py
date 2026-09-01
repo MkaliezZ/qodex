@@ -7,10 +7,16 @@ AgentFuse runtime guard (``dhms-agentfuse``): denylist wins, then the
 allowlist, then the configured fall-through action. Any unresolved state
 maps to ``block`` (fail closed).
 
-Line protocol:
+Line protocol (identity-bound):
 
-    request  {"type": "governance", "request_id": ..., "tool": ..., "arguments": {...}}
-    response {"type": "decision", "request_id": ..., "decision": "allow"|"block", "reason": ...}
+    request  {"type": "governance", "request_id": ..., "tool_call_id": ...,
+              "tool": ..., "arguments": {...}, "runtime_id": ...,
+              "session_id": ..., "turn_id": ..., "protocol_version": ...}
+    response {"type": "decision", "request_id": ..., "tool_call_id": ...,
+              "decision": "allow"|"block", "reason": ...}
+
+The response must echo the request identity verbatim; the interceptor
+verifies it and fails closed on any missing/mismatched identity.
 """
 
 from __future__ import annotations
@@ -20,6 +26,8 @@ import sys
 from typing import Any, Dict, Tuple
 
 from dhms_agentfuse.runtime_guard import RuntimeGuard, ToolCallRequest
+
+PROTOCOL_VERSION = 1
 
 # Preview policy config mirrors the audited DSH adapter schema: denyTools
 # always wins, allowTools (non-empty) restricts, defaultAction falls through.
@@ -73,6 +81,7 @@ def main() -> int:
                 {
                     "type": "decision",
                     "request_id": request.get("request_id"),
+                    "tool_call_id": request.get("tool_call_id"),
                     "decision": action,
                     "reason": reason,
                 }
