@@ -168,27 +168,47 @@ installation, compatibility, and real-user-feedback defects may reopen it.
 
 ### v0.8 - Product Packaging and Closed Beta
 
-**Engine boundary spike:** `THIN_FORK_REQUIRED`
+**CodeWhale v0.8.0:** `THIN_FORK_REQUIRED`, frozen reference baseline  
+**DeepSeek Harness v0.8.1:** source-contract slice implemented;
+`RUNTIME_PROOF_REQUIRED`
 
 The exact CodeWhale v0.8.0 spike added an isolated KerniQ-owned Agent Engine
 protocol, pinned provisioning, managed supervisor contracts, and a real
 machine-readable model tool-surface receipt. Adapter-only integration did not
 pass: the Runtime API supplies `allowed_tools: None`, deferred `tool_search`
 expanded to prohibited callable tools, and the process wrote a subagent lock
-inside the read-only fixture. CodeWhale remains experimental and is not the
-default product engine. No product side-effect path is connected.
+inside the read-only fixture. CodeWhale remains non-default and the proposed
+thin fork is no longer the active engine investigation.
 
-Next engine work is limited to review of the minimal governed-dispatch thin
-fork described by ADR-023. The fork must prove exact structural allowlisting,
-zero direct fixture writes, and the real KerniQ-controlled round trip before
-product enablement. Patch Runtime and multi-engine support remain unimplemented.
+The v0.8.1 DeepSeek Harness spike pins
+`deepseek-ai/deepseek-harness@47f943859bef60e4160492346772ded9b24f765a`
+and treats its plugin architecture, `ToolRestriction`, native presentation,
+and monotonic pre-body guard as promising source-contract seams. The same audit
+also records DSH-specific escape surfaces: scope-owned registrations are exempt
+from inherited restrictions, `run_code` is a reserved unfilterable presentation
+transport outside native mode, nested Code Mode dispatch can reach visible
+native tools, and later profile/home/CLI patches can replace earlier config.
+
+Therefore DSH does not pass on architecture alone. The isolated admission
+package remains outside the product dependency graph and defaults to
+`RUNTIME_PROOF_REQUIRED`. Before any product enablement, a real pinned DSH
+process must prove all eight gates: exact source identity, exact model surface,
+scoped-registration containment, nested-dispatch containment, monotonic
+pre-body denial, managed-profile immutability, zero direct fixture writes, and
+one real KerniQ proposal -> approval -> AgentFuse -> durable START -> KerniQ
+physical-execution round trip with zero DSH-owned product execution.
+
+ADR-023 remains historical CodeWhale design evidence and is not the active next
+implementation instruction. Patch Runtime and multi-engine support remain
+unimplemented.
 
 Product packaging remains planned: Windows installer as the primary
 distribution target, macOS unsigned technical preview, onboarding, credential
 storage, and managed-Python bootstrap.
 
 - [v0.8.0 CodeWhale spike](kerniq_v0_8_0_codewhale_governed_engine_spike.md)
-- [ADR-023](../../qodex-config/adr/ADR-023-CodeWhale-Governed-Engine-Boundary.md)
+- [v0.8.1 DeepSeek Harness governed-engine spike](kerniq_v0_8_1_dsh_governed_engine_spike.md)
+- [ADR-023 historical CodeWhale boundary](../../qodex-config/adr/ADR-023-CodeWhale-Governed-Engine-Boundary.md)
 
 ### v0.9 - Research Pack and Office Pack
 
