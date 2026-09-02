@@ -142,6 +142,14 @@ New final counterexample regressions:                         6
 
 ## Exact supported proof claim
 
+> **SUPERSEDED by the proof boundary reclassification** (see
+> `dhms_kerniq_v0_4_phase1_proof_boundary_reclassification.md`): the
+> `GOVERNED_RUNTIME_PROVEN=true` statement at the end of this report
+> exceeded the tested threat model. The authoritative final state is
+> `BOUNDED_RUNTIME_GOVERNANCE_PROVEN=true` and
+> `GOVERNED_RUNTIME_PROVEN=false`. The boundary description below remains
+> accurate as the *bounded* boundary; only the claim name was over-broad.
+
 ```text
 GOVERNED_RUNTIME_PROVEN is claimed ONLY for:
 
@@ -175,8 +183,13 @@ threat model. Observation serializes same-instance concurrency.
 
 ## Status
 
+> **SUPERSEDED** by `dhms_kerniq_v0_4_phase1_proof_boundary_reclassification.md`.
+
 ```text
 INTERCEPTION_HARDENED_PROTOTYPE=true
 GOVERNED_RUNTIME_PROOF_CANDIDATE=true
-GOVERNED_RUNTIME_PROVEN=true   (bounded preview boundary above)
+BOUNDED_RUNTIME_GOVERNANCE_PROVEN=true   (authoritative, bounded boundary above)
+GOVERNED_RUNTIME_PROVEN=false            (reserved; requires closing the
+                                          adversarial in-process gap or an
+                                          embedded runtime model)
 ```

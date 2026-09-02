@@ -75,9 +75,12 @@ execute override is refused rather than observed.
 
 Deny, invalid/unknown decisions, sidecar timeout, IPC identity mismatch,
 runtime/version/signature mismatch at admission, evidence write failure,
-wrapper replacement during an active attach, and terminal-evidence failure
-all degrade or block **before physical execution** — no observation-only
-fallback exists.
+wrapper replacement on the dynamic audited dispatch lookup path during an
+active attach, and terminal-evidence failure all degrade or block **before
+physical execution** — no observation-only fallback exists. Wrapper
+replacement is covered only for calls resolved **through the audited
+dispatch lookup at call time**; execute references pre-bound before attach
+are excluded (see Adversarial In-Process Threat Model below).
 
 ## 3. Supported Proof Boundary
 
@@ -100,7 +103,10 @@ process          single process
 ledger           process-local, attach-scoped
 identity         attach-scoped IPC identity (six fields)
 dispatch path    the audited base Agent.call_tool → audited Tool.execute;
-                 admission refuses any override on that resolution path
+                 admission refuses subclass call_tool overrides and
+                 intermediate MRO overrides on that resolution path.
+                 The supported profile assumes the audited base symbols
+                 are pristine at attach time.
 cooperation      cooperative runtime execution model: the host runtime is
                  not actively adversarial after attach (see threat model)
 ```
@@ -120,7 +126,24 @@ NOT production security certification
 NOT official Cheshire Cat integration, endorsement, or support promise
 ```
 
-## 5. Threat Model
+### Allowed tool internal behavior
+
+Phase 1 governs the **top-level admitted tool dispatch decision and its
+evidence**. For a tool the policy allows:
+
+```text
+NOT sandboxed                an allowed tool runs with full host capability
+NOT nested-execution-aware   execution the tool triggers internally
+                             (subprocesses, imported code paths) is outside
+                             the observation boundary
+NOT background-task-contained work the tool schedules beyond its
+                             awaited execute call is unobserved
+NOT internal-side-effect-governed
+                             arbitrary internal side effects after an allow
+                             are the tool's own responsibility
+```
+
+### Threat Model
 
 **Normal Runtime Threat Model (Phase 1 target).** The governed system is a
 correctly functioning agent runtime: tools may misbehave, models may
