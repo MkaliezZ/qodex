@@ -13,7 +13,7 @@ import pytest
 from kerniq_cheshire_preview import attach_governed_runtime
 from kerniq_cheshire_preview.sidecar_main import _build_guard, decide
 
-from .conftest import FakeTool, FakeToolCall, requires_real_cheshire, run
+from .conftest import make_fake_tool, FakeToolCall, requires_real_cheshire, run
 
 
 class TestSidecarDecisions:
@@ -91,7 +91,7 @@ class TestRealSidecarIpc:
         finally:
             attach.detach()
         assert allowed_tool.execution_count == 1
-        assert "tool_output:ran" in str(result)
+        assert "ran" in str(result)
         statuses = [
             json.loads(line)["status"]
             for line in evidence_path.read_text(encoding="utf-8").splitlines()
@@ -105,7 +105,7 @@ class TestRealSidecarIpc:
         from cat.types import Message
         from .conftest import FakeAgent
 
-        tool = FakeTool("real_named_tool", lambda **kwargs: "ran")
+        tool = make_fake_tool("real_named_tool", lambda **kwargs: "ran")
         agent_instance = FakeAgent(tools=[tool])
         evidence = Path(self._tmp()) / "evidence.jsonl"
         attach = attach_governed_runtime(

@@ -11,8 +11,8 @@ from kerniq_cheshire_preview import GovernanceAttachError, attach_governed_runti
 
 from .conftest import (
     FakeDecision,
-    FakeTool,
     FakeToolCall,
+    make_fake_tool,
     allow_response,
     block_response,
     read_evidence,
@@ -90,7 +90,7 @@ class TestAllowPath:
         finally:
             attach.detach()
         assert allowed_tool.execution_count == 1
-        assert "tool_output:ran" in str(result)
+        assert "ran" in str(result)
         assert result.tool_call_id == "call_a1"
 
     def test_allow_lifecycle_evidence_is_truthful(self, agent, allowed_tool, evidence_path):
@@ -115,7 +115,7 @@ class TestAllowPath:
         assert "executed_arguments" not in authorized  # no execution prediction
         assert "executed_arguments" not in dispatch_started
         assert executed["executed_arguments"] == {"v": 3}
-        assert "tool_output:ran" in executed["tool_result"]
+        assert "ran" in executed["tool_result"]
         assert executed["status"] == "EXECUTED"
 
 
@@ -344,14 +344,19 @@ class TestDispatcherFailures:
         failure = read_evidence(evidence_path)[-1]
         assert "executed_arguments" not in failure
 
-    def test_tool_raise_after_dispatch_is_failed_after_dispatch(
-        self, agent, evidence_path
+    def test_standardize_raise_after_dispatch_is_failed_after_dispatch(
+        self, agent, evidence_path, monkeypatch
     ):
         def explode(**kwargs):
+            return "never standardized"
+
+        exploding = make_fake_tool("exploding_action", explode)
+        agent.tools.append(exploding)
+
+        def raising_standardize(tool_call, tool_result):
             raise RuntimeError("boom")
 
-        exploding = FakeTool("exploding_action", explode)
-        agent.tools.append(exploding)
+        monkeypatch.setattr(exploding, "standardize_output", raising_standardize)
         sidecar = FakeDecision(responses=[allow_response()])
         attach = attach_governed_runtime(
             evidence_path, agent_class=type(agent), _sidecar=sidecar

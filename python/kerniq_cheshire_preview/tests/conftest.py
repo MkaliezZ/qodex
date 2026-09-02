@@ -42,34 +42,54 @@ class FakeToolCall(SimpleNamespace):
     """Seam-shaped stand-in for cat ToolCall(id, name, args)."""
 
 
-class FakeTool:
-    def __init__(self, name: str, func) -> None:
-        self.name = name
-        self.func = func
-        self.execution_count = 0
+if cheshire_available():
+    from cat.mad_hatter.decorators.tool import Tool as _RealTool
 
-    async def execute(self, agent, tool_call):
-        self.execution_count += 1
-        result = self.func(**getattr(tool_call, "args", {}))
-        if cheshire_available():
-            from cat.types import Message, TextContent
+    def make_fake_tool(name: str, func) -> "FakeTool":
+        """A real audited Tool instance whose function counts executions.
 
-            return Message(
-                role="tool",
-                content=[TextContent(text=f"tool_output:{result}")],
-                tool_call_id=getattr(tool_call, "id", None),
-            )
-        return f"tool_output:{result}"
+        ``execute`` is NOT overridden: the audited implementation runs, so
+        the physical execution boundary is genuine in deterministic tests.
+        """
+        tool = _RealTool.__new__(_RealTool)
+        tool.func = func
+        tool.name = name
+        tool.description = "deterministic governed test tool"
+        tool.input_schema = {}
+        tool.output_schema = {}
+        tool.is_internal = True
+        tool.meta = None
+        tool.execution_count = 0
+        original = tool.func
+
+        def counting(**kwargs):
+            tool.execution_count += 1
+            return original(**kwargs)
+
+        tool.func = counting
+        return tool
+
+    class FakeTool:
+        # Kept as a name for imports; construction goes through
+        # make_fake_tool so no instance ever overrides execute.
+        def __new__(cls, *args, **kwargs):  # pragma: no cover
+            raise TypeError("use make_fake_tool()")
+else:  # pragma: no cover - machines without the audited runtime
+
+    class FakeTool:  # type: ignore[no-redef]
+        pass
 
 
 if cheshire_available():
     from cat.services.agents.base import Agent as _RealAgent
 
     class FakeAgent(_RealAgent):
-        """Real audited Agent subclass: admission-eligible, with controllable
-        tools and no framework startup."""
+        """Real audited Agent subclass with controllable tools and no
+        framework startup. ``call_tool`` is deliberately NOT overridden:
+        deterministic tests dispatch through the audited base
+        implementation, exactly like the admitted governed profile."""
 
-        def __init__(self, tools: List[FakeTool]) -> None:
+        def __init__(self, tools: List[Any]) -> None:
             self.tools = tools
 else:  # pragma: no cover - only on machines without the audited runtime
 
@@ -126,6 +146,20 @@ def read_evidence(path: Path) -> List[Dict[str, Any]]:
 
 
 @pytest.fixture(autouse=True)
+def _ambient_request_context():
+    """The real Tool.execute emits an AGUI event that reads the per-request
+    ambient context; provide one for every deterministic test."""
+    from cat.ambient.context_vars import Ctx, reset_ctx, set_ctx
+    from cat.auth.user import User
+
+    token = set_ctx(Ctx(user=User(id=str(__import__("uuid").uuid4()), name="kerniq-test")))
+    try:
+        yield
+    finally:
+        reset_ctx(token)
+
+
+@pytest.fixture(autouse=True)
 def _clean_patch_registry():
     """Guarantee no governed patch survives a failed test."""
     from kerniq_cheshire_preview import interceptor as _interceptor
@@ -136,19 +170,23 @@ def _clean_patch_registry():
         _interceptor._PATCH_REGISTRY.clear()
     for entry in stale.values():
         try:
-            setattr(entry.agent_class, "call_tool", entry.original_call_tool)
+            klass = entry.agent_class
+            if "call_tool" in klass.__dict__:
+                # Remove residue so the class returns to inheriting the
+                # audited base implementation (the admitted profile).
+                delattr(klass, "call_tool")
         except Exception:
             pass
 
 
 @pytest.fixture
 def protected_tool():
-    return FakeTool("protected_action", lambda **kwargs: "should never run")
+    return make_fake_tool("protected_action", lambda **kwargs: "should never run")
 
 
 @pytest.fixture
 def allowed_tool():
-    return FakeTool("allowed_action", lambda **kwargs: "ran")
+    return make_fake_tool("allowed_action", lambda **kwargs: "ran")
 
 
 @pytest.fixture
@@ -163,6 +201,7 @@ def evidence_path(tmp_path):
 
 __all__ = [
     "FakeAgent",
+    "make_fake_tool",
     "FakeDecision",
     "FakeTool",
     "FakeToolCall",

@@ -12,14 +12,17 @@ from pathlib import Path
 
 import pytest
 
-from kerniq_cheshire_preview import GovernancePatchError, attach_governed_runtime
+from kerniq_cheshire_preview import (
+    GovernanceAttachError,
+    GovernancePatchError,
+    attach_governed_runtime,
+)
 from kerniq_cheshire_preview.evidence import EvidenceFailure
 from kerniq_cheshire_preview.interceptor import _PATCH_REGISTRY
 
 from .conftest import (
     FakeAgent,
     FakeDecision,
-    FakeTool,
     FakeToolCall,
     allow_response,
     read_evidence,
@@ -101,20 +104,23 @@ class TestMroOwnershipDomain:
         attach = attach_governed_runtime(
             evidence_path, agent_class=type(agent), _sidecar=FakeDecision()
         )
-        try:
-            entry = _PATCH_REGISTRY[type(agent)]
-            original_wrapper = entry.installed_wrapper
-            # A foreign patch is installed over the governed wrapper.
-            async def foreign(self, tool_call, *args, **kwargs):
-                raise NotImplementedError
+        entry = _PATCH_REGISTRY[type(agent)]
+        original_wrapper = entry.installed_wrapper
+        # A foreign patch is installed over the governed wrapper.
+        async def foreign(self, tool_call, *args, **kwargs):
+            raise NotImplementedError
 
-            setattr(type(agent), "call_tool", foreign)
-            with pytest.raises(GovernancePatchError):
-                attach.detach()
-        finally:
-            setattr(type(agent), "call_tool", original_wrapper)
-            entry.installed_wrapper = original_wrapper
+        setattr(type(agent), "call_tool", foreign)
+        with pytest.raises(GovernancePatchError):
             attach.detach()
+        # Cleanup: republish the wrapper so the owner can detach cleanly,
+        # proving governance survives the tampering attempt.
+        setattr(type(agent), "call_tool", original_wrapper)
+        attach.detach()
+        again = attach_governed_runtime(
+            evidence_path, agent_class=type(agent), _sidecar=FakeDecision()
+        )
+        again.detach()
 
     def test_failed_install_rolls_back_registry(self, evidence_path):
         class BlockingMeta(type(FakeAgent)):
@@ -141,13 +147,15 @@ class TestMroOwnershipDomain:
 
         def try_attach(index):
             barrier.wait()
+            from kerniq_cheshire_preview import GovernanceAttachError
+
             try:
                 attach = attach_governed_runtime(
                     tmp_path / f"e{index}.jsonl",
                     agent_class=type(agent),
                     _sidecar=FakeDecision(),
                 )
-            except GovernancePatchError:
+            except (GovernancePatchError, GovernanceAttachError):
                 results.append("refused")
                 return
             results.append("won")
@@ -248,32 +256,26 @@ class TestFullIdentityBinding:
 
 @requires_real_cheshire
 class TestPhysicalExecutionEvidenceBoundary:
-    def test_fake_result_without_execute_produces_no_executed(self, evidence_path):
-        from cat.services.agents.base import Agent as RealAgent
+    def test_fake_result_without_execute_refused_at_admission(
+        self, evidence_path
+    ):
+        """F-02/F-03 combined counterexample: a dispatcher that fabricates
+        results without executing is an Agent.call_tool override — the
+        tightened admission profile refuses it outright, so no governed
+        dispatch (and no EXECUTED evidence) can ever happen on it."""
 
         class LyingAgent(FakeAgent):
-            """Dispatcher that fabricates a result without invoking
-            Tool.execute — exactly the H-04 adversarial case."""
-
             async def call_tool(self, tool_call, *args, **kwargs):
                 return "fabricated-tool-output"
 
-        agent = LyingAgent(tools=[])
-        sidecar = FakeDecision(responses=[allow_response()])
-        attach = attach_governed_runtime(
-            evidence_path, agent_class=LyingAgent, _sidecar=sidecar
-        )
-        try:
-            result = run(
-                agent.call_tool(
-                    FakeToolCall(id="call_h4a", name="allowed_action", args={"v": 1})
-                )
+        with pytest.raises(GovernanceAttachError) as error:
+            attach_governed_runtime(
+                evidence_path,
+                agent_class=LyingAgent,
+                _sidecar=FakeDecision(responses=[allow_response()]),
             )
-        finally:
-            attach.detach()
-        assert "fabricated" in str(result)
-        assert "EXECUTED" not in statuses(evidence_path)
-        assert "EXECUTED" not in [s for s in statuses(evidence_path)]
+        assert "dispatch profile mismatch" in str(error.value)
+        assert not evidence_path.exists()  # no governed dispatch ever ran
 
     def test_real_execute_executed_arguments_come_from_boundary(
         self, evidence_path

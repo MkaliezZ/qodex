@@ -45,6 +45,8 @@ H-05  Runtime health fail-closed — when terminal (outcome) evidence cannot
 
 from __future__ import annotations
 
+import asyncio
+import contextvars
 import json
 import os
 import subprocess
@@ -92,9 +94,19 @@ class _PatchOwnership:
     original_identity: str
     installed_wrapper: Any = None
     active: bool = True
+    had_own_call_tool: bool = False
+    installed_execute_guard: Any = None
 
 
 _PATCH_REGISTRY: Dict[type, _PatchOwnership] = {}
+
+# Per-attach dispatch authorization token: set only inside a governed
+# dispatch (the observed execute wrapper), checked by the Tool.execute
+# guard. A direct execute call that bypasses the governed call_tool carries
+# no token and fails closed before any physical execution.
+_dispatch_token: contextvars.ContextVar[Optional[str]] = contextvars.ContextVar(
+    "kerniq_governed_dispatch_token", default=None
+)
 
 
 class GovernancePatchError(RuntimeError):
@@ -292,7 +304,19 @@ class GovernedAttach:
                     "detach refused: the installed wrapper is not the one this "
                     "attach published (wrapper tampering or foreign patch)"
                 )
-            setattr(self._agent_class, "call_tool", entry.original_call_tool)
+            if entry.installed_execute_guard is not None:
+                setattr(
+                    self.runtime.tool_class,
+                    "execute",
+                    self.runtime.audited_execute,
+                )
+            if entry.had_own_call_tool:
+                setattr(self._agent_class, "call_tool", entry.original_call_tool)
+            elif "call_tool" in self._agent_class.__dict__:
+                # The pristine state inherited the audited base
+                # implementation; leaving our own entry behind would turn
+                # the class into an override every later admission refuses.
+                delattr(self._agent_class, "call_tool")
             # Keep the retired entry so the next attach generation increments
             # from it (active=False makes it inert for ownership checks).
             entry.active = False
@@ -369,7 +393,14 @@ def attach_governed_runtime(
     nothing is patched; an overlapping active attach (same class or any
     class sharing its resolution path) raises ``GovernancePatchError``.
     """
-    runtime = admit_governed_runtime(agent_class)
+    # Governed wrappers we ourselves installed are not dispatch overrides;
+    # everything else on the resolution path still must be the audited base.
+    exempt = tuple(
+        entry.installed_wrapper
+        for entry in _PATCH_REGISTRY.values()
+        if entry.installed_wrapper is not None
+    )
+    runtime = admit_governed_runtime(agent_class, exempt_call_tools=exempt)
     resolved_policy = policy if policy is not None else {"defaultAction": "block"}
     sidecar = _sidecar if _sidecar is not None else _SidecarClient(resolved_policy)
     evidence_path = Path(evidence_path)
@@ -407,6 +438,15 @@ def attach_governed_runtime(
                 # H-05: terminal evidence could not be persisted earlier;
                 # this runtime no longer executes anything.
                 return blocked("(runtime_evidence_degraded)")
+
+            # F-01: re-verify wrapper integrity before any governed
+            # dispatch. If anything replaced, removed, or shadowed the
+            # wrapper this attach published, fail closed and degrade — a
+            # foreign patch must not execute while the registry is active.
+            resolved_call_tool = getattr(type(self), "call_tool", None)
+            if resolved_call_tool is not ownership.installed_wrapper:
+                state.degrade()
+                return blocked("(governed_wrapper_replaced)")
 
             try:
                 record_requested(
@@ -505,70 +545,114 @@ def attach_governed_runtime(
             executed: Dict[str, Any] = {}
 
             def observe_execution(arguments_at_boundary: Any, result: Any) -> None:
-                # H-04: this fires only inside the real Tool.execute — the
+                # H-04: this fires only inside the real Tool.execute - the
                 # single legitimate source of EXECUTED evidence.
                 executed["arguments"] = arguments_at_boundary
                 executed["result"] = result
+
+            # F-03: the physical execution boundary must be the audited
+            # Tool.execute. A pre-existing instance-level override, a class
+            # override between the tool's class and the audited Tool base, or
+            # a non-audited execute identity is unsupported and fails closed
+            # (no EXECUTED evidence may ever be produced from it).
+            if tool is not None:
+                if "execute" in getattr(tool, "__dict__", {}):
+                    state.finish(tool_call_id, to=_CALL_FAILED)
+                    try:
+                        record_blocked(
+                            evidence_path,
+                            request_id=request_id,
+                            tool_call_id=tool_call_id,
+                            tool_name=tool_name,
+                            requested_arguments=requested_arguments,
+                            policy_decision="block",
+                            reason="execute_profile_mismatch:instance_override",
+                        )
+                    except EvidenceFailure:
+                        pass
+                    return blocked("(execute_profile_mismatch:instance_override)")
+                resolved_execute = getattr(type(tool), "execute", None)
+                if resolved_execute is not runtime.audited_execute and (
+                    not ownership.active
+                    or resolved_execute is not ownership.installed_execute_guard
+                ):
+                    state.finish(tool_call_id, to=_CALL_FAILED)
+                    try:
+                        record_blocked(
+                            evidence_path,
+                            request_id=request_id,
+                            tool_call_id=tool_call_id,
+                            tool_name=tool_name,
+                            requested_arguments=requested_arguments,
+                            policy_decision="block",
+                            reason="execute_profile_mismatch:class_override",
+                        )
+                    except EvidenceFailure:
+                        pass
+                    return blocked("(execute_profile_mismatch:class_override)")
 
             try:
                 record_executed_result = None
                 if tool is not None:
                     # Observation boundary (not a second execution path): the
                     # dispatcher still owns execution; we only wrap the bound
-                    # execute of the resolved tool for this one dispatch, and
-                    # only to observe the physical boundary.
-                    original_execute = tool.execute
-                    observation_lock = getattr(
-                        self, "_kerniq_observation_lock", None
-                    )
-                    if observation_lock is None:
-                        observation_lock = threading.RLock()
+                    # execute of the resolved tool for exactly one dispatch.
+                    # F-04: per-tool asyncio.Lock - observation install ->
+                    # physical execute -> exact restore is serialized per
+                    # tool instance across concurrent tasks on the same loop
+                    # (threading locks cannot do this across await points).
+                    lock = tool.__dict__.get("_kerniq_observation_async_lock")
+                    if lock is None:
+                        lock = asyncio.Lock()
                         try:
-                            self._kerniq_observation_lock = observation_lock
+                            tool.__dict__["_kerniq_observation_async_lock"] = lock
                         except Exception:
-                            observation_lock = None
+                            lock = None
+
+                    original_execute = tool.execute
 
                     async def observed_execute(agent, tc, *a, **kw):
-                        result = await original_execute(agent, tc, *a, **kw)
+                        token = _dispatch_token.set(owner_id)
+                        try:
+                            result = await original_execute(agent, tc, *a, **kw)
+                        finally:
+                            _dispatch_token.reset(token)
                         observe_execution(getattr(tc, "args", None), result)
                         return result
 
-                    def install() -> Any:
-                        tool.execute = observed_execute
 
-                    def restore() -> None:
+                    async def observed_dispatch() -> Any:
+                        tool.__dict__["execute"] = observed_execute
                         try:
-                            del tool.execute  # instance attr: back to class lookup
-                        except AttributeError:
-                            try:
-                                tool.execute = original_execute
-                            except Exception:
-                                pass
-
-                    if observation_lock is not None:
-                        with observation_lock:
-                            install()
-                            try:
-                                record_executed_result = await original_call_tool(
-                                    self, tool_call, *args, **kwargs
-                                )
-                            finally:
-                                restore()
-                    else:  # agent instance rejected the lock attribute
-                        install()
-                        try:
-                            record_executed_result = await original_call_tool(
+                            return await original_call_tool(
                                 self, tool_call, *args, **kwargs
                             )
                         finally:
-                            restore()
+                            # Exact restore: the instance had no execute
+                            # before (F-03 check guaranteed it), so removing
+                            # our own key returns precisely the prior state.
+                            if tool.__dict__.get("execute") is observed_execute:
+                                del tool.__dict__["execute"]
+                            else:
+                                # Stale wrapper residue: cannot restore
+                                # truthfully - degrade the whole runtime.
+                                state.degrade()
+
+                    if lock is not None:
+                        async with lock:
+                            record_executed_result = await observed_dispatch()
+                    else:
+                        record_executed_result = await observed_dispatch()
                 else:
                     # No registered tool with this name: the dispatcher will
                     # raise before any execution could happen.
                     record_executed_result = await original_call_tool(
                         self, tool_call, *args, **kwargs
                     )
-            except Exception as error:
+            except BaseException as error:
+                # Includes CancelledError: the ledger must reach a terminal
+                # state and terminal evidence must be attempted; no EXECUTED
+                # is ever fabricated for an unfinished dispatch.
                 state.finish(tool_call_id, to=_CALL_FAILED)
                 try:
                     record_failure(
@@ -627,16 +711,40 @@ def attach_governed_runtime(
             original_call_tool=original_call_tool,
             original_identity=original_identity,
             installed_wrapper=governed_call_tool,
+            had_own_call_tool="call_tool" in runtime.agent_class.__dict__,
         )
+        original_execute = runtime.audited_execute
+
+        async def guarded_execute(self, tool_call, *args, **kwargs):
+            if not ownership.active:
+                return await original_execute(self, tool_call, *args, **kwargs)
+            token = _dispatch_token.get()
+            if token is None:
+                # Execute reached without a governed dispatch: a replaced
+                # or bypassed Agent.call_tool tried to run the physical tool
+                # behind the governance boundary. Fail closed: no execution.
+                state.degrade()
+                raise RuntimeError(
+                    "[kerniq] Tool.execute refused: no governed dispatch token "
+                    "(Agent.call_tool bypassed or replaced)"
+                )
+            return await original_execute(self, tool_call, *args, **kwargs)
+
         _PATCH_REGISTRY[runtime.agent_class] = ownership
         try:
             setattr(runtime.agent_class, "call_tool", governed_call_tool)
+            ownership.installed_execute_guard = guarded_execute
+            setattr(runtime.tool_class, "execute", guarded_execute)
         except Exception:
             # Atomic publication: registry entry never outlives a failed
             # wrapper install (H-01 rollback).
             _PATCH_REGISTRY[runtime.agent_class] = existing_retired
             if existing_retired is None:
                 del _PATCH_REGISTRY[runtime.agent_class]
+            try:
+                setattr(runtime.tool_class, "execute", original_execute)
+            except Exception:
+                pass
             raise
 
     return GovernedAttach(

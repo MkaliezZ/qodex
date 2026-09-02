@@ -44,6 +44,8 @@ class AdmittedRuntime:
     agent_class: type
     tool_class: type
     runtime_version: str
+    audited_call_tool: Any
+    audited_execute: Any
 
     def blocked_message(self, text: str, tool_call: Any) -> Any:
         """Build the host-native blocked tool result (a ``Message`` with
@@ -63,7 +65,11 @@ def _parameter_names(function: Callable[..., Any]) -> tuple[str, ...]:
     return tuple(inspect.signature(function).parameters)
 
 
-def admit_governed_runtime(agent_class: Optional[type] = None) -> AdmittedRuntime:
+def admit_governed_runtime(
+    agent_class: Optional[type] = None,
+    *,
+    exempt_call_tools: tuple = (),
+) -> AdmittedRuntime:
     """Admit the runtime for governed mode or raise.
 
     ``agent_class`` may be omitted (uses the audited ``Agent`` class) or a
@@ -93,6 +99,22 @@ def admit_governed_runtime(agent_class: Optional[type] = None) -> AdmittedRuntim
     if not (inspect.isclass(target) and issubclass(target, audited_agent)):
         raise GovernanceAttachError("target agent class is not the audited Agent hierarchy")
 
+    # Bounded-preview admission profile (F-02): governed dispatch is only
+    # admitted for the audited base Agent.call_tool implementation. Any
+    # override between the target class and the audited base — including the
+    # target itself — could redirect an approved tool to a different physical
+    # tool and is refused outright.
+    for klass in target.__mro__:
+        if klass is audited_agent:
+            break
+        own_call_tool = klass.__dict__.get("call_tool")
+        if own_call_tool is not None and own_call_tool not in exempt_call_tools:
+            raise GovernanceAttachError(
+                "dispatch profile mismatch: "
+                f"{klass.__name__} overrides Agent.call_tool; only the audited "
+                "base implementation is admitted for governed dispatch"
+            )
+
     call_tool = getattr(target, "call_tool", None)
     execute = getattr(audited_tool, "execute", None)
     if not asyncio_callable(call_tool) or not asyncio_callable(execute):
@@ -104,13 +126,20 @@ def admit_governed_runtime(agent_class: Optional[type] = None) -> AdmittedRuntim
         raise GovernanceAttachError(
             f"call_tool signature incompatible: {call_tool_params}"
         )
-    if tuple(execute_params[: len(EXPECTED_EXECUTE_PARAMS)]) != EXPECTED_EXECUTE_PARAMS:
+    execute_prefix = tuple(execute_params[: len(EXPECTED_EXECUTE_PARAMS)])
+    guard_prefix = ("self", "tool_call")  # governed execute guard shape
+    if (
+        execute_prefix != EXPECTED_EXECUTE_PARAMS
+        and tuple(execute_params[: len(guard_prefix)]) != guard_prefix
+    ):
         raise GovernanceAdmissionSignatureError(execute_params)
 
     return AdmittedRuntime(
         agent_class=target,
         tool_class=audited_tool,
         runtime_version=installed,
+        audited_call_tool=audited_agent.call_tool,
+        audited_execute=audited_tool.execute,
     )
 
 
