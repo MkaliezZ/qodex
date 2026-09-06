@@ -1,0 +1,94 @@
+{
+  "schema_version": "kerniq.governance-evidence.v0.2",
+  "evidence_id": "conformance-case-1-success",
+  "producer_ref": "conformance:offline-proof",
+  "profile_ref": "conformance:fixtures-profile-v1",
+  "recorded_at": "2026-09-07T12:00:05Z",
+  "previous_evidence_ref": null,
+  "request": {
+    "status": "known",
+    "value": {
+      "request_id": "req-c1",
+      "tool_call_id": "call-c1",
+      "attempt_ref": "conformance:attempt-c1",
+      "runtime_ref": "conformance:runtime-offline",
+      "action_name": "records.list",
+      "action_ref": "conformance:tool-records-list-1",
+      "identity_provenance": {"source": "unknown", "subject_ref": null, "provenance_ref": null, "reason": "offline_fixture_requester_unattributed"}
+    },
+    "source_ref": "conformance:event-request-c1",
+    "reason": null
+  },
+  "decision": {
+    "status": "known",
+    "value": {
+      "decision_id": "decision-c1",
+      "evaluation": "decided",
+      "action": "allow",
+      "policy_ref": "conformance:policy-1",
+      "target_ref": "conformance:target-c1-effective",
+      "decided_at": "2026-09-07T11:59:58Z"
+    },
+    "source_ref": "conformance:event-decision-c1",
+    "reason": null
+  },
+  "authorization": {
+    "status": "known",
+    "value": {
+      "authorization_ref": "conformance:approval-c1",
+      "disposition": "granted",
+      "target_ref": "conformance:target-c1-effective",
+      "approved_at": "2026-09-07T11:59:55Z",
+      "expires_at": "2026-09-07T12:05:00Z",
+      "generation": "1",
+      "validity_ref": null,
+      "identity_provenance": {"source": "unknown", "subject_ref": null, "provenance_ref": null, "reason": "offline_fixture_approver_unattributed"}
+    },
+    "source_ref": "conformance:event-approval-c1",
+    "reason": null
+  },
+  "argument_binding": {
+    "requested": {
+      "status": "known",
+      "value": {"snapshot_ref": "conformance:args-c1-requested", "tool_ref": "conformance:tool-records-list-1", "scope_ref": "conformance:scope-c1", "digest": {"algorithm": "sha256", "representation": "utf8-json-exact-v1", "value": "ca502dec04523cdc33afece69a9b600d5b9bd022d453791cc693b6b372f808ad"}},
+      "source_ref": "conformance:event-request-c1",
+      "reason": null
+    },
+    "effective": {
+      "status": "known",
+      "value": {"snapshot_ref": "conformance:args-c1-effective", "tool_ref": "conformance:tool-records-list-1", "scope_ref": "conformance:scope-c1", "digest": {"algorithm": "sha256", "representation": "utf8-json-exact-v1", "value": "a03c8657a575356de5937110fc9038dafa42d659089628586aa8f8d73924cd16"}},
+      "source_ref": "conformance:event-effective-c1",
+      "reason": null
+    },
+    "executed": {
+      "status": "known",
+      "value": {"snapshot_ref": "conformance:args-c1-executed", "tool_ref": "conformance:tool-records-list-1", "scope_ref": "conformance:scope-c1", "digest": {"algorithm": "sha256", "representation": "utf8-json-exact-v1", "value": "a03c8657a575356de5937110fc9038dafa42d659089628586aa8f8d73924cd16"}},
+      "source_ref": "conformance:event-entry-c1",
+      "reason": null
+    },
+    "scope": {
+      "status": "known",
+      "value": {"scope_ref": "conformance:scope-c1", "runtime_ref": "conformance:runtime-offline", "context_ref": "conformance:project-run-c1", "resource_refs": ["conformance:dataset-1"], "operation": "read"},
+      "source_ref": "conformance:event-scope-c1",
+      "reason": null
+    },
+    "authorization_match": {
+      "status": "known",
+      "value": {"result": "matched", "authorization_target_ref": "conformance:target-c1-effective", "effective_target_ref": "conformance:target-c1-effective"},
+      "source_ref": "conformance:target-binding-c1",
+      "reason": null
+    }
+  },
+  "execution": {
+    "release": {"status": "known", "value": {"occurred": true, "at": "2026-09-07T11:59:59Z"}, "source_ref": "conformance:event-release-c1", "reason": null},
+    "dispatch": {"status": "known", "value": {"occurred": true, "at": "2026-09-07T12:00:00Z"}, "source_ref": "conformance:event-dispatch-c1", "reason": null},
+    "start": {"status": "known", "value": {"occurred": true, "at": "2026-09-07T12:00:00.250Z"}, "source_ref": "conformance:event-entry-c1", "reason": null},
+    "completion": {"status": "known", "value": {"occurred": true, "at": "2026-09-07T12:00:01Z"}, "source_ref": "conformance:event-result-c1", "reason": null}
+  },
+  "outcome": {
+    "status": "known",
+    "value": {"status": "success", "reason": null, "result_ref": "conformance:result-c1"},
+    "source_ref": "conformance:event-result-c1",
+    "reason": null
+  }
+}

@@ -1,0 +1,94 @@
+{
+  "schema_version": "kerniq.governance-evidence.v0.2",
+  "evidence_id": "conformance-case-4-identity-unknown",
+  "producer_ref": "conformance:offline-proof",
+  "profile_ref": "conformance:fixtures-profile-v1",
+  "recorded_at": "2026-09-07T12:20:05Z",
+  "previous_evidence_ref": null,
+  "request": {
+    "status": "known",
+    "value": {
+      "request_id": "req-c4",
+      "tool_call_id": null,
+      "attempt_ref": "conformance:attempt-c4",
+      "runtime_ref": "conformance:runtime-offline",
+      "action_name": "records.list",
+      "action_ref": "conformance:tool-records-list-1",
+      "identity_provenance": {"source": "unknown", "subject_ref": null, "provenance_ref": null, "reason": "requester_identity_unavailable"}
+    },
+    "source_ref": "conformance:event-request-c4",
+    "reason": null
+  },
+  "decision": {
+    "status": "known",
+    "value": {
+      "decision_id": "decision-c4",
+      "evaluation": "decided",
+      "action": "allow",
+      "policy_ref": "conformance:policy-1",
+      "target_ref": "conformance:target-c4",
+      "decided_at": "2026-09-07T12:19:58Z"
+    },
+    "source_ref": "conformance:event-decision-c4",
+    "reason": null
+  },
+  "authorization": {
+    "status": "known",
+    "value": {
+      "authorization_ref": "conformance:approval-c4",
+      "disposition": "granted",
+      "target_ref": "conformance:target-c4",
+      "approved_at": "2026-09-07T12:19:55Z",
+      "expires_at": null,
+      "generation": null,
+      "validity_ref": null,
+      "identity_provenance": {"source": "unknown", "subject_ref": null, "provenance_ref": null, "reason": "legacy_approval_without_attribution"}
+    },
+    "source_ref": "conformance:event-approval-c4",
+    "reason": null
+  },
+  "argument_binding": {
+    "requested": {
+      "status": "known",
+      "value": {"snapshot_ref": "conformance:args-c4-requested", "tool_ref": "conformance:tool-records-list-1", "scope_ref": "conformance:scope-c4", "digest": {"algorithm": "sha256", "representation": "utf8-json-exact-v1", "value": "a03c8657a575356de5937110fc9038dafa42d659089628586aa8f8d73924cd16"}},
+      "source_ref": "conformance:event-request-c4",
+      "reason": null
+    },
+    "effective": {
+      "status": "known",
+      "value": {"snapshot_ref": "conformance:args-c4-effective", "tool_ref": "conformance:tool-records-list-1", "scope_ref": "conformance:scope-c4", "digest": {"algorithm": "sha256", "representation": "utf8-json-exact-v1", "value": "a03c8657a575356de5937110fc9038dafa42d659089628586aa8f8d73924cd16"}},
+      "source_ref": "conformance:event-effective-c4",
+      "reason": null
+    },
+    "executed": {
+      "status": "unknown",
+      "value": null,
+      "source_ref": null,
+      "reason": "no_physical_entry_instrumentation"
+    },
+    "scope": {
+      "status": "known",
+      "value": {"scope_ref": "conformance:scope-c4", "runtime_ref": "conformance:runtime-offline", "context_ref": "conformance:project-run-c4", "resource_refs": [], "operation": "read"},
+      "source_ref": "conformance:event-scope-c4",
+      "reason": null
+    },
+    "authorization_match": {
+      "status": "known",
+      "value": {"result": "matched", "authorization_target_ref": "conformance:target-c4", "effective_target_ref": "conformance:target-c4"},
+      "source_ref": "conformance:target-binding-c4",
+      "reason": null
+    }
+  },
+  "execution": {
+    "release": {"status": "known", "value": {"occurred": true, "at": "2026-09-07T12:19:59Z"}, "source_ref": "conformance:event-release-c4", "reason": null},
+    "dispatch": {"status": "known", "value": {"occurred": true, "at": "2026-09-07T12:20:00Z"}, "source_ref": "conformance:event-dispatch-c4", "reason": null},
+    "start": {"status": "unknown", "value": null, "source_ref": null, "reason": "entry_not_instrumented"},
+    "completion": {"status": "known", "value": {"occurred": true, "at": "2026-09-07T12:20:01Z"}, "source_ref": "conformance:event-result-c4", "reason": null}
+  },
+  "outcome": {
+    "status": "known",
+    "value": {"status": "success", "reason": null, "result_ref": "conformance:result-c4"},
+    "source_ref": "conformance:event-result-c4",
+    "reason": null
+  }
+}

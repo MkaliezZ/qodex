@@ -1,0 +1,77 @@
+{
+  "schema_version": "kerniq.governance-evidence.v0.2",
+  "evidence_id": "conformance-case-5-unknown-semantics",
+  "producer_ref": "conformance:offline-proof",
+  "profile_ref": "conformance:fixtures-profile-v1",
+  "recorded_at": "2026-09-07T12:30:05Z",
+  "previous_evidence_ref": null,
+  "request": {
+    "status": "unknown",
+    "value": null,
+    "source_ref": null,
+    "reason": "request_log_persistence_failed"
+  },
+  "decision": {
+    "status": "known",
+    "value": {
+      "decision_id": "decision-c5",
+      "evaluation": "error",
+      "action": null,
+      "policy_ref": "conformance:policy-1",
+      "target_ref": null,
+      "decided_at": null
+    },
+    "source_ref": "conformance:event-decision-error-c5",
+    "reason": null
+  },
+  "authorization": {
+    "status": "unknown",
+    "value": null,
+    "source_ref": null,
+    "reason": "no_authorization_record_available"
+  },
+  "argument_binding": {
+    "requested": {
+      "status": "unknown",
+      "value": null,
+      "source_ref": null,
+      "reason": "request_log_persistence_failed"
+    },
+    "effective": {
+      "status": "unknown",
+      "value": null,
+      "source_ref": null,
+      "reason": "no_effective_snapshot_for_error_decision"
+    },
+    "executed": {
+      "status": "unknown",
+      "value": null,
+      "source_ref": null,
+      "reason": "no_dispatch_occurred"
+    },
+    "scope": {
+      "status": "unknown",
+      "value": null,
+      "source_ref": null,
+      "reason": "scope_unavailable_without_request_context"
+    },
+    "authorization_match": {
+      "status": "not_applicable",
+      "value": null,
+      "source_ref": "conformance:event-decision-error-c5",
+      "reason": "no_positive_authorization_to_compare"
+    }
+  },
+  "execution": {
+    "release": {"status": "known", "value": {"occurred": false, "at": null}, "source_ref": "conformance:event-non-release-c5", "reason": null},
+    "dispatch": {"status": "known", "value": {"occurred": false, "at": null}, "source_ref": "conformance:event-non-release-c5", "reason": null},
+    "start": {"status": "unknown", "value": null, "source_ref": "conformance:partial-entry-log-c5", "reason": "entry_not_instrumented"},
+    "completion": {"status": "known", "value": {"occurred": true, "at": "2026-09-07T12:30:02Z"}, "source_ref": "conformance:event-terminal-c5", "reason": null}
+  },
+  "outcome": {
+    "status": "known",
+    "value": {"status": "unknown", "reason": "terminal_state_persistence_failed", "result_ref": null},
+    "source_ref": "conformance:event-terminal-c5",
+    "reason": null
+  }
+}
