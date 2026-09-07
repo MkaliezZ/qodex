@@ -1,0 +1,65 @@
+{
+  "bundle_format_version": "engineering-source-bundle-v1",
+  "source_class": "TEAM_OWNED_ENGINEERING_EXPERIMENT",
+  "experiment_id": "langchain-proof-capture-v0-5-1",
+  "producer_profile_ref": "experiments/langchain-proof-v0-5-1 (TEAM_LAB_NATIVE_STREAM_CONSUMER)",
+  "capture_ref": "capture/session.json",
+  "serialization_representation": "lc-dumps-jsonl-v1",
+  "files": [
+    {
+      "path": "capture/diagnostics.jsonl",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "capture/receipts.jsonl",
+      "bytes": 12690,
+      "sha256": "65a876ae6fb137c00dc9aa2be71ebbaa8c51570fa01361200c83ce75d954c090"
+    },
+    {
+      "path": "capture/session.json",
+      "bytes": 369,
+      "sha256": "696226d6e55a302f6430757f028a84c7dcb792522947b15647bee69df7670d6e"
+    },
+    {
+      "path": "context/dependencies.lock",
+      "bytes": 835,
+      "sha256": "c8eb2cd3aa004c810c900867ecd211d6cf0b2ff2da730daa9d876630ac177d39"
+    },
+    {
+      "path": "context/execution-config.json",
+      "bytes": 609,
+      "sha256": "02565cfd537f2f5d1f0f214b141a68c95688e0dfdb203dd5df8ffc2b99eca40c"
+    },
+    {
+      "path": "context/experiment-snapshot.txt",
+      "bytes": 11345,
+      "sha256": "f26304834d57b05c063459169910c10df0c508ba0b9e288751fe0347fd6ec1ee"
+    },
+    {
+      "path": "context/invocation-input.json",
+      "bytes": 149,
+      "sha256": "3875a8e83ae36aec1d18e244d4a6621909fc5a5b47d074ec95ad3f8dd5dde108"
+    },
+    {
+      "path": "context/provenance.md",
+      "bytes": 988,
+      "sha256": "a86e9ceb6bb1ea6f6154bbfd042c130660f9efd5534bcb1bf4672669e9061041"
+    },
+    {
+      "path": "context/runtime-versions.json",
+      "bytes": 325,
+      "sha256": "f85f028a8c00cb2301208d34ab8c09fc632aac64957596647349feee4328b2eb"
+    },
+    {
+      "path": "context/serialization-profile.md",
+      "bytes": 604,
+      "sha256": "e3a892f0604437443eb6a63c67081942c26a75d5f9a3ffc29bce8011b3c9995c"
+    },
+    {
+      "path": "raw/native-events.jsonl",
+      "bytes": 62698,
+      "sha256": "4ec86fd2a3ba09f98f4b456defd660d86d1bde64019b058e15080dea59c6b0fc"
+    }
+  ]
+}

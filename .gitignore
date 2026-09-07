@@ -85,3 +85,6 @@ secrets/
 
 # Local Config
 qodex-config/local/
+experiments/*/.venv/
+experiments/*/plugins/
+experiments/*/__pycache__/
