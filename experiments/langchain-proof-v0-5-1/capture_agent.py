@@ -1,0 +1,283 @@
+"""TEAM_LAB_NATIVE_STREAM_CONSUMER — LangChain engineering proof capture.
+
+One isolated experiment: an unmodified LangChain ``create_agent`` with one
+pure arithmetic tool and one real DeepSeek model call, driven through the
+public native event stream ``astream_events(version="v2")``. Every native
+event is archived verbatim (public LangChain serializer ``dumps``) into an
+engineering-source-bundle for later read-only source qualification.
+
+This is NOT a KerniQ adapter, projector, middleware, callback hook, or
+monkey patch: it subscribes to nothing, injects nothing, and adds no
+governance fields to the raw events. Collector-side facts (receipts,
+diagnostics, session) live strictly outside raw/.
+"""
+
+from __future__ import annotations
+
+import asyncio
+import hashlib
+import json
+import os
+import platform
+import subprocess
+import sys
+from datetime import datetime, timezone
+from pathlib import Path
+
+from langchain.agents import create_agent
+from langchain_core.load import dump
+from langchain_deepseek import ChatDeepSeek
+
+EXPERIMENT_ID = "langchain-proof-capture-v0-5-1"
+BUNDLE = Path(__file__).resolve().parent / "engineering-source-bundle"
+INPUT_TEXT = (
+    "Use the add tool exactly once to compute 17 + 25, "
+    "then report the result."
+)
+MODEL_ID = "deepseek-chat"
+
+
+def utc_now() -> str:
+    return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z"
+
+
+def add(a: int, b: int) -> int:
+    """Add two integers (pure computation, no side effects)."""
+    return a + b
+
+
+def write(path: Path, text: str) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(text, encoding="utf-8", newline="\n")
+
+
+def sha256_file(path: Path) -> str:
+    return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def installed_versions() -> dict:
+    import importlib.metadata as im
+
+    names = [
+        "langchain",
+        "langchain-core",
+        "langgraph",
+        "langchain-deepseek",
+        "langchain-openai",
+        "openai",
+        "pydantic",
+    ]
+    return {name: im.version(name) for name in names}
+
+
+def serialize_event(event: dict) -> dict:
+    """Public, versioned LangChain serializer: ``langchain_core.load.dump``
+    represents native objects (BaseMessage etc.) with their type markers.
+    No repr fallback, no str() substitution — a failure is recorded, not
+    silently replaced."""
+    return dump.dumps(event)
+
+
+async def run_capture() -> int:
+    (BUNDLE / "raw").mkdir(parents=True, exist_ok=True)
+    (BUNDLE / "context").mkdir(parents=True, exist_ok=True)
+    (BUNDLE / "capture").mkdir(parents=True, exist_ok=True)
+
+    session = {
+        "experiment_id": EXPERIMENT_ID,
+        "capture_class": "TEAM_LAB_NATIVE_STREAM_CONSUMER",
+        "started_at_utc": utc_now(),
+        "finished_at_utc": None,
+        "stream": {"interface": "astream_events", "version": "v2"},
+        "exit_status": None,
+        "tool_target": "one add(17, 25) call",
+    }
+
+    receipts = []
+    diagnostics = []
+    raw_lines = 0
+    exit_status = "ok"
+
+    agent = create_agent(model=ChatDeepSeek(model=MODEL_ID), tools=[add])
+
+    try:
+        index = 0
+        async for event in agent.astream_events(
+            {"messages": [("user", INPUT_TEXT)]}, version="v2"
+        ):
+            index += 1
+            try:
+                # dump.dumps returns the JSON text for the native object
+                # graph already; write it as-is (no double encoding).
+                line = serialize_event(event)
+                json.loads(line)  # guard: line must be valid JSON
+            except Exception as error:  # serialization failure is preserved
+                diagnostics.append(
+                    {
+                        "index": index,
+                        "code": "serialization_failure",
+                        "error": f"{type(error).__name__}: {error}",
+                    }
+                )
+                session["exit_status"] = "incomplete_serialization"
+                continue
+            raw_path = BUNDLE / "raw" / "native-events.jsonl"
+            with raw_path.open("a", encoding="utf-8", newline="\n") as handle:
+                handle.write(line + "\n")
+            raw_lines += 1
+            receipts.append(
+                {
+                    "index": index,
+                    "received_at_utc": utc_now(),  # collector receive time
+                    "raw_line": raw_lines,
+                    "event": event.get("event"),
+                    "run_id": event.get("run_id"),
+                    "parent_ids": event.get("parent_ids"),
+                }
+            )
+    except Exception as error:
+        exit_status = f"stream_error:{type(error).__name__}"
+        diagnostics.append(
+            {"code": "stream_error", "error": f"{type(error).__name__}: {error}"}
+        )
+    finally:
+        session["finished_at_utc"] = utc_now()
+        session["exit_status"] = session.get("exit_status") or exit_status
+        session["raw_event_count"] = raw_lines
+
+    # ---- context artifacts -------------------------------------------------
+    versions = installed_versions()
+    write(
+        BUNDLE / "context" / "runtime-versions.json",
+        json.dumps(
+            {
+                "python": platform.python_version(),
+                "python_implementation": platform.python_implementation(),
+                "os": platform.system(),
+                "machine": platform.machine(),
+                "packages": versions,
+            },
+            indent=2,
+        ),
+    )
+    lock = subprocess.run(
+        [sys.executable, "-m", "pip", "freeze"], capture_output=True, text=True
+    ).stdout
+    write(BUNDLE / "context" / "dependencies.lock", lock)
+    write(
+        BUNDLE / "context" / "execution-config.json",
+        json.dumps(
+            {
+                "agent": "langchain.agents.create_agent (unmodified)",
+                "model_provider": "deepseek (langchain-deepseek ChatDeepSeek)",
+                "model_id": MODEL_ID,
+                "api_mode": "openai-compatible chat completions",
+                "inference_params": "provider defaults (none overridden)",
+                "retry": "provider defaults",
+                "cache": "none configured",
+                "timeout": "provider defaults",
+                "recursion_limit": "langgraph default",
+                "tool": {
+                    "name": "add",
+                    "signature": "add(a: int, b: int) -> int",
+                    "side_effects": "none (pure arithmetic)",
+                },
+                "stream": {"interface": "astream_events", "version": "v2"},
+            },
+            indent=2,
+        ),
+    )
+    write(
+        BUNDLE / "context" / "invocation-input.json",
+        json.dumps({"input_text": INPUT_TEXT, "tool_target_args": {"a": 17, "b": 25}}, indent=2),
+    )
+    snapshot_source = Path(__file__).read_bytes()
+    write(
+        BUNDLE / "context" / "experiment-snapshot.txt",
+        f"# experiment source snapshot: capture_agent.py\n"
+        f"# sha256: {hashlib.sha256(snapshot_source).hexdigest()}\n"
+        f"# bytes: {len(snapshot_source)}\n\n"
+        + snapshot_source.decode("utf-8"),
+    )
+    write(
+        BUNDLE / "context" / "serialization-profile.md",
+        "# Serialization profile\n\n"
+        "- Native event API: `astream_events(version=\"v2\")` "
+        "(langchain-core Runnable astream_events, v2 run/parent correlation)\n"
+        f"- Serializer: `langchain_core.load.dump.dumps` at "
+        f"langchain-core {versions['langchain-core']} (public, versioned, "
+        "reversible with `langchain_core.load.load.loads`)\n"
+        "- Representation: serialized native event objects as JSON, one per "
+        "line; LangChain type markers (`.lc`) preserved; NOT provider wire "
+        "bytes\n"
+        "- Failure policy: a serialization failure records a diagnostic and "
+        "marks the capture incomplete; nothing is replaced with repr/str\n"
+        "- Archive representation id: `lc-dumps-jsonl-v1`\n",
+    )
+    write(
+        BUNDLE / "context" / "provenance.md",
+        "# Provenance\n\n"
+        "- Source class: TEAM_OWNED_ENGINEERING_EXPERIMENT (isolated lab "
+        "experiment; not an external application, not community adoption)\n"
+        f"- Experiment entry: {EXPERIMENT_ID} "
+        "(TEAM_LAB_NATIVE_STREAM_CONSUMER — consumes the public native event "
+        "stream and archives locally; no callback, no middleware, no monkey "
+        "patch, no KerniQ SDK)\n"
+        "- Native producer: langchain/langgraph agent runtime (versions in "
+        "runtime-versions.json); collector identity is NOT runtime admission "
+        "and NOT an approver\n"
+        "- Model: real DeepSeek API call (deepseek-chat); no FakeModel, no "
+        "replay, no recorded responses\n"
+        "- Credential handling: DEEPSEEK_API_KEY read from the user "
+        "environment at runtime; value never written to any bundle file\n"
+        "- Raw events: unmodified native stream output; no KerniQ/evidence/"
+        "decision fields added; raw/ is append-only and not edited after "
+        "capture\n"
+        "- Receipt timestamps are collector receive times, not native event "
+        "times (the native format carries no per-event timestamps)\n"
+    )
+
+    # ---- capture artifacts -------------------------------------------------
+    write(BUNDLE / "capture" / "session.json", json.dumps(session, indent=2))
+    with (BUNDLE / "capture" / "receipts.jsonl").open(
+        "w", encoding="utf-8", newline="\n"
+    ) as handle:
+        for receipt in receipts:
+            handle.write(json.dumps(receipt) + "\n")
+    with (BUNDLE / "capture" / "diagnostics.jsonl").open(
+        "w", encoding="utf-8", newline="\n"
+    ) as handle:
+        for diagnostic in diagnostics:
+            handle.write(json.dumps(diagnostic) + "\n")
+
+    # ---- manifest + root digest -------------------------------------------
+    payload_files = sorted(
+        str(path.relative_to(BUNDLE)).replace("\\", "/")
+        for path in BUNDLE.rglob("*")
+        if path.is_file() and path.name not in {"manifest.json", "bundle.sha256"}
+    )
+    manifest = {
+        "bundle_format_version": "engineering-source-bundle-v1",
+        "source_class": "TEAM_OWNED_ENGINEERING_EXPERIMENT",
+        "experiment_id": EXPERIMENT_ID,
+        "producer_profile_ref": "experiments/langchain-proof-v0-5-1 (TEAM_LAB_NATIVE_STREAM_CONSUMER)",
+        "capture_ref": "capture/session.json",
+        "serialization_representation": "lc-dumps-jsonl-v1",
+        "files": [
+            {"path": rel, "bytes": (BUNDLE / rel).stat().st_size, "sha256": sha256_file(BUNDLE / rel)}
+            for rel in payload_files
+        ],
+    }
+    manifest_bytes = json.dumps(manifest, indent=2).encode("utf-8")
+    (BUNDLE / "manifest.json").write_bytes(manifest_bytes)
+    (BUNDLE / "bundle.sha256").write_text(
+        hashlib.sha256(manifest_bytes).hexdigest(), encoding="utf-8", newline="\n"
+    )
+
+    print(f"capture exit_status={session['exit_status']} raw_events={raw_lines}")
+    print(f"diagnostics={len(diagnostics)} bundle={BUNDLE}")
+    return 0 if session["exit_status"] == "ok" else 1
+
+
+if __name__ == "__main__":
+    raise SystemExit(asyncio.run(run_capture()))

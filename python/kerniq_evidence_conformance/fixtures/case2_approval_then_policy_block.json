@@ -1,0 +1,65 @@
+{
+  "schema_version": "kerniq.governance-evidence.v0.2",
+  "evidence_id": "example-evidence-2",
+  "producer_ref": "example:recorder",
+  "profile_ref": "example:document-only-profile",
+  "recorded_at": "2026-09-07T10:00:05Z",
+  "previous_evidence_ref": "example:evidence-approval-1",
+  "request": {
+    "status": "known",
+    "value": {
+      "request_id": "req-1", "tool_call_id": "call-1", "attempt_ref": "example:attempt-1",
+      "runtime_ref": "example:runtime-1", "action_name": "records.list", "action_ref": "example:tool-records-list-1",
+      "identity_provenance": {"source": "unknown", "subject_ref": null, "provenance_ref": null, "reason": "requester_not_authenticated"}
+    },
+    "source_ref": "example:event-request", "reason": null
+  },
+  "decision": {
+    "status": "known",
+    "value": {"decision_id": "decision-1", "evaluation": "decided", "action": "block", "policy_ref": "example:policy-1", "target_ref": "example:target-effective", "decided_at": "2026-09-07T10:00:03Z"},
+    "source_ref": "example:event-policy-block", "reason": null
+  },
+  "authorization": {
+    "status": "known",
+    "value": {
+      "authorization_ref": "example:approval-1", "disposition": "granted", "target_ref": "example:target-effective",
+      "approved_at": "2026-09-07T10:00:02Z", "expires_at": "2026-09-07T10:01:02Z", "generation": "1", "validity_ref": null,
+      "identity_provenance": {"source": "unknown", "subject_ref": null, "provenance_ref": null, "reason": "legacy_approval_without_attribution"}
+    },
+    "source_ref": "example:event-approval", "reason": null
+  },
+  "argument_binding": {
+    "requested": {
+      "status": "known",
+      "value": {"snapshot_ref": "example:args-requested", "tool_ref": "example:tool-records-list-1", "scope_ref": "example:scope-1", "digest": {"algorithm": "sha256", "representation": "utf8-json-exact-v1", "value": "ca502dec04523cdc33afece69a9b600d5b9bd022d453791cc693b6b372f808ad"}},
+      "source_ref": "example:event-request", "reason": null
+    },
+    "effective": {
+      "status": "known",
+      "value": {"snapshot_ref": "example:args-effective", "tool_ref": "example:tool-records-list-1", "scope_ref": "example:scope-1", "digest": {"algorithm": "sha256", "representation": "utf8-json-exact-v1", "value": "a03c8657a575356de5937110fc9038dafa42d659089628586aa8f8d73924cd16"}},
+      "source_ref": "example:event-effective-before-approval", "reason": null
+    },
+    "executed": {"status": "not_applicable", "value": null, "source_ref": "example:event-non-execution-terminal", "reason": "entry_prevented_by_policy"},
+    "scope": {
+      "status": "known",
+      "value": {"scope_ref": "example:scope-1", "runtime_ref": "example:runtime-1", "context_ref": "example:project-run-1", "resource_refs": ["example:dataset-1"], "operation": "read"},
+      "source_ref": "example:event-scope", "reason": null
+    },
+    "authorization_match": {
+      "status": "known",
+      "value": {"result": "matched", "authorization_target_ref": "example:target-effective", "effective_target_ref": "example:target-effective"},
+      "source_ref": "example:target-binding-record", "reason": null
+    }
+  },
+  "execution": {
+    "release": {"status": "known", "value": {"occurred": false, "at": null}, "source_ref": "example:event-non-execution-terminal", "reason": null},
+    "dispatch": {"status": "known", "value": {"occurred": false, "at": null}, "source_ref": "example:event-non-execution-terminal", "reason": null},
+    "start": {"status": "known", "value": {"occurred": false, "at": null}, "source_ref": "example:event-non-execution-terminal", "reason": null},
+    "completion": {"status": "known", "value": {"occurred": true, "at": "2026-09-07T10:00:04Z"}, "source_ref": "example:event-non-execution-terminal", "reason": null}
+  },
+  "outcome": {
+    "status": "known",
+    "value": {"status": "not_executed", "reason": "policy_blocked", "result_ref": "example:correlated-block-result"},
+    "source_ref": "example:event-non-execution-terminal", "reason": null
+  }
+}

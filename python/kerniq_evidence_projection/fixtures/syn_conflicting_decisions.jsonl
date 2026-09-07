@@ -1,0 +1,5 @@
+{"phase":"model_request","toolCallId":"call_00_C3bKZTCjl6xO2JeK9yBw6519","toolName":"read","turn":1,"step":1}
+{"phase":"pre_execute","toolCallId":"call_00_C3bKZTCjl6xO2JeK9yBw6519","toolName":"read","observed":true}
+{"phase":"pre_execute","toolCallId":"call_00_C3bKZTCjl6xO2JeK9yBw6519","toolName":"read","decision":"allow"}
+{"phase":"pre_execute","toolCallId":"call_00_C3bKZTCjl6xO2JeK9yBw6519","toolName":"read","decision":"deny"}
+{"phase":"result","toolCallId":"call_00_C3bKZTCjl6xO2JeK9yBw6519","toolName":"read","isError":false,"errorCode":null}

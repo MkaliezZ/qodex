@@ -1,0 +1,7 @@
+{
+  "input_text": "Use the add tool exactly once to compute 17 + 25, then report the result.",
+  "tool_target_args": {
+    "a": 17,
+    "b": 25
+  }
+}
