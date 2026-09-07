@@ -146,10 +146,57 @@ STRUCTURAL_DETERMINISM_PROVEN=true
   byte-serialization claim is made or tested.
 ```
 
-Test counts after closure: LangChain 24 (16 prior + 6 closure negatives +
-renamed determinism case), DSH 21 (unchanged), conformance 46 (validator
-unchanged). Real bundle digests re-asserted unchanged after every tamper
-case. All suites green on Python 3.11 and 3.13.
+Test counts after closure: LangChain 24 (16 prior + 8 closure negative
+tests; the determinism case was a rename/wording alignment only and added
+no test), DSH 21 (unchanged), conformance 46 (validator unchanged). Real
+bundle digests re-asserted unchanged after every tamper case. All suites
+green on Python 3.11 and 3.13.
+
+Historical statuses unchanged: FULL_CAPTURE_QUALIFICATION=REJECTED,
+F01_FULL_CAPTURE_STATUS=UNRESOLVED, LIMITED_PROFILE_USED=true,
+FRESH_RECAPTURE_REQUIRED=false.
+
+## Final micro-closure (2026-09-08)
+
+Second independent review: ORIGINAL_4_FINDINGS_SUBSTANTIALLY_CLOSED=true,
+thesis PASS, but FIX_REQUIRED on one P1 and two P2s. All closed:
+
+```text
+FINAL_MICRO_CLOSURE_STATUS=CLOSED
+
+TYPED_TOOL_MESSAGE_FAIL_CLOSED=true
+  The terminal must now BE the audited constructed ToolMessage before any
+  identity/value check runs: output is a dict with lc==1,
+  type=="constructor", id==["langchain","schema","messages","ToolMessage"],
+  kwargs is a dict with type=="tool" and name==profile.TOOL_NAME ("add").
+  Wrong constructor type, wrong message id, missing lc marker, missing
+  kwargs, wrong kwargs.type, or wrong tool name each refuse.
+
+OPAQUE_STRUCTURAL_MATCHING=true
+  Opaque detection is a true structural scan
+  (contains_opaque_command_marker): a match requires ONE dict node
+  simultaneously carrying lc==1, type=="not_implemented", and
+  id==["langgraph","types","Command"]. The JSON-blob string search is gone.
+  Marker tokens split across different dict nodes no longer match
+  (regression-tested at both the helper level and through a split-token
+  bundle refusal).
+
+OPAQUE_REPR_SEMANTIC_ACCESS=false
+  The scan skips any "repr" key's value entirely; a marker hidden inside
+  the repr STRING does not match (regression-tested). The source-level
+  no-repr-access test remains.
+
+RESULT_CORRELATION_CLOSED=true      (unchanged from closure round)
+UNEXPECTED_OUTCOME_FAIL_CLOSED=true (unchanged; audited success shape only)
+OPAQUE_MARKER_FAIL_CLOSED=true      (now structural, both directions)
+STRUCTURAL_DETERMINISM_PROVEN=true  (unchanged; no byte-identity claim)
+```
+
+Final pytest collection: LangChain 32 (16 prior + 8 closure negatives +
+8 micro-closure tests: 4 typed-shape refusals + 4 structural-opaque tests
+including the split-token and repr-skip cases), DSH 21 (unchanged),
+conformance 46 (validator unchanged) = 99 total, actually run and green on
+Python 3.11 and 3.13. Real bundle digests re-asserted unchanged.
 
 Historical statuses unchanged: FULL_CAPTURE_QUALIFICATION=REJECTED,
 F01_FULL_CAPTURE_STATUS=UNRESOLVED, LIMITED_PROFILE_USED=true,

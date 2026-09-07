@@ -400,6 +400,173 @@ class TestCase6bUnexpectedOutcome:
         assert result.document is not True  # sanity: stays refused
 
 
+class TestCase1bTypedToolMessageShape:
+    """Micro-closure P1: the terminal must be the audited constructed
+    ToolMessage before any identity/value check runs."""
+
+    def _retarget(self, tmp_path, mutate):
+        bundle = copy_bundle(tmp_path)
+        tamper_raw(bundle, mutate)
+        _repin(bundle, None)
+        from kerniq_evidence_projection import langchain_projector as lp
+
+        return bundle, lp
+
+    def test_changed_tool_message_id_refuses(self, tmp_path):
+        def mutate(lines):
+            event = json.loads(lines[26])
+            output = event["data"]["output"]
+            output["id"] = ["langchain", "schema", "messages", "AIMessage"]
+            lines[26] = json.dumps(event, ensure_ascii=False)
+            return lines
+
+        bundle, lp = self._retarget(tmp_path, mutate)
+        result = lp.project_langchain_limited(
+            bundle, recorded_at=RECORDED_AT, projection_id="t"
+        )
+        assert result.document is None
+        assert any(
+            "not the audited constructed ToolMessage" in d["detail"]
+            for d in result.diagnostics
+            if d["code"] == "source_structure_mismatch"
+        )
+
+    def test_changed_tool_message_name_refuses(self, tmp_path):
+        def mutate(lines):
+            event = json.loads(lines[26])
+            kwargs = event["data"]["output"]["kwargs"]
+            kwargs["name"] = "subtract"
+            lines[26] = json.dumps(event, ensure_ascii=False)
+            return lines
+
+        bundle, lp = self._retarget(tmp_path, mutate)
+        result = lp.project_langchain_limited(
+            bundle, recorded_at=RECORDED_AT, projection_id="t"
+        )
+        assert result.document is None
+        assert any(
+            "audited tool identity" in d["detail"]
+            for d in result.diagnostics
+            if d["code"] == "source_structure_mismatch"
+        )
+
+    def test_missing_tool_message_constructor_marker_refuses(self, tmp_path):
+        def mutate(lines):
+            event = json.loads(lines[26])
+            output = event["data"]["output"]
+            del output["lc"]
+            lines[26] = json.dumps(event, ensure_ascii=False)
+            return lines
+
+        bundle, lp = self._retarget(tmp_path, mutate)
+        result = lp.project_langchain_limited(
+            bundle, recorded_at=RECORDED_AT, projection_id="t"
+        )
+        assert result.document is None
+        assert any(
+            "not the audited constructed ToolMessage" in d["detail"]
+            for d in result.diagnostics
+            if d["code"] == "source_structure_mismatch"
+        )
+
+    def test_changed_constructor_type_refuses(self, tmp_path):
+        def mutate(lines):
+            event = json.loads(lines[26])
+            output = event["data"]["output"]
+            output["type"] = "not_implemented"
+            lines[26] = json.dumps(event, ensure_ascii=False)
+            return lines
+
+        bundle, lp = self._retarget(tmp_path, mutate)
+        result = lp.project_langchain_limited(
+            bundle, recorded_at=RECORDED_AT, projection_id="t"
+        )
+        assert result.document is None
+
+
+class TestCase2cOpaqueStructuralMatching:
+    """Micro-closure P2: opaque marker detection is a structural scan of a
+    single dict node; tokens split across nodes never match."""
+
+    def test_split_opaque_marker_tokens_do_not_match(self):
+        from kerniq_evidence_projection.langchain_projector import (
+            contains_opaque_command_marker,
+        )
+
+        # old blob-based string search would see both tokens in the JSON
+        # dump and match; the structural scan must refuse because they sit
+        # in different dict nodes
+        split = {
+            "data": {
+                "chunk": [
+                    {"type": "not_implemented"},
+                    {"id": ["langgraph", "types", "Command"]},
+                ]
+            }
+        }
+        assert contains_opaque_command_marker(split) is False
+
+    def test_genuine_opaque_node_matches_structurally(self):
+        from kerniq_evidence_projection.langchain_projector import (
+            contains_opaque_command_marker,
+        )
+
+        genuine = {
+            "data": {
+                "chunk": [
+                    {
+                        "lc": 1,
+                        "type": "not_implemented",
+                        "id": ["langgraph", "types", "Command"],
+                        "repr": "Command(update={...})",
+                    }
+                ]
+            }
+        }
+        assert contains_opaque_command_marker(genuine) is True
+
+    def test_repr_value_is_never_traversed(self):
+        # a marker hidden inside the repr STRING must not match — proves the
+        # scan skips repr values entirely instead of inspecting them
+        from kerniq_evidence_projection.langchain_projector import (
+            contains_opaque_command_marker,
+        )
+
+        sneaky = {
+            "lc": 1,
+            "type": "constructor",
+            "id": ["something", "else"],
+            "repr": '{"lc": 1, "type": "not_implemented", '
+            '"id": ["langgraph", "types", "Command"]}',
+        }
+        assert contains_opaque_command_marker(sneaky) is False
+
+    def test_split_tokens_in_bundle_refuse_projection(self, tmp_path):
+        bundle = copy_bundle(tmp_path)
+
+        def mutate(lines):
+            event = json.loads(lines[21])  # L22 opaque carrier
+            chunk = event["data"]["chunk"][0]
+            marker_id = chunk["id"]
+            del chunk["type"]
+            del chunk["id"]
+            del chunk["lc"]
+            event["data"]["extra"] = {"type": "not_implemented", "id": marker_id}
+            lines[21] = json.dumps(event, ensure_ascii=False)
+            return lines
+
+        tamper_raw(bundle, mutate)
+        _repin(bundle, None)
+        from kerniq_evidence_projection import langchain_projector as lp
+
+        with pytest.raises(
+            lp.ProjectionRefusal, match="opaque marker missing on pinned line 22"
+        ):
+            lp.project_langchain_limited(
+                bundle, recorded_at=RECORDED_AT, projection_id="t"
+            )
+
+
 class TestCase2bOpaqueMarkerFailClosed:
     """Closure P2-1: pinned opaque lines must carry the audited marker, and
     no unapproved opaque Command may appear elsewhere."""

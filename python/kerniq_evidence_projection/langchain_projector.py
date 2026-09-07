@@ -89,6 +89,33 @@ def _verify_identity(bundle_root: Path) -> None:
         )
 
 
+def contains_opaque_command_marker(node: Any) -> bool:
+    """Structural scan: does any single dict node simultaneously carry the
+    audited opaque Command marker (lc==1, type=="not_implemented",
+    id==["langgraph","types","Command"])?
+
+    The scan is strictly structural: it never reads, parses, or inspects
+    any "repr" value — a repr key's value is skipped entirely. Marker
+    tokens split across different dict nodes do NOT match.
+    """
+    if isinstance(node, dict):
+        if (
+            node.get("lc") == 1
+            and node.get("type") == profile.OPAQUE_TYPE
+            and node.get("id") == profile.OPAQUE_COMMAND_ID
+        ):
+            return True
+        for key, value in node.items():
+            if key == "repr":
+                continue  # never semantically inspected
+            if contains_opaque_command_marker(value):
+                return True
+        return False
+    if isinstance(node, list):
+        return any(contains_opaque_command_marker(item) for item in node)
+    return False
+
+
 def _enforce_opaque_exclusion(
     lines: List[Dict[str, Any]], diagnostics: List[Dict[str, Any]]
 ) -> List[int]:
@@ -97,10 +124,8 @@ def _enforce_opaque_exclusion(
     repr; the repr content is not accessed at all."""
     excluded: List[int] = []
     for number in profile.OPAQUE_EXCLUDED_LINES:
-        blob = json.dumps(lines[number - 1])
-        has_type = f'"type": "{profile.OPAQUE_TYPE}"' in blob
-        has_command_id = json.dumps(profile.OPAQUE_COMMAND_ID) in blob
-        if not (has_type and has_command_id):
+        has_type = contains_opaque_command_marker(lines[number - 1])
+        if not has_type:
             # P2-1 fail closed: a pinned opaque line that no longer carries
             # the exact expected marker means the source deviates from the
             # audited structure; exclusion cannot proceed on faith.
@@ -128,11 +153,7 @@ def _enforce_opaque_exclusion(
     for number, event in enumerate(lines, start=1):
         if number in profile.OPAQUE_EXCLUDED_LINES:
             continue
-        blob = json.dumps(event)
-        if (
-            f'"type": "{profile.OPAQUE_TYPE}"' in blob
-            and json.dumps(profile.OPAQUE_COMMAND_ID) in blob
-        ):
+        if contains_opaque_command_marker(event):
             raise ProjectionRefusal(
                 "unexpected opaque Command on unapproved line "
                 f"{number}: the limited profile does not widen "
@@ -168,6 +189,9 @@ def _extract_tool_request(
     return tool_calls[0]
 
 
+TOOL_MESSAGE_ID = ["langchain", "schema", "messages", "ToolMessage"]
+
+
 def _extract_tool_end(
     lines: List[Dict[str, Any]], diagnostics: List[Dict[str, Any]]
 ) -> Optional[Dict[str, Any]]:
@@ -181,8 +205,61 @@ def _extract_tool_end(
             }
         )
         return None
-    message = event.get("data", {}).get("output", {})
-    return (message.get("kwargs", {}) or {})
+    output = event.get("data", {}).get("output")
+    # Typed terminal shape gate (fail-closed): the fixed limited profile
+    # audited exactly one terminal representation — a constructed
+    # langchain ToolMessage. Any other constructor type, message id, or
+    # missing structural marker refuses before identity/value checks run.
+    if not isinstance(output, dict):
+        diagnostics.append(
+            {
+                "code": DIAG_STRUCTURE_MISMATCH,
+                "line": profile.L_TOOL_END,
+                "detail": "terminal output is not an object",
+            }
+        )
+        return None
+    if (
+        output.get("lc") != 1
+        or output.get("type") != "constructor"
+        or output.get("id") != TOOL_MESSAGE_ID
+    ):
+        diagnostics.append(
+            {
+                "code": DIAG_STRUCTURE_MISMATCH,
+                "line": profile.L_TOOL_END,
+                "detail": (
+                    "terminal output is not the audited constructed "
+                    f"ToolMessage (lc={output.get('lc')!r}, "
+                    f"type={output.get('type')!r}, id={output.get('id')!r})"
+                ),
+            }
+        )
+        return None
+    kwargs = output.get("kwargs")
+    if not isinstance(kwargs, dict):
+        diagnostics.append(
+            {
+                "code": DIAG_STRUCTURE_MISMATCH,
+                "line": profile.L_TOOL_END,
+                "detail": "terminal ToolMessage kwargs missing/not an object",
+            }
+        )
+        return None
+    if kwargs.get("type") != "tool" or kwargs.get("name") != profile.TOOL_NAME:
+        diagnostics.append(
+            {
+                "code": DIAG_STRUCTURE_MISMATCH,
+                "line": profile.L_TOOL_END,
+                "detail": (
+                    "terminal ToolMessage kwargs do not match the audited "
+                    f"tool identity (type={kwargs.get('type')!r}, "
+                    f"name={kwargs.get('name')!r})"
+                ),
+            }
+        )
+        return None
+    return kwargs
 
 
 def _check_correlation(
