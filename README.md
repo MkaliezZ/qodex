@@ -6,16 +6,15 @@
 
 **English** | [中文](README.zh-CN.md)
 
-> Desktop-first, multi-model, skill-enabled, MCP-compatible, diff-first AI coding agent.
+> Desktop-first, vendor-neutral control plane for real AI agents.
 
-**Codex Workflow, Any Model, Skills Included.**
+**Orchestrate independent runtimes. Govern only where a real pre-dispatch boundary exists. Preserve explicit evidence and unknowns when stronger control is unavailable.**
 
 KerniQ was previously known as Qodex. Releases up to and including
 v0.2.0-beta.1 may still reference the Qodex name.
 
 ![Beta](https://img.shields.io/badge/status-beta-blue)
 ![License](https://img.shields.io/badge/license-MIT-blue)
-![Tests](https://img.shields.io/badge/tests-1605%20passing-green)
 ![Platform](https://img.shields.io/badge/platform-Desktop%20(Tauri)-purple)
 ![TypeScript](https://img.shields.io/badge/TypeScript-5.5-blue)
 [![CI](https://github.com/MkaliezZ/qodex/actions/workflows/ci.yml/badge.svg)](https://github.com/MkaliezZ/qodex/actions/workflows/ci.yml)
@@ -25,42 +24,111 @@ v0.2.0-beta.1 may still reference the Qodex name.
 
 ## What is KerniQ?
 
-KerniQ is an AI coding agent that follows the Codex workflow philosophy while remaining **provider-agnostic**. Unlike tools locked to a single model vendor, KerniQ supports OpenAI, DeepSeek, OpenRouter, and any OpenAI-compatible endpoint through a unified Provider SDK.
+KerniQ is a desktop-first, vendor-neutral control plane for AI agent workflows. It coordinates agent/runtime lifecycles, reconciles outputs, classifies what each runtime can truthfully expose, applies AgentFuse governance only where a reviewed execution-before boundary exists, and preserves explicit evidence and unknowns when stronger control is unavailable.
 
-**Why KerniQ?** Existing AI coding tools (Codex, Cursor, Claude Code) are typically tied to specific models. KerniQ decouples the coding workflow from any single provider — you can switch models without changing your workflow.
+KerniQ is also a working coding-agent product surface: it includes provider abstraction, context assembly, skills, MCP, diff-first editing, Git checkpoints, session/action runtimes, multi-agent orchestration, and bounded native execution paths. Those product capabilities remain important, but they are no longer the whole definition of the project.
 
-**Key architectural differences:**
-
-| vs Codex | vs Cursor | vs Claude Code |
-|:--|:--|:--|
-| Multi-provider SDK | Modular 9-package architecture | Permissive MIT license |
-| Independent Skill Runtime | Dedicated MCP Runtime | Multi-Agent orchestration |
-| Formal Context Engine | Diff Engine with rollback | Git Checkpoint system |
+The integration direction is **SDK-free by default**. KerniQ should not require users to inherit a KerniQ base class, import KerniQ into business logic, rewrite tools around a KerniQ SDK, or fork their agent framework. Existing native hooks, event streams, plugin seams, and process/runtime boundaries may be used when they already exist.
 
 ---
 
-## Features
+## Why KerniQ?
 
-| Feature | Description |
+KerniQ is built around a different question from “which model is best?”: **what can the runtime actually control, observe, and prove?**
+
+| Question | KerniQ approach |
 |:--|:--|
-| **Provider SDK** | Unified interface for OpenAI, DeepSeek, OpenRouter, and custom endpoints |
-| **Context Engine** | Structured prompt assembly: Rules → Memory → Skills → Metadata → Files → Task |
-| **Agent Runtime** | Task lifecycle with streaming, cancellation, and event bus |
-| **Session Runtime** | Append-only local session history, deterministic projection, and approval-safe restart recovery |
-| **Action Runtime** | Proposal/approval/decision/outcome contracts with a durable pre-dispatch barrier |
-| **Managed Python** | User-installed private CPython runtime for the pinned canonical AgentFuse proof bridge |
-| **Diff Engine** | User-approved patches for selected local text files, with stale-content checks, verified writes, and session rollback |
-| **Git Runtime** | Checkpoints, commits, branches, restore — no Git knowledge required |
-| **Skill Runtime** | Domain-specific guidelines via markdown skills, keyword resolution |
-| **MCP Runtime** | External tool discovery with permission-gated execution |
-| **Multi-Agent Runtime** | Coordinator + 4 specialists (Review, Refactor, Research, Testing) |
-| **Project Runtime** | Open local projects, build file trees, read and select files |
+| Can several independent agents/runtimes be coordinated from one place? | Use a control-plane model for lifecycle, orchestration, and result reconciliation. |
+| Can policy really block before execution? | Claim `GOVERNED` only when a reviewed pre-dispatch seam exists. |
+| What if the runtime exposes no safe control seam? | Downgrade the capability instead of pretending execution control exists. |
+| Is a policy decision the same as an execution result? | No. Decision and outcome are separate evidence. |
+| What was actually observed versus inferred? | Evidence v0.2 keeps known and unknown facts distinct, records source references, and refuses unsupported projections instead of inventing values. |
+
+---
+
+## Capability Model
+
+KerniQ classifies runtime integrations by what can be demonstrated, not by what would be convenient to claim.
+
+| Tier | Meaning |
+|:--|:--|
+| **GOVERNED** | A reviewed real execution-before / pre-dispatch seam exists and policy can prevent dispatch. |
+| **OBSERVED** | KerniQ can observe or control lifecycle/evidence, but cannot truthfully claim pre-dispatch governance. |
+| **OPAQUE** | The runtime does not expose enough trustworthy control/evidence surface for a stronger claim. |
+
+Core invariants:
+
+- **Unknown > fabricated certainty.**
+- **Projection != Execution Control.**
+- **Decision != Outcome.**
+- **Blocked != Failed.**
+
+---
+
+## What Is Proven Today?
+
+Current claims are intentionally bounded.
+
+| Area | Proven status |
+|:--|:--|
+| **KerniQ native Desktop Project Command** | One bounded AgentFuse-protected pre-dispatch path is proven for the reviewed Project Command scope. This is not a claim that every KerniQ action is governed. |
+| **Evidence v0.2** | Frozen conformance proof exists for the canonical Evidence contract and its known/unknown boundaries. |
+| **DSH source projection** | One reviewed real-source offline projection into Evidence v0.2 is proven. |
+| **LangChain source projection** | One fixed real-source **limited offline projection profile** is proven. Full-capture qualification remains **REJECTED** and F-01 remains **UNRESOLVED**. This is not universal LangChain support. |
+| **External validation / adoption** | **Not proven yet.** The next evidence-track milestone is an external validation pilot using an outside party's own real source/run. |
+
+The current Evidence Projection freeze is recorded in
+[`kerniq_evidence_projection_v0_5_2_freeze.md`](docs/development/kerniq_evidence_projection_v0_5_2_freeze.md).
+
+### Not claimed
+
+KerniQ does **not** currently claim:
+
+- universal LangChain support;
+- universal framework governance;
+- universal runtime projection;
+- proof of physical side effects from a terminal event alone;
+- generic cross-process exactly-once execution;
+- external validation or production adoption;
+- that every action is protected by AgentFuse.
+
+For the frozen LangChain track specifically:
+
+```text
+FULL_CAPTURE_QUALIFICATION=REJECTED
+F01_FULL_CAPTURE_STATUS=UNRESOLVED
+EXTERNAL_VALIDATION_PROVEN=false
+ADOPTION_PROVEN=false
+```
 
 ---
 
 ## Architecture
 
+### Control-plane and evidence view
+
+```text
+Agent / Runtime Sources
+  ├─ KerniQ native runtimes
+  ├─ external agent CLIs / runtimes
+  └─ structured traces / event exports
+                ↓
+        KerniQ Control Plane
+  lifecycle · orchestration · reconciliation
+                ↓
+        Capability Classification
+        ├─ GOVERNED ─→ AgentFuse decision gate
+        ├─ OBSERVED ─→ lifecycle / evidence
+        └─ OPAQUE   ─→ explicit unsupported / unknown
+                ↓
+       Evidence v0.2 / Projection
 ```
+
+The control plane does not turn an observed runtime into a governed one. A runtime moves into `GOVERNED` only when a real, reviewed pre-dispatch boundary supports that claim.
+
+### Desktop coding surface
+
+```text
 User Input → ContextEngine → MultiAgentRuntime → AgentRuntime → Provider SDK
                ↓                  ↓                   ↓
              Skills             Planner            Streaming
@@ -75,33 +143,16 @@ User Input → ContextEngine → MultiAgentRuntime → AgentRuntime → Provider
 
 ---
 
-## Repository Structure
+## External Validation
 
-```
-qodex/                  ← legacy repository name
-├── apps/desktop/           ← Tauri + React desktop UI
-├── packages/
-│   ├── provider-sdk/         ← Model provider abstraction (35 tests)
-│   ├── agent-runtime/        ← Task execution orchestration (50 tests)
-│   ├── session-runtime/      ← Universal session ledger and recovery
-│   ├── project-runtime/      ← File system access (41 tests)
-│   ├── context-engine/       ← Context assembly pipeline (57 tests)
-│   ├── diff-engine/          ← Patch generation & apply (95 tests)
-│   ├── git-runtime/          ← Git operations & checkpoints (123 tests)
-│   ├── planning-runtime/     ← Task planning & dependencies (105 tests)
-│   ├── execution-graph-runtime/ ← Graph-based execution (78 tests)
-│   ├── i18n-runtime/         ← Internationalization (35 tests)
-│   ├── marketplace-runtime/  ← Skill marketplace & registry (85 tests)
-│   ├── skill-runtime/        ← Skill loading & resolution (131 tests)
-│   ├── mcp-runtime/          ← MCP tool management (160 tests)
-│   └── multi-agent-runtime/  ← Multi-agent orchestration (195 tests)
-├── docs/                   ← Specifications, guides, development logs
-└── qodex-config/           ← AI agent workspace (rules, memory, ADRs, skills)
-```
+The current proofs are engineering proofs produced inside the project and independently reviewed against preserved sources. KerniQ does **not** yet claim external validation or adoption.
 
-> **Legacy compatibility:** The `@qodex/*` package scope, `qodex-config/`, and
-> related persisted identifiers remain unchanged during the KerniQ brand
-> migration to avoid breaking existing integrations and local data.
+The next Evidence-track milestone is an **External Validation Pilot**: an outside developer or agent-runtime maintainer runs one bounded validation against their own real source/run and returns a machine-verifiable result artifact. The goal is validation, not an integration commitment.
+
+Interested in being an early validation partner? Open an issue at
+[github.com/MkaliezZ/qodex/issues](https://github.com/MkaliezZ/qodex/issues).
+
+No public v0.6 validation CLI is claimed here yet; that pilot is the next separately authorized milestone.
 
 ---
 
@@ -119,13 +170,123 @@ Full guide: [QUICK_START.md](docs/QUICK_START.md)
 
 ---
 
-## Test Suite
+## Features
+
+### Control, trust, and evidence
+
+| Feature | Description |
+|:--|:--|
+| **Control Plane** | Coordinate agent/runtime lifecycle, orchestration, and result reconciliation without pretending every runtime exposes the same control surface. |
+| **Capability Classification** | Distinguish `GOVERNED`, `OBSERVED`, and `OPAQUE` integrations. |
+| **Action Runtime** | Proposal/approval/decision/outcome contracts with durable pre-dispatch evidence on supported paths. |
+| **Session Runtime** | Append-only local session history, deterministic projection, and approval-safe restart recovery. |
+| **AgentFuse Integration** | Policy evaluation on reviewed execution-before seams; an allow decision is not treated as execution success. |
+| **Evidence v0.2** | Canonical evidence contract that keeps request, authorization/decision, argument binding, execution lifecycle, and outcome distinct. |
+| **Runtime Projection** | Offline projection from approved source profiles into canonical Evidence while preserving unknowns and source limitations. |
+
+### Coding-agent product surface
+
+| Feature | Description |
+|:--|:--|
+| **Provider SDK** | Unified interface for OpenAI, DeepSeek, OpenRouter, and compatible endpoints. |
+| **Context Engine** | Structured prompt assembly: Rules → Memory → Skills → Metadata → Files → Task. |
+| **Agent Runtime** | Task lifecycle with streaming, cancellation, and event bus. |
+| **Managed Python** | User-installed private CPython runtime for pinned, reviewed bridge/proof paths. |
+| **Diff Engine** | User-approved patches for selected local text files, with stale-content checks, verified writes, and session rollback. |
+| **Git Runtime** | Checkpoints, commits, branches, and restore operations. |
+| **Skill Runtime** | Domain-specific guidelines via Markdown skills and keyword resolution. |
+| **MCP Runtime** | External tool discovery with permission-gated execution. |
+| **Multi-Agent Runtime** | Coordinator + specialists for review, refactor, research, and testing workflows. |
+| **Project Runtime** | Open local projects, build file trees, and read/select files. |
+
+---
+
+## Repository Structure
+
+```text
+qodex/                      ← legacy repository name
+├── apps/desktop/           ← Tauri + React desktop UI
+├── packages/
+│   ├── provider-sdk/       ← model provider abstraction
+│   ├── agent-runtime/      ← task execution orchestration
+│   ├── session-runtime/    ← durable session ledger and recovery
+│   ├── project-runtime/    ← file system access
+│   ├── context-engine/     ← context assembly pipeline
+│   ├── diff-engine/        ← patch generation and apply
+│   ├── git-runtime/        ← Git operations and checkpoints
+│   ├── planning-runtime/   ← task planning and dependencies
+│   ├── execution-graph-runtime/ ← graph-based execution
+│   ├── i18n-runtime/       ← internationalization
+│   ├── marketplace-runtime/← skill marketplace and registry
+│   ├── skill-runtime/      ← skill loading and resolution
+│   ├── mcp-runtime/        ← MCP tool management
+│   └── multi-agent-runtime/← multi-agent orchestration
+├── python/
+│   ├── kerniq_evidence_conformance/ ← Evidence v0.2 conformance
+│   └── kerniq_evidence_projection/  ← reviewed offline source projection
+├── docs/                   ← specifications, proofs, guides, development logs
+└── qodex-config/           ← AI agent workspace (rules, memory, ADRs, skills)
+```
+
+> **Legacy compatibility:** The `@qodex/*` package scope, `qodex-config/`, and
+> related persisted identifiers remain unchanged during the KerniQ brand
+> migration to avoid breaking existing integrations and local data.
+
+---
+
+## Validation & Tests
+
+Core workspace tests:
 
 ```bash
 pnpm -r test
 ```
 
-**1,605 tests** across 18 tested workspace projects - all passing.
+GitHub CI status is shown by the workflow badge at the top of this README. Static repository-wide test-count badges are intentionally avoided because test scopes evolve independently.
+
+The Evidence Projection v0.5.2 freeze independently executed these offline suites on CPython 3.11 and 3.13:
+
+| Suite | Count |
+|:--|--:|
+| LangChain limited projection | 32 passed |
+| DSH projection | 21 passed |
+| Evidence v0.2 conformance | 46 passed |
+| **Total** | **99 passed** |
+
+The existing GitHub CI workflow does **not** currently execute those three new offline Evidence suites; the 99-test result above is independent freeze-time validation, not remote Evidence CI coverage. See the
+[v0.5.2 freeze record](docs/development/kerniq_evidence_projection_v0_5_2_freeze.md) for the exact command and claim boundary.
+
+---
+
+## Documentation
+
+| Document | Description |
+|:--|:--|
+| [Quick Start](docs/QUICK_START.md) | Get running in 10 minutes |
+| [Installation](docs/INSTALLATION.md) | Setup for macOS / Windows / Linux |
+| [Architecture](docs/ARCHITECTURE.md) | Product architecture |
+| [Evidence Projection v0.5.2 Freeze](docs/development/kerniq_evidence_projection_v0_5_2_freeze.md) | Frozen Evidence v0.2 / DSH / limited LangChain projection claims and non-claims |
+| [Dev Log](docs/development/DEVLOG.md) | Development history |
+| [Product Roadmap](docs/development/PRODUCT_ROADMAP.md) | Product and distribution milestones |
+| [ADR Records](qodex-config/adr/) | Architecture Decision Records |
+| [Release Notes](docs/development/RELEASE_NOTES_v0.2.0-beta.2.md) | v0.2.0-beta.2 changelog |
+
+---
+
+## Version Tracks
+
+KerniQ has more than one development track:
+
+- **Product/runtime milestones** cover the desktop product, native execution, Coding Pack, installation, and runtime integrations.
+- **Evidence/protocol proof milestones** cover Evidence contracts, source qualification, projection, and proof boundaries.
+
+These tracks intentionally use their own milestone numbering. **Evidence Projection v0.5.2 is not a claim that the whole KerniQ product release has moved backward to product v0.5.2.** Historical product milestones such as v0.6.x and v0.7.x remain valid in their own track.
+
+---
+
+## Development History / Proven Milestones
+
+The sections below preserve bounded historical product milestones and their original non-claims. They should not be read as expanding the current capability model above.
 
 ## Minimal Agent Loop v0.4
 
@@ -170,22 +331,6 @@ development mode keeps the File System Access API fallback. Both modes replace
 only selected existing text files through the same Diff Engine approval flow.
 Project selection and rollback history are not persisted across restarts, and
 installer artifacts are not yet published.
-
----
-
-## Documentation
-
-| Document | Description |
-|:--|:--|
-| [Quick Start](docs/QUICK_START.md) | Get running in 10 minutes |
-| [Installation](docs/INSTALLATION.md) | Setup for macOS / Windows / Linux |
-| [Architecture](docs/ARCHITECTURE.md) | Deep dive into all 14 packages |
-| [Dev Log](docs/development/DEVLOG.md) | Complete development history |
-| [Product Roadmap](docs/development/PRODUCT_ROADMAP.md) | Authoritative product and distribution milestones |
-| [ADR Records](qodex-config/adr/) | Architecture Decision Records |
-| [Release Notes](docs/development/RELEASE_NOTES_v0.2.0-beta.2.md) | v0.2.0-beta.2 changelog |
-
----
 
 ## Session Restart Safety v0.5.1
 
