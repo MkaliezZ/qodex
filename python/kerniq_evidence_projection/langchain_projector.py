@@ -96,15 +96,20 @@ def _enforce_opaque_exclusion(
     structure (lc type marker + langgraph Command id), never by reading the
     repr; the repr content is not accessed at all."""
     excluded: List[int] = []
-    blob_by_line = {
-        number: json.dumps(lines[number - 1])
-        for number in profile.OPAQUE_EXCLUDED_LINES
-    }
-    for number, blob in blob_by_line.items():
-        is_opaque = (
-            f'"type": "{profile.OPAQUE_TYPE}"' in blob
-            and json.dumps(profile.OPAQUE_COMMAND_ID) in blob
-        )
+    for number in profile.OPAQUE_EXCLUDED_LINES:
+        blob = json.dumps(lines[number - 1])
+        has_type = f'"type": "{profile.OPAQUE_TYPE}"' in blob
+        has_command_id = json.dumps(profile.OPAQUE_COMMAND_ID) in blob
+        if not (has_type and has_command_id):
+            # P2-1 fail closed: a pinned opaque line that no longer carries
+            # the exact expected marker means the source deviates from the
+            # audited structure; exclusion cannot proceed on faith.
+            raise ProjectionRefusal(
+                "opaque marker missing on pinned line "
+                f"{number}: the limited profile only admits a source whose "
+                "excluded lines carry the audited not_implemented Command "
+                "marker (repr never read)"
+            )
         diagnostics.append(
             {
                 "code": DIAG_OPAQUE_EXCLUDED,
@@ -113,10 +118,26 @@ def _enforce_opaque_exclusion(
                     "langgraph.types.Command serialized as not_implemented; "
                     "repr never parsed; excluded from all known evidence"
                 ),
-                "detected": is_opaque,
+                "detected": True,
             }
         )
         excluded.append(number)
+    # No unapproved opaque Command may hide on other lines: a new
+    # not_implemented Command outside the pinned exclusion set refuses
+    # instead of silently widening the profile.
+    for number, event in enumerate(lines, start=1):
+        if number in profile.OPAQUE_EXCLUDED_LINES:
+            continue
+        blob = json.dumps(event)
+        if (
+            f'"type": "{profile.OPAQUE_TYPE}"' in blob
+            and json.dumps(profile.OPAQUE_COMMAND_ID) in blob
+        ):
+            raise ProjectionRefusal(
+                "unexpected opaque Command on unapproved line "
+                f"{number}: the limited profile does not widen "
+                "OPAQUE_EXCLUDED_LINES by content"
+            )
     return excluded
 
 
@@ -199,13 +220,43 @@ def _check_correlation(
             }
         )
         return False
+    tool_end_event = lines[profile.L_TOOL_END - 1]
+    if tool_end_event.get("run_id") != profile.TOOL_RUN_ID:
+        diagnostics.append(
+            {
+                "code": DIAG_CORRELATION_MISMATCH,
+                "detail": "tool run_id mismatch at on_tool_end",
+            }
+        )
+        return False
+    if tool_end_event.get("run_id") != tool_start.get("run_id"):
+        diagnostics.append(
+            {
+                "code": DIAG_CORRELATION_MISMATCH,
+                "detail": "on_tool_start/on_tool_end run ids diverge",
+            }
+        )
+        return False
+    start_parents = tool_start.get("parent_ids", [])
+    end_parents = tool_end_event.get("parent_ids", [])
     # parent_ids is the ancestor chain: the pinned root run must appear in
-    # it (tool run → tools-node run → root run).
-    if profile.ROOT_RUN_ID not in tool_start.get("parent_ids", []):
+    # both, and the start/end chains must be consistent with each other.
+    if (
+        profile.ROOT_RUN_ID not in start_parents
+        or profile.ROOT_RUN_ID not in end_parents
+    ):
         diagnostics.append(
             {
                 "code": DIAG_CORRELATION_MISMATCH,
                 "detail": "tool run not nested under the pinned root run chain",
+            }
+        )
+        return False
+    if start_parents != end_parents:
+        diagnostics.append(
+            {
+                "code": DIAG_CORRELATION_MISMATCH,
+                "detail": "tool start/end parent chains diverge",
             }
         )
         return False
@@ -303,6 +354,32 @@ def project_langchain_limited(
         },
     }
 
+    # P1-2 fail closed: the limited profile audited exactly one terminal
+    # shape -- ToolMessage status="success" content="42". Anything else
+    # (missing/unknown/unexpected status, unexpected content, changed
+    # result shape) refuses the projection; no failure mapping exists in
+    # this profile and none is invented.
+    if (
+        tool_end_kwargs.get("status") != "success"
+        or tool_end_kwargs.get("content") != "42"
+    ):
+        diagnostics.append(
+            {
+                "code": DIAG_STRUCTURE_MISMATCH,
+                "line": profile.L_TOOL_END,
+                "detail": (
+                    "terminal result does not match the audited success "
+                    f"shape (status={tool_end_kwargs.get('status')!r}, "
+                    f"content={tool_end_kwargs.get('content')!r}); the "
+                    "limited profile has no failure mapping and refuses "
+                    "instead of guessing"
+                ),
+            }
+        )
+        return LangChainProjectionResult(
+            document=None, diagnostics=diagnostics, opaque_exclusions=excluded
+        )
+
     def build_document() -> Dict[str, Any]:
         return {
             "schema_version": SCHEMA_VERSION,
@@ -360,25 +437,13 @@ def project_langchain_limited(
                     _line_ref(profile.L_TOOL_END),
                 ),
             },
-            "outcome": (
-                _known(
-                    {
-                        "status": "success",
-                        "reason": None,
-                        "result_ref": _line_ref(profile.L_TOOL_END),
-                    },
-                    _line_ref(profile.L_TOOL_END),
-                )
-                if tool_end_kwargs.get("status") == "success"
-                and tool_end_kwargs.get("content") == "42"
-                else _known(
-                    {
-                        "status": "failure",
-                        "reason": f"observed_status_{tool_end_kwargs.get('status')}",
-                        "result_ref": _line_ref(profile.L_TOOL_END),
-                    },
-                    _line_ref(profile.L_TOOL_END),
-                )
+            "outcome": _known(
+                {
+                    "status": "success",
+                    "reason": None,
+                    "result_ref": _line_ref(profile.L_TOOL_END),
+                },
+                _line_ref(profile.L_TOOL_END),
             ),
         }
 

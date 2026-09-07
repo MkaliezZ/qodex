@@ -112,6 +112,49 @@ CASE 6 replaces an in-context line (structure intact) so the
 conflicting-terminal path itself refuses. The real bundle's digests are
 re-asserted unchanged by a dedicated test after every tampering case.
 
+## Proof closure (2026-09-08)
+
+Independent review returned CONCLUSION=FIX_REQUIRED (thesis still valid,
+bundle projection valid as bounded sample). Four findings closed:
+
+```text
+PROOF_CLOSURE_STATUS=CLOSED
+
+RESULT_CORRELATION_CLOSED=true
+  P1-1: the terminal result now carries its own identity checks — L27
+  run_id must equal the pinned tool run, must equal L26's run_id, and the
+  pinned root run must appear in BOTH parent chains, which must also be
+  consistent with each other. tool_call_id alone never accepts a terminal.
+
+UNEXPECTED_OUTCOME_FAIL_CLOSED=true
+  P1-2: only the audited terminal shape (ToolMessage status="success"
+  content="42") projects to outcome success. Missing/unknown/unexpected
+  status, unexpected content, or a changed result shape refuses the whole
+  projection — the limited profile has no failure mapping and invents
+  none (no unknown→failure downgrade path exists).
+
+OPAQUE_MARKER_FAIL_CLOSED=true
+  P2-1: each pinned opaque line (L22/L23/L50/L51) must actually carry the
+  audited not_implemented + langgraph.types.Command marker; a pinned line
+  without the marker is a hard refusal. Conversely, a not_implemented
+  Command appearing on any unapproved line also refuses — the exclusion
+  set never widens by content. repr remains unread in every path.
+
+STRUCTURAL_DETERMINISM_PROVEN=true
+  P2-2: the replay test proves deterministic structurally-identical
+  canonical projection results (document, lineage, exclusions). No
+  byte-serialization claim is made or tested.
+```
+
+Test counts after closure: LangChain 24 (16 prior + 6 closure negatives +
+renamed determinism case), DSH 21 (unchanged), conformance 46 (validator
+unchanged). Real bundle digests re-asserted unchanged after every tamper
+case. All suites green on Python 3.11 and 3.13.
+
+Historical statuses unchanged: FULL_CAPTURE_QUALIFICATION=REJECTED,
+F01_FULL_CAPTURE_STATUS=UNRESOLVED, LIMITED_PROFILE_USED=true,
+FRESH_RECAPTURE_REQUIRED=false.
+
 ## Not claimed (per review boundary)
 
 ```text

@@ -282,6 +282,169 @@ class TestCase5CorrelationMismatch:
 # ------------------------------------------------------------- CASE 6
 
 
+class TestCase5bResultSideCorrelation:
+    """Closure P1-1: the terminal result must carry its own run/parent
+    identity — tool_call_id alone never accepts it."""
+
+    def _retarget(self, tmp_path, mutate):
+        bundle = copy_bundle(tmp_path)
+        tamper_raw(bundle, mutate)
+        _repin(bundle, None)
+        from kerniq_evidence_projection import langchain_projector as lp
+
+        return bundle, lp
+
+    def test_result_run_id_mismatch_refuses(self, tmp_path):
+        def mutate(lines):
+            event = json.loads(lines[26])  # L27 on_tool_end
+            event["run_id"] = "01a07bef-fake-1234-0000-000000000000"
+            lines[26] = json.dumps(event, ensure_ascii=False)
+            return lines
+
+        bundle, lp = self._retarget(tmp_path, mutate)
+        result = lp.project_langchain_limited(
+            bundle, recorded_at=RECORDED_AT, projection_id="t"
+        )
+        assert result.document is None
+        assert any(d["code"] == "correlation_mismatch" for d in result.diagnostics)
+
+    def test_result_parent_chain_mismatch_refuses(self, tmp_path):
+        def mutate(lines):
+            event = json.loads(lines[26])  # L27 on_tool_end
+            event["parent_ids"] = ["01a07bef-not-root-0000-0000-00000000"]
+            lines[26] = json.dumps(event, ensure_ascii=False)
+            return lines
+
+        bundle, lp = self._retarget(tmp_path, mutate)
+        result = lp.project_langchain_limited(
+            bundle, recorded_at=RECORDED_AT, projection_id="t"
+        )
+        assert result.document is None
+        assert any(d["code"] == "correlation_mismatch" for d in result.diagnostics)
+
+    def test_start_end_run_divergence_refuses(self, tmp_path):
+        def mutate(lines):
+            event = json.loads(lines[25])  # L26 on_tool_start
+            event["run_id"] = "01a07bef-other-run-0000-0000000000000"
+            lines[25] = json.dumps(event, ensure_ascii=False)
+            return lines
+
+        bundle, lp = self._retarget(tmp_path, mutate)
+        result = lp.project_langchain_limited(
+            bundle, recorded_at=RECORDED_AT, projection_id="t"
+        )
+        assert result.document is None
+        assert any(d["code"] == "correlation_mismatch" for d in result.diagnostics)
+
+
+class TestCase6bUnexpectedOutcome:
+    """Closure P1-2: only the audited success shape projects; anything
+    unexpected refuses — never an automatic failure mapping."""
+
+    def _retarget(self, tmp_path, mutate):
+        bundle = copy_bundle(tmp_path)
+        tamper_raw(bundle, mutate)
+        _repin(bundle, None)
+        from kerniq_evidence_projection import langchain_projector as lp
+
+        return bundle, lp
+
+    def test_unknown_result_status_refuses(self, tmp_path):
+        def mutate(lines):
+            event = json.loads(lines[26])
+            kwargs = event["data"]["output"]["kwargs"]
+            kwargs["status"] = "error"
+            lines[26] = json.dumps(event, ensure_ascii=False)
+            return lines
+
+        bundle, lp = self._retarget(tmp_path, mutate)
+        result = lp.project_langchain_limited(
+            bundle, recorded_at=RECORDED_AT, projection_id="t"
+        )
+        assert result.document is None, "unexpected status must refuse, not fail"
+        diagnostics = [d for d in result.diagnostics if d["code"] == "source_structure_mismatch"]
+        assert any("audited success shape" in d["detail"] for d in diagnostics)
+
+    def test_unexpected_result_content_refuses(self, tmp_path):
+        def mutate(lines):
+            event = json.loads(lines[26])
+            kwargs = event["data"]["output"]["kwargs"]
+            kwargs["content"] = "99"
+            lines[26] = json.dumps(event, ensure_ascii=False)
+            return lines
+
+        bundle, lp = self._retarget(tmp_path, mutate)
+        result = lp.project_langchain_limited(
+            bundle, recorded_at=RECORDED_AT, projection_id="t"
+        )
+        assert result.document is None
+        assert any(
+            "audited success shape" in d["detail"]
+            for d in result.diagnostics
+            if d["code"] == "source_structure_mismatch"
+        )
+
+    def test_missing_status_refuses(self, tmp_path):
+        def mutate(lines):
+            event = json.loads(lines[26])
+            kwargs = event["data"]["output"]["kwargs"]
+            del kwargs["status"]
+            lines[26] = json.dumps(event, ensure_ascii=False)
+            return lines
+
+        bundle, lp = self._retarget(tmp_path, mutate)
+        result = lp.project_langchain_limited(
+            bundle, recorded_at=RECORDED_AT, projection_id="t"
+        )
+        assert result.document is None
+        assert result.document is not True  # sanity: stays refused
+
+
+class TestCase2bOpaqueMarkerFailClosed:
+    """Closure P2-1: pinned opaque lines must carry the audited marker, and
+    no unapproved opaque Command may appear elsewhere."""
+
+    def _retarget(self, tmp_path, mutate):
+        bundle = copy_bundle(tmp_path)
+        tamper_raw(bundle, mutate)
+        _repin(bundle, None)
+        from kerniq_evidence_projection import langchain_projector as lp
+
+        return bundle, lp
+
+    def test_expected_opaque_marker_missing_refuses(self, tmp_path):
+        def mutate(lines):
+            event = json.loads(lines[21])  # L22 opaque carrier
+            # strip the opaque payload from the chunk (marker disappears)
+            event["data"]["chunk"] = []
+            lines[21] = json.dumps(event, ensure_ascii=False)
+            return lines
+
+        bundle, lp = self._retarget(tmp_path, mutate)
+        with pytest.raises(
+            lp.ProjectionRefusal, match="opaque marker missing on pinned line 22"
+        ):
+            lp.project_langchain_limited(
+                bundle, recorded_at=RECORDED_AT, projection_id="t"
+            )
+
+    def test_unexpected_extra_opaque_command_refuses(self, tmp_path):
+        def mutate(lines):
+            donor = json.loads(lines[21])  # L22 carries the opaque Command
+            victim = json.loads(lines[51])  # L52 in-context chain event
+            victim["data"]["chunk"] = donor["data"]["chunk"]
+            lines[51] = json.dumps(victim, ensure_ascii=False)
+            return lines
+
+        bundle, lp = self._retarget(tmp_path, mutate)
+        with pytest.raises(
+            lp.ProjectionRefusal, match="unexpected opaque Command on unapproved line 52"
+        ):
+            lp.project_langchain_limited(
+                bundle, recorded_at=RECORDED_AT, projection_id="t"
+            )
+
+
 class TestCase6ConflictingTerminal:
     def test_second_conflicting_result_refuses(self, tmp_path):
         bundle = copy_bundle(tmp_path)
@@ -342,7 +505,11 @@ class TestCase7UnknownPreservation:
 
 
 class TestCase8DeterministicReplay:
-    def test_same_context_identical_output(self):
+    """Same profile + source + context produce deterministic
+    structurally-identical canonical projection results (documents,
+    lineage, exclusions) — structural determinism, not byte identity."""
+
+    def test_same_context_structurally_identical_output(self):
         first = project()
         second = project()
         assert first.document == second.document
