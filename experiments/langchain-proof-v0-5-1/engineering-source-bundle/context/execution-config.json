@@ -1,0 +1,20 @@
+{
+  "agent": "langchain.agents.create_agent (unmodified)",
+  "model_provider": "deepseek (langchain-deepseek ChatDeepSeek)",
+  "model_id": "deepseek-chat",
+  "api_mode": "openai-compatible chat completions",
+  "inference_params": "provider defaults (none overridden)",
+  "retry": "provider defaults",
+  "cache": "none configured",
+  "timeout": "provider defaults",
+  "recursion_limit": "langgraph default",
+  "tool": {
+    "name": "add",
+    "signature": "add(a: int, b: int) -> int",
+    "side_effects": "none (pure arithmetic)"
+  },
+  "stream": {
+    "interface": "astream_events",
+    "version": "v2"
+  }
+}
