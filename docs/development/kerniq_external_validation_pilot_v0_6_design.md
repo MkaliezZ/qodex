@@ -2,7 +2,7 @@
 
 ## 1. Executive Decision
 
-**设计可行，推荐 GO_TO_MINIMAL_PILOT_IMPLEMENTATION，等待独立 human/architecture review；当前不授权实现或 outreach。** 采用一份伙伴自有真实 source、一个经资格审查的固定 profile、一次本地验证和一份默认不含业务内容的结果 artifact。不得把团队固定样本换一个操作者运行就算外部验证。
+**设计可行，推荐 GO_TO_SOURCE_QUALIFICATION_BEFORE_IMPLEMENTATION。** 独立审查认可总体方向；当前只授权 Pre-Pilot Source Qualification 阶段，不授权 pilot 实现或 pilot outreach。本次任务仅修正文档，source qualification 尚未开始，也不发送任何请求。采用一份伙伴自有真实 source、一个经资格审查的固定 profile、一次本地验证和一份默认不含业务内容的结果 artifact。不得把团队固定样本换一个操作者运行就算外部验证。
 
 这是 external validation / evidence track milestone，不是整个 KerniQ 产品 release v0.6，也不重编号历史产品 v0.6.x。
 
@@ -18,7 +18,19 @@
 
 任务提及的 external runtime validation strategy 文件不在此 main 的 tracked 文档中，未把其他工作区草稿当作已合并依据。当前未取得 PraisonAI 样本或从该仓库确认联系人互动历史。
 
-**关键准备缺口：** source format 待伙伴样本；PraisonAI 不处于可运行状态；10 分钟只是设计预算，未实测。GO 是有条件的设计建议，不是“kit 已就绪”。样本/profile 资格审查必须先于针对该 source 的实现和试用邀请；无法满足时按后文 stop/kill 条件退出，不提前做通用 parser。
+**关键准备缺口：** source format 待伙伴样本；PraisonAI 不处于可运行状态；10 分钟只是设计预算，未实测。GO 仅指进入来源资格审查，不是 implementation GO 或“kit 已就绪”。执行顺序冻结为：
+
+```text
+Design -> Human / Architecture Review -> Source Qualification
+-> Receive real external-owned source format/sample
+-> Review producer/version/correlation semantics
+-> Freeze ONE qualified external profile
+-> Separately authorized Minimal Pilot Implementation
+-> 10-minute usability test -> Separately authorized Pilot Outreach
+-> External Run -> Artifact Verified
+```
+
+不得先实现 CLI/parser 再找 source 或补定义语义。资格审查/冻结未通过时，后续实现、试用邀约和外部成果状态均不能提前推进。
 
 ## 2. Goal
 
@@ -99,7 +111,7 @@ ADOPTION_PROVEN=false
 
 Path A 优先满足该旅程。Path B 只有可拆卸 helper 已按固定版本准备好、伙伴正常 run 能在同一时间预算内产出 source 时才进入试用；agent 运行时间也计入，不能排除等待模型的时间来制造达标。超过 10 分钟没有首个有用结果即 friction gate 不通过；超过 30 分钟终止本轮。
 
-`TARGET_TIME_TO_FIRST_RESULT_MET=false` 表示**当前未测量，不能宣称已达标**，不是已观察到超时。设计预算为 10，真实首轮必须另记耗时；不能把准备就绪前的 schema 协商隐藏成一个已经成功的 10 分钟体验。
+`TARGET_TIME_TO_FIRST_RESULT_MET=false` 表示**当前未测量，不能宣称已达标**，不是已观察到超时。设计预算为 10；只有 profile 已冻结、minimal kit 已在单独授权后实现，才能进行 10 分钟 usability 实测，然后才申请 pilot outreach。真实首轮必须另记耗时；不能把准备就绪前的 schema 协商隐藏成一个已经成功的 10 分钟体验。
 
 ## 7. Input Paths
 
@@ -121,7 +133,7 @@ Path A 优先满足该旅程。Path B 只有可拆卸 helper 已按固定版本�
 
 ## 8. Source Profile Strategy
 
-首版只预留**一个 partner-qualified profile**，不是一个通用框架名称；最多第二个需另行批准和实际来源需要。固定 producer/runtime/version、source representation、关联语义、支持的 record 形状、缺口及拒绝规则。固定的是格式边界，不是团队样本答案或伙伴 run ID。
+首版只预留**一个 partner-qualified profile**，不是一个通用框架名称；第二个 profile 属于后续独立范围，需另行批准和实际来源需要。固定 producer/runtime/version、source representation、关联语义、支持的 record 形状、缺口及拒绝规则。固定的是格式边界，不是团队样本答案或伙伴 run ID。
 
 | 候选来源 | 可否直接作为外部 pilot | 处置 |
 | --- | --- | --- |
@@ -131,7 +143,57 @@ Path A 优先满足该旅程。Path B 只有可拆卸 helper 已按固定版本�
 
 样本入口条件是伙伴提供真实可用的 format/version 信息及本地结构诊断；原始业务 source 可始终不离开伙伴机器。必要时伙伴自行选择低敏真实 run 的最小样本，自愿分享并明确变换范围；不能要求敏感 raw 上传作为必要步骤。如果没有足够非敏信息可完成格式审查，保持 pending 或换候选，不凭空设计 PraisonAI schema。
 
-未来 qualified profile 如需 source-specific 映射，仅作为离线记录解释进入现有 Evidence v0.2；不能复用错误语义或修改旧 frozen profile。若所需事实无法用既有契约表达，停止，不在 pilot 中扩 schema。人工资格审查完成前不实现 parser。
+未来 qualified profile 如需 source-specific 映射，仅作为离线记录解释进入现有 Evidence v0.2；不能复用错误语义或修改旧 frozen profile。若所需事实无法用既有契约表达，停止，不在 pilot 中扩 schema。人工资格审查、明确的 profile freeze 和单独实现授权完成前不实现 parser。
+
+## Pre-Pilot Source Qualification
+
+本阶段只回答：**CAN_A_TRUTHFUL_PROFILE_BE_BUILT=true/false**。结论必须来自外部自有真实 source 的资格审查；当前没有样本，尚不能判为 true，也不把“未审查”写成“不可能”。这是来源准备阶段，不是 pilot trial、external validation 或 adoption。
+
+```text
+SOURCE_QUALIFICATION_REQUEST_SENT
+-> SOURCE_FORMAT_RECEIVED
+-> SOURCE_SAMPLE_RECEIVED
+-> SOURCE_SAMPLE_QUALIFIED
+-> PROFILE_FREEZE_READY
+```
+
+| 状态 | 必需事实；不能推导的下一步 |
+| --- | --- |
+| SOURCE_QUALIFICATION_REQUEST_SENT | 实际发送仅索取来源资格资料的请求并记录引用；本任务未发送 |
+| SOURCE_FORMAT_RECEIVED | 已收到 producer/runtime/version 和原生 export/trace 格式资料；格式说明不等于真实样本合格 |
+| SOURCE_SAMPLE_RECEIVED | 已收到可审查的外部自有真实 tool-call 样本/非敏摘录及来源、范围说明；结构示例或手写 fixture 不替代真实 source |
+| SOURCE_SAMPLE_QUALIFIED | QGATE_1 至 QGATE_7 全部通过，有明确 request 到 tool observation/result 的关联依据，无需 repr 或猜测 |
+| PROFILE_FREEZE_READY | 样本已合格，下述 freeze 清单完整、无未决语义，可交人工正式冻结；ready 不等于已冻结或已授权实现 |
+
+资料同批到达可以逐项核验，但不得仅因收到回复就跳到 qualified。缺失或未知 gate 保持 pending；任何必要 gate 不通过，`SOURCE_SAMPLE_QUALIFIED=false`、`PROFILE_FREEZE_READY=false`。当前阶段已授权但尚未执行，所有请求/样本状态均不能自动标为完成。
+
+**Source qualification activity is not an adoption signal.** 此状态链及其请求记录必须与第 5 节 pilot/adoption funnel 分开。它不自动增加 OUTREACH_SENT、TRIAL_ACCEPTED、ARTIFACT_VERIFIED、WILL_REUSE，也不使 EXTERNAL_VALIDATION_PROVEN 或 ADOPTION_PROVEN 变成 true。第 18 节的 qualification 等待指标只记录准备耗时，不计入 pilot 转化或主 KPI。
+
+### 最小资料请求与隐私
+
+未来首个 PraisonAI source qualification 请求只需要：producer/runtime version、native trace/export format、一个真实且已脱敏的 tool-call sample。不要求试用尚不存在的 validator，也不宣称 PraisonAI supported、profile/validator 已存在或 pilot ready。
+
+不便提供 raw 时，可先提供 version、format description、structural schema/field sample 或 non-sensitive excerpt。仅格式说明只能推进 SOURCE_FORMAT_RECEIVED；只有真实来源依据及摘录足以审核 essential fields 和明确 ID/lineage 关联时，才能推进 SOURCE_SAMPLE_QUALIFIED。脱敏范围必须披露；如果脱敏破坏关联而无法审核，继续 pending，不要求上传敏感 raw，不以人工解释或团队造样本填空。
+
+### Source Qualification Gates
+
+| Gate | 通过条件 |
+| --- | --- |
+| QGATE_1 - Producer Identity | producer/runtime/version 固定明确，source representation 可识别；名称不是 runtime trust/身份认证 |
+| QGATE_2 - Native Source | source 来自伙伴真实 agent/runtime run，有归属/采集范围依据，不是 KerniQ 团队 fixture 或手工补写事件 |
+| QGATE_3 - Correlation | request 到 tool observation/result 由明确原生 ID/lineage 关联；禁止按时间相邻、同名工具或参数相等猜测 |
+| QGATE_4 - Serialization | essential fields 完整结构化可读；禁止 repr parsing、string heuristic、unsupported-object silent fallback；排除与缺口显式记录 |
+| QGATE_5 - Evidence Mapping | known/unknown/refusal 可以在冻结 Evidence v0.2 与原 core validator semantics 下表达，NEW_SCHEMA_REQUIRED=false |
+| QGATE_6 - SDK-Free | 不修改 business logic、framework core 或 tool implementation；仅既有获审查外置读取/导出路径 |
+| QGATE_7 - Privacy | validation 可 local-only，来源资格审查不要求上传敏感 raw；非敏资料足够支持必要语义判断 |
+
+**全部通过且 freeze 清单齐备后，PROFILE_FREEZE_READY=true；否则 false。** 暂无合格样本不等于路线失败，但禁止实现过程中边写 parser 边决定语义。若发现必须改 Evidence schema、core validator semantics、runtime 或 governance protocol，立即停止并记录 ARCHITECTURE_CHANGE_REQUIRED=true、FINAL_RECOMMENDATION=REDESIGN。
+
+### Profile Freeze Before Implementation
+
+正式冻结必须先于实现，至少记录：profile_id；producer/runtime；version；source representation；supported event/record shapes；correlation rules；required source fields；known mappings；unknown mappings；refusal rules；truncation/incomplete behavior；source digest representation。
+
+冻结记录应有审核依据及精确版本，只覆盖 ONE qualified external profile。PROFILE_FREEZE_READY 是进入人工冻结的门槛，不是实现授权。source profile 的语义与 source digest representation 在此确定；新 result artifact 的 canonicalization 属于另一层，可按第 11 节在 implementation proof 单独冻结，不能借此延后 source 语义决定。
 
 ## 9. SDK-Free Boundary
 
@@ -170,9 +232,16 @@ Path A 优先满足该旅程。Path B 只有可拆卸 helper 已按固定版本�
 
 ## 11. Artifact Integrity
 
-最小 canonical JSON 方案命名 `pilot-json-ascii-v1`：对象 key 限预定义 ASCII；按 key 升序排序；数组保持顺序；无多余空白；字符串按 JSON 转义，所有非 ASCII 使用小写十六进制 Unicode escape，非 BMP 用 surrogate pair；不做 Unicode normalization。输入字符串拒绝孤立 surrogate，重复键拒绝；仅 null、boolean、string、object、array 和非负安全整数，禁止浮点、NaN、Infinity。输出 UTF-8、无 BOM、无尾随换行。它只用于新封套，绝不更改原始 source 或既有参数 digest 的 representation。
+采用 **Option B**：本阶段只冻结确定性 artifact serialization 要求，不再定义自创 canonical JSON 标准。具体 canonicalization profile 在单独获授权的 implementation proof 中选择、验证并冻结；在其冻结前不能声称 artifact 字节摘要已具备跨实现可复核性。
 
-`artifact_digest = SHA256(canonical_json(artifact 去除顶层 artifact_digest 整项))`。源码、profile、分发包各自摘要从固定发布清单核对；该清单随 kit 本地取得，验证时不联网下载任意声明的版本。带时间戳的两次 artifact 不要求字节相同；同一输入/上下文的派生 claim 结果应稳定，local replay 比较排除时钟等 run metadata 的结果部分。
+```text
+DETERMINISTIC_ARTIFACT_SERIALIZATION_REQUIRED=true
+CANONICALIZATION_PROFILE=TO_BE_FROZEN_DURING_IMPLEMENTATION_PROOF
+```
+
+保留 source digest、artifact digest、profile version/digest、validator version/digest 及确定性派生结果要求。未来方案必须明确摘要覆盖范围、artifact_digest 自引用排除方式及固定实现测试，不修改 raw source、Evidence v0.2 或既有参数 digest representation；不在本任务决定新的排序、转义或数值编码标准。
+
+artifact digest 绑定结果封套，具体字节规则以上述待冻结 profile 为准；摘要自身不递归包含在摘要输入中。源码、profile、分发包各自摘要从固定发布清单核对；该清单随 kit 本地取得，验证时不联网下载任意声明的版本。带时间戳的两次 artifact 不要求字节相同；同一输入/上下文的派生 claim 结果应稳定，local replay 比较排除时钟等 run metadata 的结果部分。
 
 核验分两层：
 
@@ -241,11 +310,11 @@ SOURCE_FORMAT_PENDING_PARTNER_SAMPLE=true
 
 路径优先 A。若没有原生 export，只把 B 作为待验证可能性：固定官方 seam、外置捕获、可删除、无业务/core/tool 修改。若这些限制不能同时成立，保持 PRAISONAI_PILOT_NOT_READY=true 并拒绝该路径，返回候选选择；不做永久 instrumentation 或 framework fork。
 
-先做获准的 source qualification，再冻结一个 profile 的最小映射和 unknown 矩阵；之后才申请实现/邀测。此资格准备阶段不是外部成功，不计 ARTIFACT_VERIFIED。没有样本不能发送“kit 已支持你的 runtime”的承诺。
+按 Pre-Pilot Source Qualification 的独立状态链，先取得实际来源资料并通过七项 gates，正式冻结一个 profile 的映射和 unknown 矩阵，再单独申请实现。kit 实现后的 10 分钟 usability test 通过后，才可单独授权 pilot outreach。此资格准备阶段不是外部成功，不计 ARTIFACT_VERIFIED。没有样本不能发送“kit 已支持你的 runtime”的承诺。
 
 ## 16. Outreach Recovery Strategy
 
-本任务不联系任何人。后续单独授权且 kit/profile 达到入口条件后，改为一个小请求：“用你自己的真实 source 试一次，看看哪些观察能被证实，返回结果 artifact”。不要重复“请集成 AgentFuse”的旧要求，不索取会议、roadmap、依赖合并、first-party support 或维护承诺。
+本节只讨论未来 **pilot outreach**，不包括独立的 source qualification 请求。本任务不联系任何人；只有 profile 已正式冻结、kit 已实现、10 分钟 usability test 通过且 pilot outreach 单独获授权后，才发送：“用你自己的真实 source 试一次，看看哪些观察能被证实，返回结果 artifact”。不要重复“请集成 AgentFuse”的旧要求，不索取会议、roadmap、依赖合并、first-party support 或维护承诺。
 
 只设计候选槽位，不编造具体联系人或历史：
 
@@ -258,7 +327,7 @@ SOURCE_FORMAT_PENDING_PARTNER_SAMPLE=true
 
 ## 17. Outreach Template
 
-仅供未来 kit/profile 就绪且获得发送授权后使用；方括号内容必须来自已核实上下文。本任务未发送。
+仅供未来 profile 冻结、kit 就绪、10 分钟 usability test 通过且 pilot outreach 单独获授权后使用；不是 source qualification 索样模板。方括号内容必须来自已核实上下文。本任务未发送。
 
 > Hi [name], your work on [verified runtime/tool-boundary feature] makes your perspective especially useful. We have a small local-only validation pilot for [qualified source format]. Would you try one existing real tool-call source from your own project and send back the machine-verifiable result artifact? The goal is under 10 minutes, with no integration or maintenance commitment. Raw prompts, credentials, and business payloads stay on your machine. The result separates what was observed, what can be supported, and what remains unknown. You can stop if the format is unsupported or setup takes too long. Would this small trial be useful to you?
 
@@ -279,7 +348,7 @@ SOURCE_FORMAT_PENDING_PARTNER_SAMPLE=true
 | 1 Friction | 合格 Path A 10 分钟内有用首结果；包含下载/setup，理想 5 分钟 | PENDING_MEASUREMENT；预算可行但没有实测 |
 | 2 Source honesty | 外部 owner/operator、自有真实 source；不可团队代造 | PENDING_PARTNER_SAMPLE |
 | 3 SDK-free | 核心业务零改动；helper 仅获准外置 seam | DESIGN_CONSTRAINT_MET；伙伴路径待确认 |
-| 4 Machine-verifiable | canonical artifact + source 本地重核 + 收件侧一致性检查 | DESIGN_FEASIBLE；不是远程执行认证，待实现验证 |
+| 4 Machine-verifiable | 确定性 artifact + source 本地重核 + 收件侧一致性检查 | DESIGN_FEASIBLE；canonicalization 待 implementation proof 冻结，不是远程执行认证 |
 | 5 Privacy | 默认 raw 不上传、无遥测、分享预览/退出 | DESIGN_CONSTRAINT_MET；待验证 |
 | 6 Truthfulness | 不推执行/授权；unknown/拒绝/冲突显式保留 | DESIGN_CONSTRAINT_MET；沿用冻结契约，待 profile 测试 |
 | 7 Partner value | 本地可定位的事实/缺口与可采取行动的诊断 | DESIGN_FEASIBLE；需伙伴反馈确认 |
@@ -305,7 +374,7 @@ SOURCE_FORMAT_PENDING_PARTNER_SAMPLE=true
 
 **IMPLEMENTATION_SCOPE=M**：不是平台工程，但可靠的无 raw 分享、确定性 artifact 和 source-qualified 映射比一个命令 wrapper 更大。首版只实现获批的一条 Path A，第二 profile 和 Path B helper 都不能因本文被默认纳入首批工作。
 
-在 human review、非敏样本资格审查和 profile 冻结之后，另行授权的 MUST_HAVE 限于：一个 local validation CLI；一个固定 source profile（上限两个需理由）；只读 source loader；artifact writer；artifact/local-source verifier；确定性测试；短 pilot README。复用冻结 Evidence validator 与适用的既有投影能力；若新 source 必须有特定映射，只能限于已审查离线 profile，不写 generic parser。
+本节是未来范围上限，不是当前实现任务。只有 human review、七项 source qualification gates、完整 profile freeze 均已完成，再取得单独实现授权，才进入 MUST_HAVE：一个 local validation CLI；ONE qualified external profile；只读 source loader；artifact writer；artifact/local-source verifier；确定性测试；短 pilot README。复用冻结 Evidence validator 与适用的既有投影能力；若新 source 必须有特定映射，只能限于已审查离线 profile，不写 generic parser。不能先开发再补 source/profile 语义。
 
 未来测试至少覆盖：完整可用来源、预期 unknown、unsupported/incomplete、关联冲突、摘要/版本不符、source 读期间变化、opaque 排除、无秘密内容泄露、确定性派生结果和拒绝改 schema。synthetic negatives 与伙伴真实 positive 明确分开，测试数量不作为外部采用证据。本次不创建测试或 fixtures。
 
@@ -321,9 +390,9 @@ DEFER：GUI、dashboard、cloud backend、accounts、hosted upload、telemetry �
 
 ## 23. Recommendation
 
-将此设计交独立 human/architecture review。优先获得一个 PraisonAI 候选人的**获准、外部自有、非敏可审查格式资料**，不猜 schema、不承诺已支持。如果来源可以在既有契约下解释，冻结一个 profile 后再申请最小实现；否则换合格候选或 redesign，而不是新增 runtime。所有 outreach 仍需单独授权。
+当前推荐仅为 **GO_TO_SOURCE_QUALIFICATION_BEFORE_IMPLEMENTATION**。source qualification 阶段已授权，但本次只完成设计 micro-closure，不开始任何 qualification 请求。未来先获得 PraisonAI 候选人的外部自有、非敏可审查格式与真实样本资料，通过七项 gates，冻结 ONE qualified external profile；再单独申请最小实现、完成 10 分钟实测，最后单独授权 pilot outreach。不能因格式回复就认为 profile 已可实现；不能把 qualification 记入 adoption funnel。
 
-以下 false proof/measurement flags 表示当前未获证明或未就绪，不等于事实已被否定。`TARGET_TIME_TO_FIRST_RESULT_MET=false` 的原因为 NOT_MEASURED。GO 是设计可行性建议，不是进入实现的授权，也不是外部成功。
+以下 false proof/measurement flags 表示当前未获证明或未就绪，不等于事实已被否定。`TARGET_TIME_TO_FIRST_RESULT_MET=false` 的原因为 NOT_MEASURED。GO 只允许推进来源资格审查，不是实现 GO，也不是外部成功；本次结束后立即停止，不自动执行该阶段。
 
 ```text
 BASE_MAIN_HEAD=1eabd5fdca94e000bc462a78be84ceb701bf7c00
@@ -332,6 +401,10 @@ EXTERNAL_VALIDATION_PILOT_FEASIBLE=true
 PRAISONAI_FIRST_CANDIDATE=true
 PRAISONAI_PILOT_NOT_READY=true
 SOURCE_FORMAT_PENDING_PARTNER_SAMPLE=true
+SOURCE_QUALIFICATION_REQUIRED=true
+SOURCE_QUALIFICATION_AUTHORIZED=true
+SOURCE_QUALIFICATION_STARTED=false
+PROFILE_FREEZE_READY=false
 TARGET_TIME_TO_FIRST_RESULT_MINUTES=10
 TARGET_TIME_TO_FIRST_RESULT_MET=false
 TARGET_TIME_MEASUREMENT_STATUS=NOT_MEASURED
@@ -342,20 +415,24 @@ FRAMEWORK_CORE_CHANGE_REQUIRED=false
 NEW_SCHEMA_REQUIRED=false
 NEW_RUNTIME_REQUIRED=false
 NEW_GOVERNANCE_PROTOCOL_REQUIRED=false
+CANONICALIZATION_PROFILE=TO_BE_FROZEN_DURING_IMPLEMENTATION_PROOF
+DETERMINISTIC_ARTIFACT_SERIALIZATION_REQUIRED=true
 FIRST_EXTERNAL_VALIDATION_DEFINITION=ARTIFACT_VERIFIED_WITH_EXTERNAL_SOURCE_OPERATOR_AND_USEFUL_CORRELATED_OBSERVATION
 FIRST_ADOPTION_SIGNAL_DEFINITION=POST_RESULT_CONCRETE_WILL_REUSE_OR_VERIFIED_REPEAT_USE
 PRIMARY_KPI=ARTIFACT_VERIFIED
 IMPLEMENTATION_SCOPE=M
 OUTREACH_RESTART_REQUIRED=true
 ARCHITECTURE_CHANGE_REQUIRED=false
+PILOT_IMPLEMENTATION_AUTHORIZED=false
+PILOT_OUTREACH_AUTHORIZED=false
 IMPLEMENTATION_AUTHORIZED=false
 IMPLEMENTATION_STARTED=false
 EXTERNAL_VALIDATION_PROVEN=false
 ADOPTION_PROVEN=false
 FULL_CAPTURE_QUALIFICATION=REJECTED
 F01_FULL_CAPTURE_STATUS=UNRESOLVED
-FINAL_RECOMMENDATION=GO_TO_MINIMAL_PILOT_IMPLEMENTATION
-FINAL_STATUS=EXTERNAL_VALIDATION_PILOT_DESIGN_COMPLETE_READY_FOR_HUMAN_REVIEW
+FINAL_RECOMMENDATION=GO_TO_SOURCE_QUALIFICATION_BEFORE_IMPLEMENTATION
+FINAL_STATUS=EXTERNAL_VALIDATION_PILOT_DESIGN_MICRO_CLOSURE_COMPLETE_READY_FOR_SOURCE_QUALIFICATION
 ```
 
-本次只新增设计文档，提交并推送独立 docs 分支。未创建 PR、merge、tag、README 改动或任何代码；未联系伙伴。完成后停止。
+本次只修订此设计文档，在原 docs 分支、815303f013e39efb11cad4fca171f83e902968bf 之上创建并推送一个 micro-closure commit。未创建新分支、PR、merge、tag、README 改动或任何代码；未联系伙伴、未开始 source qualification。完成后停止。
