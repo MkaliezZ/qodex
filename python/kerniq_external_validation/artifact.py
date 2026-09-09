@@ -32,9 +32,55 @@ from typing import Any, Dict, List, Optional
 
 from . import langchain_profile as profile
 from .diagnostics import Diagnostic, summarize
+from .source_loader import (
+    check_no_lone_surrogates,
+    reject_duplicate_keys,
+    reject_nonfinite_constant,
+)
 from .validator import ValidationOutcome
 
 ARTIFACT_DIGEST_KEY = "artifact_digest"
+
+
+class ArtifactFormatError(ValueError):
+    """Artifact bytes are not a strict canonical artifact (fail-closed)."""
+
+
+def parse_artifact_bytes(raw: bytes) -> Dict[str, Any]:
+    """Strict artifact parsing with canonical-input enforcement.
+
+    Refused: duplicate JSON keys, NaN/Infinity constants, invalid UTF-8,
+    lone surrogates, non-object top level, missing final LF, and ANY byte
+    difference from the canonical serialization (ARTIFACT_CANONICAL_INPUT_
+    ENFORCED=true) — a semantically equal but respaced/reordered file is
+    not this artifact.
+    """
+    if not raw.endswith(b"\n"):
+        raise ArtifactFormatError("artifact file does not end with a final LF")
+    try:
+        text = raw.decode("utf-8")
+    except UnicodeDecodeError:
+        raise ArtifactFormatError("artifact bytes are not valid UTF-8")
+    try:
+        value = json.loads(
+            text,
+            object_pairs_hook=reject_duplicate_keys,
+            parse_constant=reject_nonfinite_constant,
+        )
+    except ValueError as exc:
+        raise ArtifactFormatError(f"artifact is not strict JSON: {type(exc).__name__}")
+    if not isinstance(value, dict):
+        raise ArtifactFormatError("artifact top level is not a JSON object")
+    try:
+        check_no_lone_surrogates(value)
+    except UnicodeEncodeError:
+        raise ArtifactFormatError("artifact contains lone surrogate characters")
+    if raw != canonical_bytes(value) + b"\n":
+        raise ArtifactFormatError(
+            "artifact bytes are not the canonical serialization "
+            "(spacing/order/newline differences are not accepted)"
+        )
+    return value
 
 
 def canonical_bytes(value: Any) -> bytes:
@@ -131,7 +177,7 @@ def _claim_checks(outcome: ValidationOutcome) -> List[Dict[str, Any]]:
         "TOOL_ACTION_NAME": outcome.evidence_document["request"]["source_ref"],
         "TOOL_SUCCESSFUL_RETURN_SOURCE_REPORTED": outcome.lineage["outcome"]["source_ref"],
         "TOOL_RUN_LIFECYCLE_CORRELATION": (
-            f"langchain-archive:{outcome.source_digest[:12]}"
+            f"langchain-archive:{outcome.source_digest}"
             f"#root={outcome.lineage['correlation_key']['root_run_id']}"
             f"#tool={outcome.lineage['correlation_key']['tool_run_id']}"
         ),

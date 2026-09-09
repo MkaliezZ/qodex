@@ -48,9 +48,23 @@ python -m kerniq_external_validation verify --artifact external-validation-resul
 ```
 
 Re-reads your source bytes, recomputes digests, re-runs the full offline
-mapping and compares against the artifact (excluding run timestamps).
-Outputs `VERIFIED` (exit 0) or `REJECTED` (exit 2) with reasons. It never
-trusts self-reported artifact fields alone.
+mapping, rebuilds the expected artifact and compares the WHOLE shareable
+semantic envelope (result, capability_assessment, claims, claim_checks,
+diagnostics, exclusions, evidence_validation, the full source_digest record,
+evidence, lineage, privacy, identity versions). Only per-run clock metadata
+(start/completed timestamps, duration, validation id, evidence.recorded_at)
+is excluded from the comparison. Artifact files must also parse strictly
+(duplicate keys / NaN / invalid UTF-8 refused) and be byte-identical to
+their canonical serialization with a final LF — a respaced or reordered file
+is rejected even if semantically equal. Forging any bound field — even with
+a recomputed artifact digest — is REJECTED. Outputs `VERIFIED` (exit 0) or
+`REJECTED` (exit 2) with reasons. It never trusts self-reported artifact
+fields alone.
+
+All source-bound references (Evidence `source_ref`/`snapshot_ref`/
+`result_ref`, `attempt_ref`, `runtime_ref`, claim locators, `evidence_id`)
+carry the FULL 64-hex SHA-256 of the exact source bytes
+(`SOURCE_REFERENCE_DIGEST_LENGTH=64`).
 
 ## Result meaning
 

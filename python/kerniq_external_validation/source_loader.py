@@ -60,8 +60,11 @@ class LoadedSource:
     diagnostics: List[Diagnostic] = field(default_factory=list)
 
     def archive_ref(self, line: int, pointer: str = "") -> str:
-        """Namespaced source reference: digest + one-based line + pointer."""
-        ref = f"langchain-archive:{self.raw_digest[:12]}#L{line}"
+        """Namespaced source reference binding the EXACT full 64-hex source
+        digest (v0.6.2 freeze section 8: exact source digest binding — a
+        truncated digest never identifies the archive), one-based line and
+        optional JSON Pointer."""
+        ref = f"langchain-archive:{self.raw_digest}#L{line}"
         if pointer:
             ref += f"#{pointer}"
         return ref
@@ -110,11 +113,11 @@ def _safe_inventory_path(root: Path, raw_path: Any) -> Path:
 # --- Strict JSONL parsing ------------------------------------------------------
 
 
-def _reject_constant(name: str) -> float:
+def reject_nonfinite_constant(name: str) -> float:
     raise ValueError(f"non-finite JSON constant refused: {name}")
 
 
-def _reject_duplicate_keys(pairs: List[Tuple[str, Any]]) -> Dict[str, Any]:
+def reject_duplicate_keys(pairs: List[Tuple[str, Any]]) -> Dict[str, Any]:
     seen = set()
     for key, _ in pairs:
         if key in seen:
@@ -123,16 +126,16 @@ def _reject_duplicate_keys(pairs: List[Tuple[str, Any]]) -> Dict[str, Any]:
     return dict(pairs)
 
 
-def _check_no_lone_surrogates(node: Any) -> None:
+def check_no_lone_surrogates(node: Any) -> None:
     if isinstance(node, str):
         node.encode("utf-8")  # lone surrogates raise UnicodeEncodeError
     elif isinstance(node, dict):
         for key, value in node.items():
-            _check_no_lone_surrogates(key)
-            _check_no_lone_surrogates(value)
+            check_no_lone_surrogates(key)
+            check_no_lone_surrogates(value)
     elif isinstance(node, list):
         for item in node:
-            _check_no_lone_surrogates(item)
+            check_no_lone_surrogates(item)
 
 
 def parse_jsonl_strict(raw: bytes) -> Tuple[List[Dict[str, Any]], List[Diagnostic]]:
@@ -181,8 +184,8 @@ def parse_jsonl_strict(raw: bytes) -> Tuple[List[Dict[str, Any]], List[Diagnosti
         try:
             value = json.loads(
                 line,
-                object_pairs_hook=_reject_duplicate_keys,
-                parse_constant=_reject_constant,
+                object_pairs_hook=reject_duplicate_keys,
+                parse_constant=reject_nonfinite_constant,
             )
         except ValueError as exc:
             diagnostics.append(
@@ -201,7 +204,7 @@ def parse_jsonl_strict(raw: bytes) -> Tuple[List[Dict[str, Any]], List[Diagnosti
             )
             continue
         try:
-            _check_no_lone_surrogates(value)
+            check_no_lone_surrogates(value)
         except UnicodeEncodeError:
             diagnostics.append(
                 Diagnostic(INVALID_SOURCE, "error", "jsonl.valid_unicode", line=index, detail="lone surrogate in line")
@@ -379,7 +382,7 @@ def _load_inventory(
     try:
         inventory = json.loads(
             read_bytes(inventory_path).decode("utf-8"),
-            object_pairs_hook=_reject_duplicate_keys,
+            object_pairs_hook=reject_duplicate_keys,
         )
     except (UnicodeDecodeError, ValueError) as exc:
         diagnostics.append(
@@ -503,7 +506,7 @@ def load_source(source: Path) -> LoadedSource:
     _, provenance_bytes = bound[profile.PROVENANCE_FILENAME]
     try:
         provenance = json.loads(
-            provenance_bytes.decode("utf-8"), object_pairs_hook=_reject_duplicate_keys
+            provenance_bytes.decode("utf-8"), object_pairs_hook=reject_duplicate_keys
         )
     except (UnicodeDecodeError, ValueError) as exc:
         diagnostics.append(

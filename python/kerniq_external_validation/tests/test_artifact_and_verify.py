@@ -102,7 +102,7 @@ def test_canonical_bytes_sorted_compact_no_ascii_escape():
 def test_case27_artifact_tampering_detected(tmp_path):
     src, out, _, artifact = _validate_to_artifact(tmp_path)
     artifact["result"] = "PARTIAL"  # forged without recomputing digest
-    out.write_text(json.dumps(artifact, ensure_ascii=False), encoding="utf-8")
+    out.write_bytes(canonical_bytes(artifact) + b"\n")
     assert verify_artifact(out, src).status == REJECTED
 
 
@@ -110,16 +110,17 @@ def test_case27b_forged_with_recomputed_digest_caught_by_replay(tmp_path):
     src, out, _, artifact = _validate_to_artifact(tmp_path)
     artifact["claims_proven"] = list(artifact["claims_proven"]) + ["PHYSICAL_EXECUTION"]
     artifact[ARTIFACT_DIGEST_KEY]["value"] = compute_artifact_digest(artifact)  # attacker recomputes
-    out.write_text(json.dumps(artifact, ensure_ascii=False), encoding="utf-8")
+    # write canonically so the attack lands on the semantic replay binding
+    out.write_bytes(canonical_bytes(artifact) + b"\n")
     outcome = verify_artifact(out, src)
     assert outcome.status == REJECTED
-    assert any("claims_proven" in r or "claim consistency" in r for r in outcome.reasons)
+    assert any("semantic envelope mismatch" in r for r in outcome.reasons)
 
 
 def test_case28_invalid_artifact_digest_detected(tmp_path):
     src, out, _, artifact = _validate_to_artifact(tmp_path)
     artifact[ARTIFACT_DIGEST_KEY]["value"] = "0" * 64
-    out.write_text(json.dumps(artifact, ensure_ascii=False), encoding="utf-8")
+    out.write_bytes(canonical_bytes(artifact) + b"\n")
     assert verify_artifact(out, src).status == REJECTED
 
 
@@ -127,7 +128,7 @@ def test_verify_rejects_unknown_profile_artifact(tmp_path):
     src, out, _, artifact = _validate_to_artifact(tmp_path)
     artifact["profile_version"] = "9.9.9"
     artifact[ARTIFACT_DIGEST_KEY]["value"] = compute_artifact_digest(artifact)
-    out.write_text(json.dumps(artifact, ensure_ascii=False), encoding="utf-8")
+    out.write_bytes(canonical_bytes(artifact) + b"\n")
     assert verify_artifact(out, src).status == REJECTED
 
 

@@ -40,22 +40,23 @@ def _known(value: Dict[str, Any], source_ref: str) -> Dict[str, Any]:
     return {"status": "known", "value": value, "source_ref": source_ref, "reason": None}
 
 
-def attempt_ref(matched: MatchedIdentity) -> str:
+def attempt_ref(source_digest: str, matched: MatchedIdentity) -> str:
     """Namespaced, locally-resolvable native invocation reference (freeze
     section 6: encodes the original identity components unambiguously,
-    together with the exact source digest; resolves locally; executes
-    nothing)."""
+    TOGETHER WITH the exact full source digest; resolves locally; executes
+    nothing; contains no path and no retry ordinal)."""
     return (
-        f"langchain-tool-run:{matched.root_run_id}:{matched.tool_run_id}"
+        f"langchain-tool-run:{source_digest}:"
+        f"{matched.root_run_id}:{matched.tool_run_id}"
     )
 
 
 def runtime_ref(loaded: LoadedSource) -> str:
     """Reference to the declared source runtime provenance (freeze section 6:
-    derived, not an integrity attestation)."""
+    derived, not an integrity attestation; binds the exact full digest)."""
     return (
         "langchain-archive:"
-        f"{loaded.raw_digest[:12]}:"
+        f"{loaded.raw_digest}:"
         "producer=langchain@1.4.0+core@1.6.2+langgraph@1.2.11+prebuilt@1.1.0"
     )
 
@@ -75,9 +76,12 @@ def build_evidence_document(loaded: LoadedSource, matched: MatchedIdentity) -> D
 
     document: Dict[str, Any] = {
         "schema_version": SCHEMA_VERSION,
+        # evidence_id binds the exact FULL source digest (opaque producer-ns
+        # identity); the trailing hash is only a tool-run disambiguation salt
+        # for producer-namespace uniqueness — it is not a source locator.
         "evidence_id": (
             "kerniq-external-validator:"
-            f"{loaded.raw_digest[:12]}:"
+            f"{loaded.raw_digest}:"
             f"{hashlib.sha256(matched.tool_run_id.encode('utf-8')).hexdigest()[:12]}"
         ),
         "producer_ref": profile.PRODUCER_REF,
@@ -92,7 +96,7 @@ def build_evidence_document(loaded: LoadedSource, matched: MatchedIdentity) -> D
                 # Source-confirmed: the exact native id in the matched typed
                 # terminal; terminal origin recorded in lineage below.
                 "tool_call_id": matched.terminal_kwargs["tool_call_id"],
-                "attempt_ref": attempt_ref(matched),
+                "attempt_ref": attempt_ref(loaded.raw_digest, matched),
                 "runtime_ref": runtime_ref(loaded),
                 "action_name": matched.tool_name,
                 # Display name only; no executable identity is established.
