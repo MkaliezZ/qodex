@@ -75,7 +75,7 @@ Current claims are intentionally bounded.
 | **Evidence v0.2** | Frozen conformance proof exists for the canonical Evidence contract and its known/unknown boundaries. |
 | **DSH source projection** | One reviewed real-source offline projection into Evidence v0.2 is proven. |
 | **LangChain source projection** | One fixed real-source **limited offline projection profile** is proven. Full-capture qualification remains **REJECTED** and F-01 remains **UNRESOLVED**. This is not universal LangChain support. |
-| **External validation / adoption** | **Not proven yet.** A minimal local external validation CLI exists for one frozen OBSERVED LangChain profile (see [External Validation](#external-validation)); the first internal 10-minute usability run failed on documentation friction and a fresh rerun is pending. |
+| **External validation / adoption** | **Not proven yet.** A minimal local external validation CLI exists for one frozen OBSERVED LangChain profile (see [External Validation](#external-validation)); the first internal usability run failed on documentation friction and, after the doc fix, a second fresh-clone rerun passed (~61 s to a PASS + VERIFIED artifact on the synthetic sample). Still not external validation. |
 
 The current Evidence Projection freeze is recorded in
 [`kerniq_evidence_projection_v0_5_2_freeze.md`](docs/development/kerniq_evidence_projection_v0_5_2_freeze.md).
@@ -153,11 +153,18 @@ it validates exactly ONE frozen `OBSERVED` LangChain profile
 (`langchain-create-agent-tool-run-jsonl-v0.1`), takes an existing
 compatible archive only (no capture path), runs entirely local, read-only,
 and offline, performs strict source qualification and Evidence v0.2
-projection, and verifies the result artifact by replay. The first internal
-10-minute usability run failed honestly on a documentation friction (the
-documented Python command did not cover a `python3`-only fresh host); the
-docs were corrected and a fresh rerun is pending. That failed run and this
-CLI are still not external validation.
+projection, and verifies the result artifact by replay.
+
+Internal usability history, preserved as evidence on both runs: the first
+fresh-clone internal usability run failed honestly on a Python executable
+documentation mismatch (a real documentation friction, later fixed by the
+minimal doc repair). After the fix, a second fresh-clone rerun passed: the
+bundled synthetic sample produced a PASS artifact and a VERIFIED result in
+about 61 seconds, with end-to-end semantic interpretation completed in
+about 89 seconds. This proves the documented internal usability path for
+the synthetic sample — it is not external validation, a real external
+user proof, or adoption. Evidence: [first usability proof (FAIL)](docs/development/kerniq_langchain_internal_usability_proof_v0_6_4.md)
+and [fresh rerun (PASS)](docs/development/kerniq_langchain_internal_usability_rerun_v0_6_4.md).
 
 The next Evidence-track milestone remains an **External Validation Pilot**:
 an outside developer or agent-runtime maintainer runs one bounded validation
