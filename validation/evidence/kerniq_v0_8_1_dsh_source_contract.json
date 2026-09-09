@@ -1,0 +1,54 @@
+{
+  "schema_version": "kerniq.dsh.source-contract.v0.8.1",
+  "recorded_at": "2026-08-13",
+  "kerniq_base_commit": "8e12526e2f9fc1759bfbd3802bfec4a22182eaad",
+  "dsh": {
+    "repository": "deepseek-ai/deepseek-harness",
+    "commit": "47f943859bef60e4160492346772ded9b24f765a",
+    "package_version": "0.1.0-rc.5",
+    "license": "MIT",
+    "release_channel": "developer_preview"
+  },
+  "reviewed_source_contract": {
+    "everything_is_plugin": true,
+    "explicit_tool_restriction_allow_deny": true,
+    "restrictions_intersect": true,
+    "scoped_registrations_exempt_from_inherited_restrictions": true,
+    "reserved_run_code_transport_exempt_from_restrictions": true,
+    "monotonic_tool_guard_after_pre_execute_before_body": true,
+    "native_tool_presentation_supported": true,
+    "guarded_execution_pipeline": true,
+    "later_profile_home_or_cli_patch_can_override_earlier_rows": true
+  },
+  "source_references": [
+    "README.md",
+    "docs/architecture.md",
+    "docs/subsystems/tools.md",
+    "packages/core/tools/src/index.ts",
+    "packages/bundle/base/README.md",
+    "package.json"
+  ],
+  "required_runtime_gates": [
+    "pinned_source_identity",
+    "structural_model_surface",
+    "scoped_registration_containment",
+    "nested_dispatch_containment",
+    "monotonic_dispatch_guard",
+    "managed_profile_immutability",
+    "workspace_write_zero",
+    "kerniq_owned_side_effect_authority"
+  ],
+  "runtime_proof": {
+    "status": "NOT_RUN_IN_SOURCE_CONTRACT_SLICE",
+    "model_visible_tool_surface": null,
+    "scoped_registration_escape_probe": null,
+    "nested_dispatch_probe": null,
+    "monotonic_guard_probe": null,
+    "effective_config_digest": null,
+    "direct_fixture_writes": null,
+    "kerniq_agentfuse_round_trip": null
+  },
+  "current_outcome": "RUNTIME_PROOF_REQUIRED",
+  "codewhale_status": "FROZEN_REFERENCE_BASELINE",
+  "dsh_default_product_engine": false
+}
