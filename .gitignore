@@ -88,3 +88,7 @@ qodex-config/local/
 experiments/*/.venv/
 experiments/*/plugins/
 experiments/*/__pycache__/
+
+# cheshire-cat import scaffold garbage (generated at cwd on import)
+plugins/
+.venv-preview/
