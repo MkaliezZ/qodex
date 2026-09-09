@@ -81,7 +81,7 @@ KerniQ 按“实际证明能力”而不是“希望拥有的能力”来分类 
 | **Evidence v0.2** | 已有冻结的 conformance proof，用于约束 canonical Evidence contract 及 known / unknown 边界。 |
 | **DSH source projection** | 已证明一个经过审查的真实 source 离线投影到 Evidence v0.2。 |
 | **LangChain source projection** | 已证明一个固定真实 source 的**有限离线 projection profile**。Full capture qualification 仍为 **REJECTED**，F-01 仍为 **UNRESOLVED**。这不是通用 LangChain 支持。 |
-| **External validation / adoption** | **尚未证明。** 下一条 Evidence 主线是让项目外部人员用自己的真实 source / run 完成一次独立验证。 |
+| **External validation / adoption** | **尚未证明。** 已存在一个最小本地 external validation CLI，仅支持一个冻结的 `OBSERVED` LangChain profile（见 [External Validation](#external-validation)）；首次内部 10 分钟 usability 因文档 friction 失败，文档修正后 fresh rerun 已 PASS。这仍不是 external validation。 |
 
 当前 Evidence Projection 冻结记录：
 [`kerniq_evidence_projection_v0_5_2_freeze.md`](docs/development/kerniq_evidence_projection_v0_5_2_freeze.md)
@@ -153,12 +153,19 @@ Control Plane 不会自动把“可观察 Runtime”变成“可治理 Runtime�
 
 当前 proof 是项目内部工程 proof，并基于保存下来的真实 source 做过独立审查；KerniQ **还没有**声称 external validation 或 adoption。
 
-下一条 Evidence 主线是 **External Validation Pilot**：由项目外部开发者或 Agent Runtime 维护者，对其自己的真实 source / run 完成一次受限验证，并返回机器可复核的结果 artifact。目标是验证，不要求对方承诺集成。
+**最小本地 external validator CLI** 已经存在（使用说明见
+[pilot README](docs/development/kerniq_langchain_external_validator_v0_6_3.md)）：
+
+- 只支持一个冻结的 `OBSERVED` LangChain profile：`langchain-create-agent-tool-run-jsonl-v0.1`；
+- 输入是**已有的兼容 archive**（EXISTING_ARCHIVE_ONLY），不提供 automatic capture path；
+- 完全本地、只读、离线运行：严格 source qualification、Evidence v0.2 投影，以及对结果 artifact 的 replay 校验。
+
+**内部 usability 现状**：首次 fresh-clone 内部 10 分钟 usability 因 README 的 Python 可执行文件说明 friction 如实 FAIL；文档修正后 fresh rerun 已 PASS——首次 validate 即得到 PASS artifact，首次 verify 返回 VERIFIED，约 61 秒到达 verified artifact，约 89 秒完成语义理解。这是使用 synthetic sample 的 internal usability proof，**不是** external validation、真实外部用户证明或 adoption 证明。
+
+下一条 Evidence 主线仍是 **External Validation Pilot**：由项目外部开发者或 Agent Runtime 维护者，对其自己的真实 source / run 完成一次受限验证，并返回机器可复核的结果 artifact。目标是验证，不要求对方承诺集成。在 Pilot 成功之前，以下边界不变：不是通用 LangChain 支持；没有 LangChain governance、physical execution 或物理副作用证明；没有 model ToolCall → tool run 的 Level B 关联证明；external validation 与 adoption 均未证明。
 
 如果愿意作为早期 validation partner，可以在
 [GitHub Issues](https://github.com/MkaliezZ/qodex/issues) 留言。
-
-目前 README **不声称已经存在**公开的 v0.6 validation CLI；该 Pilot 是下一阶段单独授权的工作。
 
 ---
 
@@ -215,7 +222,8 @@ qodex/                      ← 历史仓库名称
 ├── packages/               ← 产品 Runtime / SDK / Engine
 ├── python/
 │   ├── kerniq_evidence_conformance/ ← Evidence v0.2 conformance
-│   └── kerniq_evidence_projection/  ← 经过审查的离线 source projection
+│   ├── kerniq_evidence_projection/  ← 经过审查的离线 source projection
+│   └── kerniq_external_validation/  ← 最小本地 external validator / pilot
 ├── docs/                   ← 规范、proof、指南与开发日志
 └── qodex-config/           ← AI Agent 工作空间（rules / memory / ADR / skills）
 ```
@@ -268,6 +276,7 @@ KerniQ 当前存在不止一条开发轨道：
 | [Installation](docs/INSTALLATION.md) | macOS / Windows / Linux 安装 |
 | [Architecture](docs/ARCHITECTURE.md) | 产品架构 |
 | [Evidence Projection v0.5.2 Freeze](docs/development/kerniq_evidence_projection_v0_5_2_freeze.md) | Evidence v0.2 / DSH / limited LangChain projection 的冻结 claim 与 non-claim |
+| [External Validator Pilot README](docs/development/kerniq_langchain_external_validator_v0_6_3.md) | 一个冻结 OBSERVED LangChain profile 的最小本地 external validator 使用说明 |
 | [Dev Log](docs/development/DEVLOG.md) | 开发历史 |
 | [Product Roadmap](docs/development/PRODUCT_ROADMAP.md) | 产品与分发里程碑 |
 | [ADR Records](qodex-config/adr/) | 架构决策记录 |
