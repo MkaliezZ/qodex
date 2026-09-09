@@ -75,7 +75,7 @@ Current claims are intentionally bounded.
 | **Evidence v0.2** | Frozen conformance proof exists for the canonical Evidence contract and its known/unknown boundaries. |
 | **DSH source projection** | One reviewed real-source offline projection into Evidence v0.2 is proven. |
 | **LangChain source projection** | One fixed real-source **limited offline projection profile** is proven. Full-capture qualification remains **REJECTED** and F-01 remains **UNRESOLVED**. This is not universal LangChain support. |
-| **External validation / adoption** | **Not proven yet.** The next evidence-track milestone is an external validation pilot using an outside party's own real source/run. |
+| **External validation / adoption** | **Not proven yet.** A minimal local external validation CLI exists for one frozen OBSERVED LangChain profile (see [External Validation](#external-validation)); the first internal 10-minute usability run failed on documentation friction and a fresh rerun is pending. |
 
 The current Evidence Projection freeze is recorded in
 [`kerniq_evidence_projection_v0_5_2_freeze.md`](docs/development/kerniq_evidence_projection_v0_5_2_freeze.md).
@@ -147,12 +147,28 @@ User Input → ContextEngine → MultiAgentRuntime → AgentRuntime → Provider
 
 The current proofs are engineering proofs produced inside the project and independently reviewed against preserved sources. KerniQ does **not** yet claim external validation or adoption.
 
-The next Evidence-track milestone is an **External Validation Pilot**: an outside developer or agent-runtime maintainer runs one bounded validation against their own real source/run and returns a machine-verifiable result artifact. The goal is validation, not an integration commitment.
+A **minimal local external validator CLI** now exists (see the
+[pilot README](docs/development/kerniq_langchain_external_validator_v0_6_3.md)):
+it validates exactly ONE frozen `OBSERVED` LangChain profile
+(`langchain-create-agent-tool-run-jsonl-v0.1`), takes an existing
+compatible archive only (no capture path), runs entirely local, read-only,
+and offline, performs strict source qualification and Evidence v0.2
+projection, and verifies the result artifact by replay. The first internal
+10-minute usability run failed honestly on a documentation friction (the
+documented Python command did not cover a `python3`-only fresh host); the
+docs were corrected and a fresh rerun is pending. That failed run and this
+CLI are still not external validation.
+
+The next Evidence-track milestone remains an **External Validation Pilot**:
+an outside developer or agent-runtime maintainer runs one bounded validation
+against their own real source/run and returns a machine-verifiable result
+artifact. The goal is validation, not an integration commitment. Until that
+pilot succeeds: no general LangChain support, no automatic capture path, no
+governance or physical-execution proof, and no external validation or
+adoption is claimed.
 
 Interested in being an early validation partner? Open an issue at
 [github.com/MkaliezZ/qodex/issues](https://github.com/MkaliezZ/qodex/issues).
-
-No public v0.6 validation CLI is claimed here yet; that pilot is the next separately authorized milestone.
 
 ---
 
@@ -223,7 +239,8 @@ qodex/                      ← legacy repository name
 │   └── multi-agent-runtime/← multi-agent orchestration
 ├── python/
 │   ├── kerniq_evidence_conformance/ ← Evidence v0.2 conformance
-│   └── kerniq_evidence_projection/  ← reviewed offline source projection
+│   ├── kerniq_evidence_projection/  ← reviewed offline source projection
+│   └── kerniq_external_validation/  ← minimal local external validator (pilot)
 ├── docs/                   ← specifications, proofs, guides, development logs
 └── qodex-config/           ← AI agent workspace (rules, memory, ADRs, skills)
 ```
@@ -266,6 +283,7 @@ The existing GitHub CI workflow does **not** currently execute those three new o
 | [Installation](docs/INSTALLATION.md) | Setup for macOS / Windows / Linux |
 | [Architecture](docs/ARCHITECTURE.md) | Product architecture |
 | [Evidence Projection v0.5.2 Freeze](docs/development/kerniq_evidence_projection_v0_5_2_freeze.md) | Frozen Evidence v0.2 / DSH / limited LangChain projection claims and non-claims |
+| [External Validator Pilot README](docs/development/kerniq_langchain_external_validator_v0_6_3.md) | Minimal local external validation CLI for one frozen OBSERVED LangChain profile |
 | [Dev Log](docs/development/DEVLOG.md) | Development history |
 | [Product Roadmap](docs/development/PRODUCT_ROADMAP.md) | Product and distribution milestones |
 | [ADR Records](qodex-config/adr/) | Architecture Decision Records |

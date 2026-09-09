@@ -18,7 +18,10 @@ uploads anything, and never modifies your source.
 
 ## Prerequisites
 
-- Python 3.11+ (stdlib only; no third-party dependency, no network)
+- **A Python 3.11+ interpreter on this machine** (the validator itself is
+  stdlib-only: no third-party dependency, no network). See "Choosing your
+  Python command" below — the documented commands use `python3` / `py -3`
+  because a bare `python` executable does not exist on every platform.
 - A source bundle directory containing exactly:
 
 ```
@@ -28,23 +31,97 @@ uploads anything, and never modifies your source.
   inventory.json        per-file SHA-256 + byte length binding (kerniq-source-inventory-v1)
 ```
 
-See `python/kerniq_external_validation/tests/fixtures/synthetic_valid_source/`
-for a complete synthetic example (SYNTHETIC_TEST_FIXTURE=true — it is a test
-fixture, not external validation evidence).
+### Choosing your Python command
+
+Pick ONE interpreter command, confirm it is Python 3.11+, and use that same
+command for every `validate` and `verify` invocation.
+
+**macOS / Linux** — check `python3` first:
+
+```bash
+python3 --version      # if this prints 3.11 or newer, use python3
+```
+
+If your environment only provides `python`, run `python --version`; once you
+have confirmed 3.11+ you may use `python` instead. You do not need to create
+an alias, modify `PATH`, set `PYTHONPATH`, or install another Python if a
+qualifying interpreter already exists.
+
+**Windows** — check the `py` launcher first:
+
+```powershell
+py -3 --version        # if this prints 3.11 or newer, use py -3
+```
+
+`python --version` also works when you have confirmed it is 3.11+.
+
+If `python` is the confirmed Python 3.11+ executable on your system, you may
+substitute `python` consistently in all commands below.
+
+### Validator host Python vs. frozen producer Python pin
+
+Two different things are easily confused:
+
+- **Validator host Python** — the interpreter running this CLI on your
+  machine. Prerequisites currently require Python 3.11+. The next usability
+  rerun will exercise the documented path in a fresh environment.
+- **Source profile provenance Python pin** — `provenance.json` in the source
+  bundle declares the exact producer environment (CPython 3.11.15 /
+  Pydantic 2.13.5) that generated the archive. That pin is validated
+  **against the archive's declaration**; it does not mean the validator CLI
+  can only run on that exact host interpreter, and no broader host
+  compatibility matrix is claimed here.
+
+### The bundled synthetic sample
+
+`python/kerniq_external_validation/tests/fixtures/synthetic_valid_source/`
+is a complete example bundle for the internal usability journey and for
+trying the commands. It is declared `SYNTHETIC_TEST_FIXTURE=true` inside its
+own `provenance.json`: it is a test fixture and example only — it does not
+prove external validation, a real LangChain capture, or adoption.
 
 ## Validate
 
+macOS / Linux:
+
 ```bash
 cd python
-python -m kerniq_external_validation validate --source <your-source-dir> --output external-validation-result.json
+python3 -m kerniq_external_validation validate \
+  --source kerniq_external_validation/tests/fixtures/synthetic_valid_source \
+  --output external-validation-result.json
 ```
+
+Windows PowerShell:
+
+```powershell
+cd python
+py -3 -m kerniq_external_validation validate `
+  --source kerniq_external_validation/tests/fixtures/synthetic_valid_source `
+  --output external-validation-result.json
+```
+
+(Replace the `--source` path with your own compatible archive directory.)
 
 Exit codes: `0` = PASS · `2` = refused (UNSUPPORTED_SOURCE / SOURCE_INCOMPLETE / CORRELATION_UNPROVEN) · `3` = validation error · `1` = usage.
 
 ## Verify
 
+Reuses the same interpreter command you confirmed above.
+
+macOS / Linux:
+
 ```bash
-python -m kerniq_external_validation verify --artifact external-validation-result.json --source <your-source-dir>
+python3 -m kerniq_external_validation verify \
+  --artifact external-validation-result.json \
+  --source kerniq_external_validation/tests/fixtures/synthetic_valid_source
+```
+
+Windows PowerShell:
+
+```powershell
+py -3 -m kerniq_external_validation verify `
+  --artifact external-validation-result.json `
+  --source kerniq_external_validation/tests/fixtures/synthetic_valid_source
 ```
 
 Re-reads your source bytes, recomputes digests, re-runs the full offline
