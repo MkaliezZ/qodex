@@ -1,0 +1,1032 @@
+{
+  "profile": "maf-python-local-function-governed-v0.8",
+  "maf_upstream_ref": "4507512f95effaae4518d658e86e9afc0ccb4514",
+  "agentfuse_ref": "ec4b5842339dccfba0db62df7541920759203bc9",
+  "provider": "deepseek-official",
+  "requested_model": "deepseek-v4-flash",
+  "package_versions": {
+    "agent-framework-core": "1.17.0",
+    "agent-framework-openai": "1.14.2",
+    "openai": "3.11.0",
+    "pydantic": "2.13.5"
+  },
+  "qualified_source_sha256": {
+    "_tools.py": "9c046818b1ad137ba20ca8005c407712f01b863da1700f1d9f98084219484f1f",
+    "_middleware.py": "92badb9dd4235920311bd35098babb9f209c0b22a349bbdf8b4f41f070fc624b",
+    "_agents.py": "455ee0747f8e133ae57c8969f61d72a658eac5ec899ad58b6cc178e650062fd7",
+    "_sessions.py": "f5954f9651b2089b82886e506aadc4414a3690d78a803b4fa5ebba8f0e3c3ce6"
+  },
+  "real_provider": true,
+  "cases": [
+    {
+      "case": "single_block",
+      "real_model_tool_call": true,
+      "body_entry_count": 0,
+      "physical_marker_exists": false,
+      "physical_marker_line_count": 0,
+      "physical_marker_sha256": null,
+      "result_returned_to_caller": true,
+      "response_id": "9f625b0d-3960-4021-b5c3-ec163d3a09fd",
+      "record": {
+        "request_id": "maf-request-f839d827f6314f73ad14caf94dd7952b",
+        "call_id": "call_00_qBiqwDvndvpns2v1gdLR4235",
+        "occurrence_id": "af-call-d6607c655967401b94eb04e16507d25c",
+        "run_id": "maf-run-5ef61310e3d94403bf4e37cdf2a87d65",
+        "effective_digest": "789e9efa7b078295ccbdf83bba3175d8fa7bb854bfa1b013e268c6f43b11fa74",
+        "parent_call_id": null,
+        "events": [
+          {
+            "sequence": 0,
+            "phase": "request",
+            "at": "2026-09-10T10:57:48.611851Z"
+          },
+          {
+            "sequence": 1,
+            "phase": "decision",
+            "at": "2026-09-10T10:57:48.612154Z"
+          },
+          {
+            "sequence": 2,
+            "phase": "blocked",
+            "at": "2026-09-10T10:57:48.612209Z"
+          },
+          {
+            "sequence": 3,
+            "phase": "closed",
+            "at": "2026-09-10T10:57:48.612216Z"
+          }
+        ],
+        "decision": {
+          "tool_call_id": "maf-request-f839d827f6314f73ad14caf94dd7952b",
+          "tool_name": "kerniq_record_marker",
+          "action": "block",
+          "reason_code": "explicit_denylist",
+          "policy_id": "runtime-guard:denylist",
+          "evidence": {
+            "record_id": "runtime-guard-evidence:maf-request-f839d827f6314f73ad14caf94dd7952b",
+            "schema_version": "agentfuse-evidence-schema-v0.1",
+            "policy_resolution": {
+              "policy_resolution_outcome": "resolved",
+              "match_stage": "exact",
+              "matched_policy_key": "deny:kerniq_record_marker",
+              "match_kind": "exact",
+              "priority": 100,
+              "candidate_policy_keys": [
+                "deny:kerniq_record_marker"
+              ],
+              "fallback_reason": null
+            },
+            "boundary_decision": {
+              "boundary_type": "call",
+              "decision": "block",
+              "policy_id": "runtime-guard:denylist",
+              "policy_hash": "sha256:0cba9a5d2be0bd0f04e06496c515593b068321eed4b92b179c3702e075777e99",
+              "reason_code": "explicit_denylist",
+              "decisive_gate": true
+            },
+            "trace_metadata": {
+              "tool_name": "kerniq_record_marker",
+              "decision": "block",
+              "policy_id": "runtime-guard:denylist",
+              "policy_hash": "sha256:0cba9a5d2be0bd0f04e06496c515593b068321eed4b92b179c3702e075777e99",
+              "reason_code": "explicit_denylist",
+              "boundary_type": "call",
+              "args_hash": "sha256:789e9efa7b078295ccbdf83bba3175d8fa7bb854bfa1b013e268c6f43b11fa74",
+              "evidence_ref": "evidence:runtime-guard:maf-request-f839d827f6314f73ad14caf94dd7952b",
+              "raw_inputs_in_trace": false,
+              "model_visible_trace_sanitized": true
+            },
+            "non_execution": {
+              "status": "not_executed",
+              "reason": "explicit_denylist",
+              "execution": "not_started",
+              "payload_executed": false,
+              "tool_failure": false,
+              "side_effect_occurred": false,
+              "approval_id": "runtime-policy:maf-request-f839d827f6314f73ad14caf94dd7952b",
+              "call_id": "maf-request-f839d827f6314f73ad14caf94dd7952b",
+              "result_ref": "result:not_executed:maf-request-f839d827f6314f73ad14caf94dd7952b"
+            }
+          }
+        },
+        "executed_digest": null,
+        "outcome": "not_executed",
+        "reason": "agentfuse_policy_block"
+      },
+      "evidence_v0_2": {
+        "schema_version": "kerniq.governance-evidence.v0.2",
+        "evidence_id": "maf-request-f839d827f6314f73ad14caf94dd7952b",
+        "producer_ref": "kerniq:maf-local-function-adapter-v0.8",
+        "profile_ref": "maf-python-local-function-governed-v0.8",
+        "recorded_at": "2026-09-10T10:57:49.707234Z",
+        "previous_evidence_ref": null,
+        "request": {
+          "status": "known",
+          "value": {
+            "request_id": "maf-request-f839d827f6314f73ad14caf94dd7952b",
+            "tool_call_id": "call_00_qBiqwDvndvpns2v1gdLR4235",
+            "attempt_ref": "af-call-d6607c655967401b94eb04e16507d25c",
+            "runtime_ref": "maf-run-5ef61310e3d94403bf4e37cdf2a87d65",
+            "action_name": "kerniq_record_marker",
+            "action_ref": "maf-python-local-function-governed-v0.8:kerniq_record_marker",
+            "identity_provenance": {
+              "source": "unknown",
+              "subject_ref": null,
+              "provenance_ref": null,
+              "reason": "no_authenticated_requester"
+            }
+          },
+          "source_ref": "maf-local-observation:maf-request-f839d827f6314f73ad14caf94dd7952b#request",
+          "reason": null
+        },
+        "decision": {
+          "status": "known",
+          "value": {
+            "decision_id": "runtime-guard-evidence:maf-request-f839d827f6314f73ad14caf94dd7952b",
+            "evaluation": "decided",
+            "action": "block",
+            "policy_ref": "runtime-guard:denylist",
+            "target_ref": "sha256:789e9efa7b078295ccbdf83bba3175d8fa7bb854bfa1b013e268c6f43b11fa74",
+            "decided_at": "2026-09-10T10:57:48.612154Z"
+          },
+          "source_ref": "maf-local-observation:maf-request-f839d827f6314f73ad14caf94dd7952b#decision",
+          "reason": null
+        },
+        "authorization": {
+          "status": "unknown",
+          "value": null,
+          "source_ref": null,
+          "reason": "policy_decision_is_not_human_authorization"
+        },
+        "argument_binding": {
+          "requested": {
+            "status": "unknown",
+            "value": null,
+            "source_ref": null,
+            "reason": "context_is_validated_effective_args_not_exact_model_request"
+          },
+          "effective": {
+            "status": "known",
+            "value": {
+              "snapshot_ref": null,
+              "tool_ref": "maf-python-local-function-governed-v0.8:kerniq_record_marker",
+              "scope_ref": "maf-run-5ef61310e3d94403bf4e37cdf2a87d65",
+              "digest": {
+                "algorithm": "sha256",
+                "representation": "utf8-json-exact-v1",
+                "value": "789e9efa7b078295ccbdf83bba3175d8fa7bb854bfa1b013e268c6f43b11fa74"
+              }
+            },
+            "source_ref": "maf-local-observation:maf-request-f839d827f6314f73ad14caf94dd7952b#request",
+            "reason": null
+          },
+          "executed": {
+            "status": "not_applicable",
+            "value": null,
+            "source_ref": "maf-local-observation:maf-request-f839d827f6314f73ad14caf94dd7952b",
+            "reason": "agentfuse_policy_block"
+          },
+          "scope": {
+            "status": "known",
+            "value": {
+              "scope_ref": "maf-run-5ef61310e3d94403bf4e37cdf2a87d65",
+              "runtime_ref": "maf-run-5ef61310e3d94403bf4e37cdf2a87d65",
+              "context_ref": "maf-run-5ef61310e3d94403bf4e37cdf2a87d65",
+              "resource_refs": null,
+              "operation": "local_custom_function"
+            },
+            "source_ref": "maf-local-observation:maf-request-f839d827f6314f73ad14caf94dd7952b#request",
+            "reason": null
+          },
+          "authorization_match": {
+            "status": "unknown",
+            "value": null,
+            "source_ref": null,
+            "reason": "no_authorization_to_attribute"
+          }
+        },
+        "execution": {
+          "release": {
+            "status": "known",
+            "value": {
+              "occurred": false,
+              "at": null
+            },
+            "source_ref": "maf-local-observation:maf-request-f839d827f6314f73ad14caf94dd7952b#closed",
+            "reason": null
+          },
+          "dispatch": {
+            "status": "known",
+            "value": {
+              "occurred": false,
+              "at": null
+            },
+            "source_ref": "maf-local-observation:maf-request-f839d827f6314f73ad14caf94dd7952b#closed",
+            "reason": null
+          },
+          "start": {
+            "status": "known",
+            "value": {
+              "occurred": false,
+              "at": null
+            },
+            "source_ref": "maf-local-observation:maf-request-f839d827f6314f73ad14caf94dd7952b#closed",
+            "reason": null
+          },
+          "completion": {
+            "status": "known",
+            "value": {
+              "occurred": false,
+              "at": null
+            },
+            "source_ref": "maf-local-observation:maf-request-f839d827f6314f73ad14caf94dd7952b#closed",
+            "reason": null
+          }
+        },
+        "outcome": {
+          "status": "known",
+          "value": {
+            "status": "not_executed",
+            "reason": "agentfuse_policy_block",
+            "result_ref": null
+          },
+          "source_ref": "maf-local-observation:maf-request-f839d827f6314f73ad14caf94dd7952b#closed",
+          "reason": null
+        }
+      },
+      "delegation_events": []
+    },
+    {
+      "case": "single_allow",
+      "real_model_tool_call": true,
+      "body_entry_count": 1,
+      "physical_marker_exists": true,
+      "physical_marker_line_count": 1,
+      "physical_marker_sha256": "8dde1dbe735ba391344d20dade86d21ed23615f432449a1181810523d7655be9",
+      "result_returned_to_caller": true,
+      "response_id": "40126c49-bb81-46e0-bbed-9d6ba2d8cb93",
+      "record": {
+        "request_id": "maf-request-cb637478f3f8406892ec1fb1cfe0201c",
+        "call_id": "call_00_UD8za0LK7RktNskgQIH00486",
+        "occurrence_id": "af-call-142f01e9dfcf44d8a0f411f6402d882e",
+        "run_id": "maf-run-d967c5b389f6491caf24666acbb3f367",
+        "effective_digest": "789e9efa7b078295ccbdf83bba3175d8fa7bb854bfa1b013e268c6f43b11fa74",
+        "parent_call_id": null,
+        "events": [
+          {
+            "sequence": 0,
+            "phase": "request",
+            "at": "2026-09-10T10:57:51.546939Z"
+          },
+          {
+            "sequence": 1,
+            "phase": "decision",
+            "at": "2026-09-10T10:57:51.547086Z"
+          },
+          {
+            "sequence": 2,
+            "phase": "release",
+            "at": "2026-09-10T10:57:51.547125Z"
+          },
+          {
+            "sequence": 3,
+            "phase": "dispatch",
+            "at": "2026-09-10T10:57:51.547147Z"
+          },
+          {
+            "sequence": 4,
+            "phase": "start",
+            "at": "2026-09-10T10:57:51.547357Z"
+          },
+          {
+            "sequence": 5,
+            "phase": "completion",
+            "at": "2026-09-10T10:57:51.547772Z"
+          },
+          {
+            "sequence": 6,
+            "phase": "closed",
+            "at": "2026-09-10T10:57:51.547833Z"
+          }
+        ],
+        "decision": {
+          "tool_call_id": "maf-request-cb637478f3f8406892ec1fb1cfe0201c",
+          "tool_name": "kerniq_record_marker",
+          "action": "allow",
+          "reason_code": "allowed",
+          "policy_id": "runtime-guard:allowlist",
+          "evidence": {
+            "record_id": "runtime-guard-evidence:maf-request-cb637478f3f8406892ec1fb1cfe0201c",
+            "schema_version": "agentfuse-evidence-schema-v0.1",
+            "policy_resolution": {
+              "policy_resolution_outcome": "resolved",
+              "match_stage": "exact",
+              "matched_policy_key": "allow:kerniq_record_marker",
+              "match_kind": "exact",
+              "priority": 100,
+              "candidate_policy_keys": [
+                "allow:kerniq_record_marker"
+              ],
+              "fallback_reason": null
+            },
+            "boundary_decision": {
+              "boundary_type": "call",
+              "decision": "allow",
+              "policy_id": "runtime-guard:allowlist",
+              "policy_hash": "sha256:f394c7aa488954d3a325a7c66b663cbc1236a25471885d3659a1fa7c572bc518",
+              "reason_code": "allowed",
+              "decisive_gate": true
+            },
+            "trace_metadata": {
+              "tool_name": "kerniq_record_marker",
+              "decision": "allow",
+              "policy_id": "runtime-guard:allowlist",
+              "policy_hash": "sha256:f394c7aa488954d3a325a7c66b663cbc1236a25471885d3659a1fa7c572bc518",
+              "reason_code": "allowed",
+              "boundary_type": "call",
+              "args_hash": "sha256:789e9efa7b078295ccbdf83bba3175d8fa7bb854bfa1b013e268c6f43b11fa74",
+              "evidence_ref": "evidence:runtime-guard:maf-request-cb637478f3f8406892ec1fb1cfe0201c",
+              "raw_inputs_in_trace": false,
+              "model_visible_trace_sanitized": true
+            },
+            "non_execution": null
+          }
+        },
+        "executed_digest": "789e9efa7b078295ccbdf83bba3175d8fa7bb854bfa1b013e268c6f43b11fa74",
+        "outcome": "success",
+        "reason": ""
+      },
+      "evidence_v0_2": {
+        "schema_version": "kerniq.governance-evidence.v0.2",
+        "evidence_id": "maf-request-cb637478f3f8406892ec1fb1cfe0201c",
+        "producer_ref": "kerniq:maf-local-function-adapter-v0.8",
+        "profile_ref": "maf-python-local-function-governed-v0.8",
+        "recorded_at": "2026-09-10T10:57:53.090356Z",
+        "previous_evidence_ref": null,
+        "request": {
+          "status": "known",
+          "value": {
+            "request_id": "maf-request-cb637478f3f8406892ec1fb1cfe0201c",
+            "tool_call_id": "call_00_UD8za0LK7RktNskgQIH00486",
+            "attempt_ref": "af-call-142f01e9dfcf44d8a0f411f6402d882e",
+            "runtime_ref": "maf-run-d967c5b389f6491caf24666acbb3f367",
+            "action_name": "kerniq_record_marker",
+            "action_ref": "maf-python-local-function-governed-v0.8:kerniq_record_marker",
+            "identity_provenance": {
+              "source": "unknown",
+              "subject_ref": null,
+              "provenance_ref": null,
+              "reason": "no_authenticated_requester"
+            }
+          },
+          "source_ref": "maf-local-observation:maf-request-cb637478f3f8406892ec1fb1cfe0201c#request",
+          "reason": null
+        },
+        "decision": {
+          "status": "known",
+          "value": {
+            "decision_id": "runtime-guard-evidence:maf-request-cb637478f3f8406892ec1fb1cfe0201c",
+            "evaluation": "decided",
+            "action": "allow",
+            "policy_ref": "runtime-guard:allowlist",
+            "target_ref": "sha256:789e9efa7b078295ccbdf83bba3175d8fa7bb854bfa1b013e268c6f43b11fa74",
+            "decided_at": "2026-09-10T10:57:51.547086Z"
+          },
+          "source_ref": "maf-local-observation:maf-request-cb637478f3f8406892ec1fb1cfe0201c#decision",
+          "reason": null
+        },
+        "authorization": {
+          "status": "unknown",
+          "value": null,
+          "source_ref": null,
+          "reason": "policy_decision_is_not_human_authorization"
+        },
+        "argument_binding": {
+          "requested": {
+            "status": "unknown",
+            "value": null,
+            "source_ref": null,
+            "reason": "context_is_validated_effective_args_not_exact_model_request"
+          },
+          "effective": {
+            "status": "known",
+            "value": {
+              "snapshot_ref": null,
+              "tool_ref": "maf-python-local-function-governed-v0.8:kerniq_record_marker",
+              "scope_ref": "maf-run-d967c5b389f6491caf24666acbb3f367",
+              "digest": {
+                "algorithm": "sha256",
+                "representation": "utf8-json-exact-v1",
+                "value": "789e9efa7b078295ccbdf83bba3175d8fa7bb854bfa1b013e268c6f43b11fa74"
+              }
+            },
+            "source_ref": "maf-local-observation:maf-request-cb637478f3f8406892ec1fb1cfe0201c#request",
+            "reason": null
+          },
+          "executed": {
+            "status": "known",
+            "value": {
+              "snapshot_ref": null,
+              "tool_ref": "maf-python-local-function-governed-v0.8:kerniq_record_marker",
+              "scope_ref": "maf-run-d967c5b389f6491caf24666acbb3f367",
+              "digest": {
+                "algorithm": "sha256",
+                "representation": "utf8-json-exact-v1",
+                "value": "789e9efa7b078295ccbdf83bba3175d8fa7bb854bfa1b013e268c6f43b11fa74"
+              }
+            },
+            "source_ref": "maf-local-observation:maf-request-cb637478f3f8406892ec1fb1cfe0201c#start",
+            "reason": null
+          },
+          "scope": {
+            "status": "known",
+            "value": {
+              "scope_ref": "maf-run-d967c5b389f6491caf24666acbb3f367",
+              "runtime_ref": "maf-run-d967c5b389f6491caf24666acbb3f367",
+              "context_ref": "maf-run-d967c5b389f6491caf24666acbb3f367",
+              "resource_refs": null,
+              "operation": "local_custom_function"
+            },
+            "source_ref": "maf-local-observation:maf-request-cb637478f3f8406892ec1fb1cfe0201c#request",
+            "reason": null
+          },
+          "authorization_match": {
+            "status": "unknown",
+            "value": null,
+            "source_ref": null,
+            "reason": "no_authorization_to_attribute"
+          }
+        },
+        "execution": {
+          "release": {
+            "status": "known",
+            "value": {
+              "occurred": true,
+              "at": "2026-09-10T10:57:51.547125Z"
+            },
+            "source_ref": "maf-local-observation:maf-request-cb637478f3f8406892ec1fb1cfe0201c#release",
+            "reason": null
+          },
+          "dispatch": {
+            "status": "known",
+            "value": {
+              "occurred": true,
+              "at": "2026-09-10T10:57:51.547147Z"
+            },
+            "source_ref": "maf-local-observation:maf-request-cb637478f3f8406892ec1fb1cfe0201c#dispatch",
+            "reason": null
+          },
+          "start": {
+            "status": "known",
+            "value": {
+              "occurred": true,
+              "at": "2026-09-10T10:57:51.547357Z"
+            },
+            "source_ref": "maf-local-observation:maf-request-cb637478f3f8406892ec1fb1cfe0201c#start",
+            "reason": null
+          },
+          "completion": {
+            "status": "known",
+            "value": {
+              "occurred": true,
+              "at": "2026-09-10T10:57:51.547772Z"
+            },
+            "source_ref": "maf-local-observation:maf-request-cb637478f3f8406892ec1fb1cfe0201c#completion",
+            "reason": null
+          }
+        },
+        "outcome": {
+          "status": "known",
+          "value": {
+            "status": "success",
+            "reason": null,
+            "result_ref": "maf-local-observation:maf-request-cb637478f3f8406892ec1fb1cfe0201c#completion"
+          },
+          "source_ref": "maf-local-observation:maf-request-cb637478f3f8406892ec1fb1cfe0201c#closed",
+          "reason": null
+        }
+      },
+      "delegation_events": []
+    },
+    {
+      "case": "delegated_block",
+      "real_model_tool_call": true,
+      "body_entry_count": 0,
+      "physical_marker_exists": false,
+      "physical_marker_line_count": 0,
+      "physical_marker_sha256": null,
+      "result_returned_to_caller": true,
+      "response_id": "425d7953-debe-4a8d-abe1-b8da1cff5fec",
+      "record": {
+        "request_id": "maf-request-ee91d770f1874e51bfff4ecfdec02f46",
+        "call_id": "call_00_uvDlOwyDwH7LlqaYXiZ12760",
+        "occurrence_id": "af-call-e455892a8bcf45e8b5c18403c96d9140",
+        "run_id": "maf-run-0b22c414290d4a6aa19f56901efb4f78",
+        "effective_digest": "789e9efa7b078295ccbdf83bba3175d8fa7bb854bfa1b013e268c6f43b11fa74",
+        "parent_call_id": "call_00_HH9EHIgwRfwzOG9JanvC9041",
+        "events": [
+          {
+            "sequence": 0,
+            "phase": "request",
+            "at": "2026-09-10T10:57:56.028938Z"
+          },
+          {
+            "sequence": 1,
+            "phase": "decision",
+            "at": "2026-09-10T10:57:56.029095Z"
+          },
+          {
+            "sequence": 2,
+            "phase": "blocked",
+            "at": "2026-09-10T10:57:56.029137Z"
+          },
+          {
+            "sequence": 3,
+            "phase": "closed",
+            "at": "2026-09-10T10:57:56.029144Z"
+          }
+        ],
+        "decision": {
+          "tool_call_id": "maf-request-ee91d770f1874e51bfff4ecfdec02f46",
+          "tool_name": "kerniq_record_marker",
+          "action": "block",
+          "reason_code": "explicit_denylist",
+          "policy_id": "runtime-guard:denylist",
+          "evidence": {
+            "record_id": "runtime-guard-evidence:maf-request-ee91d770f1874e51bfff4ecfdec02f46",
+            "schema_version": "agentfuse-evidence-schema-v0.1",
+            "policy_resolution": {
+              "policy_resolution_outcome": "resolved",
+              "match_stage": "exact",
+              "matched_policy_key": "deny:kerniq_record_marker",
+              "match_kind": "exact",
+              "priority": 100,
+              "candidate_policy_keys": [
+                "deny:kerniq_record_marker"
+              ],
+              "fallback_reason": null
+            },
+            "boundary_decision": {
+              "boundary_type": "call",
+              "decision": "block",
+              "policy_id": "runtime-guard:denylist",
+              "policy_hash": "sha256:0cba9a5d2be0bd0f04e06496c515593b068321eed4b92b179c3702e075777e99",
+              "reason_code": "explicit_denylist",
+              "decisive_gate": true
+            },
+            "trace_metadata": {
+              "tool_name": "kerniq_record_marker",
+              "decision": "block",
+              "policy_id": "runtime-guard:denylist",
+              "policy_hash": "sha256:0cba9a5d2be0bd0f04e06496c515593b068321eed4b92b179c3702e075777e99",
+              "reason_code": "explicit_denylist",
+              "boundary_type": "call",
+              "args_hash": "sha256:789e9efa7b078295ccbdf83bba3175d8fa7bb854bfa1b013e268c6f43b11fa74",
+              "evidence_ref": "evidence:runtime-guard:maf-request-ee91d770f1874e51bfff4ecfdec02f46",
+              "raw_inputs_in_trace": false,
+              "model_visible_trace_sanitized": true
+            },
+            "non_execution": {
+              "status": "not_executed",
+              "reason": "explicit_denylist",
+              "execution": "not_started",
+              "payload_executed": false,
+              "tool_failure": false,
+              "side_effect_occurred": false,
+              "approval_id": "runtime-policy:maf-request-ee91d770f1874e51bfff4ecfdec02f46",
+              "call_id": "maf-request-ee91d770f1874e51bfff4ecfdec02f46",
+              "result_ref": "result:not_executed:maf-request-ee91d770f1874e51bfff4ecfdec02f46"
+            }
+          }
+        },
+        "executed_digest": null,
+        "outcome": "not_executed",
+        "reason": "agentfuse_policy_block"
+      },
+      "evidence_v0_2": {
+        "schema_version": "kerniq.governance-evidence.v0.2",
+        "evidence_id": "maf-request-ee91d770f1874e51bfff4ecfdec02f46",
+        "producer_ref": "kerniq:maf-local-function-adapter-v0.8",
+        "profile_ref": "maf-python-local-function-governed-v0.8",
+        "recorded_at": "2026-09-10T10:57:59.440724Z",
+        "previous_evidence_ref": null,
+        "request": {
+          "status": "known",
+          "value": {
+            "request_id": "maf-request-ee91d770f1874e51bfff4ecfdec02f46",
+            "tool_call_id": "call_00_uvDlOwyDwH7LlqaYXiZ12760",
+            "attempt_ref": "af-call-e455892a8bcf45e8b5c18403c96d9140",
+            "runtime_ref": "maf-run-0b22c414290d4a6aa19f56901efb4f78",
+            "action_name": "kerniq_record_marker",
+            "action_ref": "maf-python-local-function-governed-v0.8:kerniq_record_marker",
+            "identity_provenance": {
+              "source": "unknown",
+              "subject_ref": null,
+              "provenance_ref": null,
+              "reason": "no_authenticated_requester"
+            }
+          },
+          "source_ref": "maf-local-observation:maf-request-ee91d770f1874e51bfff4ecfdec02f46#request",
+          "reason": null
+        },
+        "decision": {
+          "status": "known",
+          "value": {
+            "decision_id": "runtime-guard-evidence:maf-request-ee91d770f1874e51bfff4ecfdec02f46",
+            "evaluation": "decided",
+            "action": "block",
+            "policy_ref": "runtime-guard:denylist",
+            "target_ref": "sha256:789e9efa7b078295ccbdf83bba3175d8fa7bb854bfa1b013e268c6f43b11fa74",
+            "decided_at": "2026-09-10T10:57:56.029095Z"
+          },
+          "source_ref": "maf-local-observation:maf-request-ee91d770f1874e51bfff4ecfdec02f46#decision",
+          "reason": null
+        },
+        "authorization": {
+          "status": "unknown",
+          "value": null,
+          "source_ref": null,
+          "reason": "policy_decision_is_not_human_authorization"
+        },
+        "argument_binding": {
+          "requested": {
+            "status": "unknown",
+            "value": null,
+            "source_ref": null,
+            "reason": "context_is_validated_effective_args_not_exact_model_request"
+          },
+          "effective": {
+            "status": "known",
+            "value": {
+              "snapshot_ref": null,
+              "tool_ref": "maf-python-local-function-governed-v0.8:kerniq_record_marker",
+              "scope_ref": "maf-run-0b22c414290d4a6aa19f56901efb4f78",
+              "digest": {
+                "algorithm": "sha256",
+                "representation": "utf8-json-exact-v1",
+                "value": "789e9efa7b078295ccbdf83bba3175d8fa7bb854bfa1b013e268c6f43b11fa74"
+              }
+            },
+            "source_ref": "maf-local-observation:maf-request-ee91d770f1874e51bfff4ecfdec02f46#request",
+            "reason": null
+          },
+          "executed": {
+            "status": "not_applicable",
+            "value": null,
+            "source_ref": "maf-local-observation:maf-request-ee91d770f1874e51bfff4ecfdec02f46",
+            "reason": "agentfuse_policy_block"
+          },
+          "scope": {
+            "status": "known",
+            "value": {
+              "scope_ref": "maf-run-0b22c414290d4a6aa19f56901efb4f78",
+              "runtime_ref": "maf-run-0b22c414290d4a6aa19f56901efb4f78",
+              "context_ref": "maf-run-0b22c414290d4a6aa19f56901efb4f78",
+              "resource_refs": null,
+              "operation": "local_custom_function"
+            },
+            "source_ref": "maf-local-observation:maf-request-ee91d770f1874e51bfff4ecfdec02f46#request",
+            "reason": null
+          },
+          "authorization_match": {
+            "status": "unknown",
+            "value": null,
+            "source_ref": null,
+            "reason": "no_authorization_to_attribute"
+          }
+        },
+        "execution": {
+          "release": {
+            "status": "known",
+            "value": {
+              "occurred": false,
+              "at": null
+            },
+            "source_ref": "maf-local-observation:maf-request-ee91d770f1874e51bfff4ecfdec02f46#closed",
+            "reason": null
+          },
+          "dispatch": {
+            "status": "known",
+            "value": {
+              "occurred": false,
+              "at": null
+            },
+            "source_ref": "maf-local-observation:maf-request-ee91d770f1874e51bfff4ecfdec02f46#closed",
+            "reason": null
+          },
+          "start": {
+            "status": "known",
+            "value": {
+              "occurred": false,
+              "at": null
+            },
+            "source_ref": "maf-local-observation:maf-request-ee91d770f1874e51bfff4ecfdec02f46#closed",
+            "reason": null
+          },
+          "completion": {
+            "status": "known",
+            "value": {
+              "occurred": false,
+              "at": null
+            },
+            "source_ref": "maf-local-observation:maf-request-ee91d770f1874e51bfff4ecfdec02f46#closed",
+            "reason": null
+          }
+        },
+        "outcome": {
+          "status": "known",
+          "value": {
+            "status": "not_executed",
+            "reason": "agentfuse_policy_block",
+            "result_ref": null
+          },
+          "source_ref": "maf-local-observation:maf-request-ee91d770f1874e51bfff4ecfdec02f46#closed",
+          "reason": null
+        }
+      },
+      "delegation_events": [
+        {
+          "phase": "delegation_start",
+          "call_id": "call_00_HH9EHIgwRfwzOG9JanvC9041",
+          "at": "2026-09-10T10:57:54.553509Z"
+        },
+        {
+          "phase": "delegation_return",
+          "call_id": "call_00_HH9EHIgwRfwzOG9JanvC9041",
+          "at": "2026-09-10T10:57:57.643917Z",
+          "result_sha256": "c2240afba090d3d2732cab21e9c6abf7d4431d728a28051728abd1fcb2aac850",
+          "blocked_token_observed": true,
+          "recorded_token_observed": false
+        }
+      ]
+    },
+    {
+      "case": "delegated_allow",
+      "real_model_tool_call": true,
+      "body_entry_count": 1,
+      "physical_marker_exists": true,
+      "physical_marker_line_count": 1,
+      "physical_marker_sha256": "8dde1dbe735ba391344d20dade86d21ed23615f432449a1181810523d7655be9",
+      "result_returned_to_caller": true,
+      "response_id": "64fba061-c3b8-45fd-af93-7a26ac101033",
+      "record": {
+        "request_id": "maf-request-9ec086ea0a264b289ead0480d7bf498b",
+        "call_id": "call_00_JO6SK9pjJKMR5ne8vuY42181",
+        "occurrence_id": "af-call-2d99275a14d94fdc8e077bc83c2c51be",
+        "run_id": "maf-run-a745b13b9a2045cab13ea77d7af8c517",
+        "effective_digest": "789e9efa7b078295ccbdf83bba3175d8fa7bb854bfa1b013e268c6f43b11fa74",
+        "parent_call_id": "call_00_SIwN9GKEKTIgH5gCwkfv6984",
+        "events": [
+          {
+            "sequence": 0,
+            "phase": "request",
+            "at": "2026-09-10T10:58:02.597402Z"
+          },
+          {
+            "sequence": 1,
+            "phase": "decision",
+            "at": "2026-09-10T10:58:02.597555Z"
+          },
+          {
+            "sequence": 2,
+            "phase": "release",
+            "at": "2026-09-10T10:58:02.597598Z"
+          },
+          {
+            "sequence": 3,
+            "phase": "dispatch",
+            "at": "2026-09-10T10:58:02.597612Z"
+          },
+          {
+            "sequence": 4,
+            "phase": "start",
+            "at": "2026-09-10T10:58:02.597780Z"
+          },
+          {
+            "sequence": 5,
+            "phase": "completion",
+            "at": "2026-09-10T10:58:02.598223Z"
+          },
+          {
+            "sequence": 6,
+            "phase": "closed",
+            "at": "2026-09-10T10:58:02.598278Z"
+          }
+        ],
+        "decision": {
+          "tool_call_id": "maf-request-9ec086ea0a264b289ead0480d7bf498b",
+          "tool_name": "kerniq_record_marker",
+          "action": "allow",
+          "reason_code": "allowed",
+          "policy_id": "runtime-guard:allowlist",
+          "evidence": {
+            "record_id": "runtime-guard-evidence:maf-request-9ec086ea0a264b289ead0480d7bf498b",
+            "schema_version": "agentfuse-evidence-schema-v0.1",
+            "policy_resolution": {
+              "policy_resolution_outcome": "resolved",
+              "match_stage": "exact",
+              "matched_policy_key": "allow:kerniq_record_marker",
+              "match_kind": "exact",
+              "priority": 100,
+              "candidate_policy_keys": [
+                "allow:kerniq_record_marker"
+              ],
+              "fallback_reason": null
+            },
+            "boundary_decision": {
+              "boundary_type": "call",
+              "decision": "allow",
+              "policy_id": "runtime-guard:allowlist",
+              "policy_hash": "sha256:f394c7aa488954d3a325a7c66b663cbc1236a25471885d3659a1fa7c572bc518",
+              "reason_code": "allowed",
+              "decisive_gate": true
+            },
+            "trace_metadata": {
+              "tool_name": "kerniq_record_marker",
+              "decision": "allow",
+              "policy_id": "runtime-guard:allowlist",
+              "policy_hash": "sha256:f394c7aa488954d3a325a7c66b663cbc1236a25471885d3659a1fa7c572bc518",
+              "reason_code": "allowed",
+              "boundary_type": "call",
+              "args_hash": "sha256:789e9efa7b078295ccbdf83bba3175d8fa7bb854bfa1b013e268c6f43b11fa74",
+              "evidence_ref": "evidence:runtime-guard:maf-request-9ec086ea0a264b289ead0480d7bf498b",
+              "raw_inputs_in_trace": false,
+              "model_visible_trace_sanitized": true
+            },
+            "non_execution": null
+          }
+        },
+        "executed_digest": "789e9efa7b078295ccbdf83bba3175d8fa7bb854bfa1b013e268c6f43b11fa74",
+        "outcome": "success",
+        "reason": ""
+      },
+      "evidence_v0_2": {
+        "schema_version": "kerniq.governance-evidence.v0.2",
+        "evidence_id": "maf-request-9ec086ea0a264b289ead0480d7bf498b",
+        "producer_ref": "kerniq:maf-local-function-adapter-v0.8",
+        "profile_ref": "maf-python-local-function-governed-v0.8",
+        "recorded_at": "2026-09-10T10:58:06.164847Z",
+        "previous_evidence_ref": null,
+        "request": {
+          "status": "known",
+          "value": {
+            "request_id": "maf-request-9ec086ea0a264b289ead0480d7bf498b",
+            "tool_call_id": "call_00_JO6SK9pjJKMR5ne8vuY42181",
+            "attempt_ref": "af-call-2d99275a14d94fdc8e077bc83c2c51be",
+            "runtime_ref": "maf-run-a745b13b9a2045cab13ea77d7af8c517",
+            "action_name": "kerniq_record_marker",
+            "action_ref": "maf-python-local-function-governed-v0.8:kerniq_record_marker",
+            "identity_provenance": {
+              "source": "unknown",
+              "subject_ref": null,
+              "provenance_ref": null,
+              "reason": "no_authenticated_requester"
+            }
+          },
+          "source_ref": "maf-local-observation:maf-request-9ec086ea0a264b289ead0480d7bf498b#request",
+          "reason": null
+        },
+        "decision": {
+          "status": "known",
+          "value": {
+            "decision_id": "runtime-guard-evidence:maf-request-9ec086ea0a264b289ead0480d7bf498b",
+            "evaluation": "decided",
+            "action": "allow",
+            "policy_ref": "runtime-guard:allowlist",
+            "target_ref": "sha256:789e9efa7b078295ccbdf83bba3175d8fa7bb854bfa1b013e268c6f43b11fa74",
+            "decided_at": "2026-09-10T10:58:02.597555Z"
+          },
+          "source_ref": "maf-local-observation:maf-request-9ec086ea0a264b289ead0480d7bf498b#decision",
+          "reason": null
+        },
+        "authorization": {
+          "status": "unknown",
+          "value": null,
+          "source_ref": null,
+          "reason": "policy_decision_is_not_human_authorization"
+        },
+        "argument_binding": {
+          "requested": {
+            "status": "unknown",
+            "value": null,
+            "source_ref": null,
+            "reason": "context_is_validated_effective_args_not_exact_model_request"
+          },
+          "effective": {
+            "status": "known",
+            "value": {
+              "snapshot_ref": null,
+              "tool_ref": "maf-python-local-function-governed-v0.8:kerniq_record_marker",
+              "scope_ref": "maf-run-a745b13b9a2045cab13ea77d7af8c517",
+              "digest": {
+                "algorithm": "sha256",
+                "representation": "utf8-json-exact-v1",
+                "value": "789e9efa7b078295ccbdf83bba3175d8fa7bb854bfa1b013e268c6f43b11fa74"
+              }
+            },
+            "source_ref": "maf-local-observation:maf-request-9ec086ea0a264b289ead0480d7bf498b#request",
+            "reason": null
+          },
+          "executed": {
+            "status": "known",
+            "value": {
+              "snapshot_ref": null,
+              "tool_ref": "maf-python-local-function-governed-v0.8:kerniq_record_marker",
+              "scope_ref": "maf-run-a745b13b9a2045cab13ea77d7af8c517",
+              "digest": {
+                "algorithm": "sha256",
+                "representation": "utf8-json-exact-v1",
+                "value": "789e9efa7b078295ccbdf83bba3175d8fa7bb854bfa1b013e268c6f43b11fa74"
+              }
+            },
+            "source_ref": "maf-local-observation:maf-request-9ec086ea0a264b289ead0480d7bf498b#start",
+            "reason": null
+          },
+          "scope": {
+            "status": "known",
+            "value": {
+              "scope_ref": "maf-run-a745b13b9a2045cab13ea77d7af8c517",
+              "runtime_ref": "maf-run-a745b13b9a2045cab13ea77d7af8c517",
+              "context_ref": "maf-run-a745b13b9a2045cab13ea77d7af8c517",
+              "resource_refs": null,
+              "operation": "local_custom_function"
+            },
+            "source_ref": "maf-local-observation:maf-request-9ec086ea0a264b289ead0480d7bf498b#request",
+            "reason": null
+          },
+          "authorization_match": {
+            "status": "unknown",
+            "value": null,
+            "source_ref": null,
+            "reason": "no_authorization_to_attribute"
+          }
+        },
+        "execution": {
+          "release": {
+            "status": "known",
+            "value": {
+              "occurred": true,
+              "at": "2026-09-10T10:58:02.597598Z"
+            },
+            "source_ref": "maf-local-observation:maf-request-9ec086ea0a264b289ead0480d7bf498b#release",
+            "reason": null
+          },
+          "dispatch": {
+            "status": "known",
+            "value": {
+              "occurred": true,
+              "at": "2026-09-10T10:58:02.597612Z"
+            },
+            "source_ref": "maf-local-observation:maf-request-9ec086ea0a264b289ead0480d7bf498b#dispatch",
+            "reason": null
+          },
+          "start": {
+            "status": "known",
+            "value": {
+              "occurred": true,
+              "at": "2026-09-10T10:58:02.597780Z"
+            },
+            "source_ref": "maf-local-observation:maf-request-9ec086ea0a264b289ead0480d7bf498b#start",
+            "reason": null
+          },
+          "completion": {
+            "status": "known",
+            "value": {
+              "occurred": true,
+              "at": "2026-09-10T10:58:02.598223Z"
+            },
+            "source_ref": "maf-local-observation:maf-request-9ec086ea0a264b289ead0480d7bf498b#completion",
+            "reason": null
+          }
+        },
+        "outcome": {
+          "status": "known",
+          "value": {
+            "status": "success",
+            "reason": null,
+            "result_ref": "maf-local-observation:maf-request-9ec086ea0a264b289ead0480d7bf498b#completion"
+          },
+          "source_ref": "maf-local-observation:maf-request-9ec086ea0a264b289ead0480d7bf498b#closed",
+          "reason": null
+        }
+      },
+      "delegation_events": [
+        {
+          "phase": "delegation_start",
+          "call_id": "call_00_SIwN9GKEKTIgH5gCwkfv6984",
+          "at": "2026-09-10T10:58:01.116191Z"
+        },
+        {
+          "phase": "delegation_return",
+          "call_id": "call_00_SIwN9GKEKTIgH5gCwkfv6984",
+          "at": "2026-09-10T10:58:04.294607Z",
+          "result_sha256": "1e46569e8a9ddd472a70b7617fe034c59d54b85b282c517b1f12b10fbbab92fc",
+          "blocked_token_observed": false,
+          "recorded_token_observed": true
+        }
+      ]
+    }
+  ],
+  "model_request_to_tool_run_correlation_proven": false,
+  "scope": "one controlled local async FunctionTool(value: str) per operation"
+}
