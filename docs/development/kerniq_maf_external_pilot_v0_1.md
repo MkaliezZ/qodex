@@ -102,14 +102,36 @@ python -m kerniq_microsoft_agent_framework.pilot verify \
   kerniq-maf-external-pilot-v0.1.json
 ```
 
-`VERIFY_RESULT=VERIFIED` checks the artifact digest, BLOCK/ALLOW invariants,
-decision/outcome separation, qualification metadata, privacy constraints and
-the embedded Evidence v0.2 documents.
+`VERIFY_RESULT=VERIFIED` means the artifact is canonical, internally
+consistent, matches the frozen pilot qualification metadata, and satisfies
+KerniQ's BLOCK/ALLOW invariants (checked: artifact digest, exact package/
+provider/model pins, tool identifier digest, BLOCK and ALLOW invariants,
+case↔Evidence cross-field binding, decision/outcome separation, privacy
+constraints, and the embedded Evidence v0.2 documents). It does **not**
+cryptographically prove who produced it or independently attest that the
+reported runtime events occurred — the SHA-256 digest provides canonical
+integrity and tamper detection against unrecomputed edits, not a digital
+signature, runtime attestation, or operator identity proof.
+
+**An artifact counts as a complete pilot result only when: BLOCK completed
+AND ALLOW completed (successfully) AND verify returns VERIFIED.** A BLOCK-only
+artifact (ALLOW `not_run`) verifies as `INCOMPLETE` — structurally valid, but
+not a complete pilot result and never countable as external validation. An
+ALLOW run whose user tool raises does not count as a complete pilot either:
+the pilot refuses instead of writing a complete artifact (Decision != Outcome
+remains a proven fact of the underlying governance lane; the external pilot
+journey additionally requires your tool to return successfully).
 
 ## What file to return
 
 Return ONLY `kerniq-maf-external-pilot-v0.1.json`. Do NOT send source code,
 logs, your API key, screenshots, prompts, tool results, or customer data.
+
+External validation is established by the KerniQ team AFTER receiving your
+artifact, by independently establishing: an outside operator, an
+outside-owned project/tool, the returned artifact, and a VERIFIED complete
+result. The CLI never outputs `EXTERNAL_VALIDATION_PROVEN=true` — a
+self-reported operator label is not an identity proof.
 
 ## Privacy
 

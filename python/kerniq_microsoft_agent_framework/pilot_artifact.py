@@ -27,11 +27,25 @@ import re
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
-from .qualification import AGENTFUSE_REF, MAF_HASHES, PROFILE
+from .qualification import AGENTFUSE_REF, MAF_HASHES, MAF_VERSION, PROFILE
 
 ARTIFACT_VERSION = "0.1"
 CANONICALIZATION = "kerniq-json-canonical-v1"
 DIGEST_KEY = "artifact_digest"
+PROVIDER = "deepseek-official"
+REQUESTED_MODEL = "deepseek-v4-flash"
+
+# The single frozen version truth lives in qualification.qualify_framework's
+# pins; MAF_VERSION is imported from there. The three non-core pins are not
+# exported as module constants (qualification.py is frozen this round), so
+# they are mirrored here and locked to the qualification source by a parity
+# test that fails if either side drifts.
+EXPECTED_PACKAGE_VERSIONS = {
+    "agent-framework-core": MAF_VERSION,
+    "agent-framework-openai": "1.14.2",
+    "openai": "3.11.0",
+    "pydantic": "2.13.5",
+}
 
 REQUIRED_TOP_LEVEL = (
     "artifact_version", "created_at", "kerniq_commit", "profile",
@@ -105,8 +119,8 @@ def build_envelope(
         "package_versions": dict(package_versions),
         "qualified_source_sha256": dict(MAF_HASHES),
         "agentfuse_ref": AGENTFUSE_REF,
-        "provider": "deepseek-official",
-        "requested_model": "deepseek-v4-flash",
+        "provider": PROVIDER,
+        "requested_model": REQUESTED_MODEL,
         "tool": {
             "import_identifier": tool_import_identifier,
             # Binds the declared tool identity; the tool's SOURCE CODE is never stored.
@@ -177,8 +191,29 @@ def parse_artifact_bytes(raw: bytes) -> Dict[str, Any]:
     return value
 
 
+
+
+def parse_artifact_file(path: Path) -> Dict[str, Any]:
+    return parse_artifact_bytes(Path(path).read_bytes())
+
+
 def verify_artifact_file(path: Path) -> Tuple[str, Optional[str]]:
-    """Verify an artifact file. Returns ("VERIFIED", None) or ("REJECTED", reason)."""
+    """Verify an artifact file.
+
+    Returns exactly one of:
+      ("VERIFIED", None)     - canonical, internally consistent, matches the
+                               frozen pilot qualification metadata, and BOTH
+                               BLOCK and a successfully-run ALLOW satisfy the
+                               pilot invariants (a complete pilot artifact);
+      ("INCOMPLETE", reason) - structurally valid partial artifact (e.g.
+                               BLOCK-only); NOT a complete pilot result;
+      ("REJECTED", reason)   - tampered/malformed/inconsistent artifact.
+
+    VERIFIED means canonical integrity and invariant consistency only. It
+    does NOT cryptographically prove who produced the artifact, does not
+    attest that the reported runtime events occurred, and does not establish
+    operator identity or external validation.
+    """
     try:
         return _verify(path)
     except ArtifactRejected as exc:
@@ -206,39 +241,56 @@ def _verify(path: Path) -> Tuple[str, Optional[str]]:
         if field not in artifact:
             raise ArtifactRejected("MISSING_REQUIRED_FIELD:" + field)
 
-    # qualification metadata must match the locally pinned qualification
-    if artifact.get("profile") != PROFILE or artifact.get("agentfuse_ref") != AGENTFUSE_REF:
-        raise ArtifactRejected("QUALIFICATION_METADATA_MISMATCH")
+    # --- exact frozen qualification metadata (single truth: qualification) ---
+    if artifact.get("profile") != PROFILE:
+        raise ArtifactRejected("QUALIFICATION_PROFILE_MISMATCH")
+    if artifact.get("agentfuse_ref") != AGENTFUSE_REF:
+        raise ArtifactRejected("QUALIFICATION_AGENTFUSE_REF_MISMATCH")
     if artifact.get("qualified_source_sha256") != MAF_HASHES:
         raise ArtifactRejected("QUALIFICATION_HASHES_MISMATCH")
-    for package in ("agent-framework-core", "agent-framework-openai", "openai", "pydantic"):
-        if not isinstance(artifact.get("package_versions", {}).get(package), str):
-            raise ArtifactRejected("PACKAGE_VERSION_MISSING:" + package)
+    versions = artifact.get("package_versions")
+    if not isinstance(versions, dict):
+        raise ArtifactRejected("PACKAGE_VERSIONS_MISSING")
+    for package, expected in EXPECTED_PACKAGE_VERSIONS.items():
+        if versions.get(package) != expected:
+            raise ArtifactRejected("QUALIFICATION_PACKAGE_VERSION_MISMATCH:" + package)
+    if artifact.get("provider") != PROVIDER:
+        raise ArtifactRejected("PROVIDER_MISMATCH")
+    if artifact.get("requested_model") != REQUESTED_MODEL:
+        raise ArtifactRejected("REQUESTED_MODEL_MISMATCH")
+
     tool = artifact.get("tool")
-    if not isinstance(tool, dict) or not isinstance(tool.get("import_identifier"), str):
+    if not isinstance(tool, dict):
+        raise ArtifactRejected("TOOL_METADATA_MISSING")
+    identifier = tool.get("import_identifier")
+    if not isinstance(identifier, str) or not identifier:
         raise ArtifactRejected("TOOL_IDENTIFIER_MISSING")
+    expected_digest = "sha256:" + hashlib.sha256(identifier.encode("utf-8")).hexdigest()
+    if tool.get("identifier_digest") != expected_digest:
+        raise ArtifactRejected("TOOL_IDENTIFIER_DIGEST_MISMATCH")
 
     # operator identity is self-reported only; never trust it as proof
     if artifact.get("outside_operator_claim") not in (None, "self_reported", "unknown"):
         raise ArtifactRejected("OPERATOR_CLAIM_OVERSTATED")
 
     _verify_case(artifact["block_case"], expect_block=True)
+    _bind_case_to_evidence(artifact["block_case"], expect_block=True)
+
     allow_case = artifact["allow_case"]
     if allow_case.get("status") == "not_run":
         if allow_case.get("reason") != "allow_acknowledgement_missing":
             raise ArtifactRejected("INVALID_NOT_RUN_REASON")
-    else:
-        _verify_case(allow_case, expect_block=False)
+        # structurally valid partial artifact: not a complete pilot result
+        return "INCOMPLETE", "ALLOW_CASE_NOT_RUN"
 
-    # decision/outcome separation is inside the embedded Evidence v0.2 docs
+    _verify_case(allow_case, expect_block=False)
+    _bind_case_to_evidence(allow_case, expect_block=False)
+
+    # decision/outcome separation and Evidence conformance for ran cases
     from kerniq_evidence_conformance import validate_evidence_document
 
-    for case in (artifact["block_case"], artifact["allow_case"]):
-        document = case.get("evidence_v0_2")
-        if case.get("status") == "not_run":
-            continue
-        if not isinstance(document, dict):
-            raise ArtifactRejected("EVIDENCE_DOCUMENT_MISSING")
+    for case in (artifact["block_case"], allow_case):
+        document = case["evidence_v0_2"]
         try:
             validate_evidence_document(document)
         except Exception:
@@ -257,10 +309,6 @@ def _verify(path: Path) -> Tuple[str, Optional[str]]:
     return "VERIFIED", None
 
 
-def parse_artifact_file(path: Path) -> Dict[str, Any]:
-    return parse_artifact_bytes(Path(path).read_bytes())
-
-
 def expect_separation_violation(decision: Dict[str, Any], outcome: Dict[str, Any]) -> bool:
     """A policy BLOCK must never be encoded as an execution failure, and an
     allow+failure must never be rewritten as a block/not-executed."""
@@ -271,6 +319,44 @@ def expect_separation_violation(decision: Dict[str, Any], outcome: Dict[str, Any
     if action == "allow" and status not in ("success", "failure", "cancelled", "unknown"):
         return True
     return False
+
+
+def _bind_case_to_evidence(case: Dict[str, Any], *, expect_block: bool) -> None:
+    """Pilot-envelope-level cross-field binding between the case record and
+    its embedded Evidence v0.2 document. This is the pilot verifier's own
+    semantic responsibility, independent of schema-level validation."""
+    document = case.get("evidence_v0_2")
+    if not isinstance(document, dict):
+        raise ArtifactRejected("EVIDENCE_DOCUMENT_MISSING")
+    evidence_decision = document["decision"]["value"]["action"]
+    evidence_outcome = document["outcome"]["value"]["status"]
+    if case.get("decision") != evidence_decision:
+        raise ArtifactRejected("CASE_EVIDENCE_DECISION_MISMATCH")
+    if case.get("outcome") != evidence_outcome:
+        raise ArtifactRejected("CASE_EVIDENCE_OUTCOME_MISMATCH")
+
+    binding = document["argument_binding"]
+    effective_digest = binding["effective"]["value"]["digest"]["value"]
+    if case.get("effective_args_digest") != effective_digest:
+        raise ArtifactRejected("CASE_EVIDENCE_EFFECTIVE_DIGEST_MISMATCH")
+    executed = binding["executed"]
+    if expect_block:
+        if executed["status"] != "not_applicable":
+            raise ArtifactRejected("CASE_EVIDENCE_EXECUTED_STATUS_MISMATCH")
+    else:
+        if executed["status"] != "known":
+            raise ArtifactRejected("CASE_EVIDENCE_EXECUTED_STATUS_MISMATCH")
+        if case.get("executed_args_digest") != executed["value"]["digest"]["value"]:
+            raise ArtifactRejected("CASE_EVIDENCE_EXECUTED_DIGEST_MISMATCH")
+
+    execution = document["execution"]
+    for stage in ("release", "dispatch", "start"):
+        occurred = execution[stage]["value"]["occurred"]
+        if occurred != bool(case.get(stage + "_occurred")):
+            raise ArtifactRejected("CASE_EVIDENCE_EXECUTION_STAGE_MISMATCH")
+        if occurred == expect_block:
+            # BLOCK must have none of these stages; ALLOW must have all three
+            raise ArtifactRejected("CASE_EVIDENCE_EXECUTION_STAGE_MISMATCH")
 
 
 def _verify_case(case: Dict[str, Any], *, expect_block: bool) -> None:
@@ -309,6 +395,9 @@ def _verify_case(case: Dict[str, Any], *, expect_block: bool) -> None:
         if case.get("executed_args_digest") is not None:
             raise ArtifactRejected("BLOCK_CASE_EXECUTED_DIGEST_PRESENT")
     else:
+        # A complete pilot requires a SUCCESSFUL ALLOW invocation: the real
+        # backend raises on handler failure, and v0.1 does not claim complete
+        # artifacts for failed user-tool runs.
         if decision != "allow":
             raise ArtifactRejected("ALLOW_CASE_DECISION_NOT_ALLOW")
         if not (release and dispatch and start):
@@ -317,14 +406,14 @@ def _verify_case(case: Dict[str, Any], *, expect_block: bool) -> None:
             raise ArtifactRejected("ALLOW_CASE_ENTRY_COUNT_NOT_ONE")
         if not marker:
             raise ArtifactRejected("ALLOW_CASE_MARKER_MISSING")
-        if outcome not in ("success", "failure"):
-            raise ArtifactRejected("ALLOW_CASE_OUTCOME_INVALID")
+        if outcome != "success":
+            raise ArtifactRejected("ALLOW_OUTCOME_NOT_SUCCESS")
         if not _is_sha256(case.get("executed_args_digest")):
             raise ArtifactRejected("EXECUTED_DIGEST_INVALID")
         if case.get("executed_args_digest") != case.get("effective_args_digest"):
             raise ArtifactRejected("EFFECTIVE_EXECUTED_DIGEST_MISMATCH")
-        if case.get("handler_return_status") != ("SUCCESS" if outcome == "success" else "FAILURE"):
-            raise ArtifactRejected("HANDLER_STATUS_OUTCOME_MISMATCH")
+        if case.get("handler_return_status") != "SUCCESS":
+            raise ArtifactRejected("HANDLER_STATUS_NOT_SUCCESS")
 
 
 def _is_sha256(value: Any) -> bool:

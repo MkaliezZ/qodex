@@ -243,18 +243,21 @@ def test_case11_allow_means_exactly_one_entry(tmp_path):
 
 def test_case22_no_automatic_retry(tmp_path):
     backend = FakeGovernedBackend(handler_raises=True)
-    case = asyncio.run(pilot._run_case(backend, _client_factory, _user_tool_raises, block=False))
+    # the user tool raised: the pilot refuses instead of producing a complete
+    # ALLOW case, and never retries (exactly one start_task / one entry)
+    with pytest.raises(PilotRefused, match="ALLOW_INVARIANT_OUTCOME_SUCCESS_REQUIRED"):
+        asyncio.run(pilot._run_case(backend, _client_factory, _user_tool_raises, block=False))
     assert backend.start_task_calls == 1  # one operation, no pilot retry
-    assert case["bound_handler_entry_count"] == 1
-    assert case["outcome"] == "failure"
 
 
-def test_case14_handler_failure_keeps_decision_allow(tmp_path):
+def test_case14_handler_failure_is_not_a_complete_pilot(tmp_path):
+    # Decision != Outcome remains a proven fact of the underlying MAF
+    # governance lane (covered by the governance suite); but pilot v0.1
+    # refuses to build a complete ALLOW case from a failed user-tool run,
+    # matching the real backend which surfaces MiddlewareFailure.
     backend = FakeGovernedBackend(handler_raises=True)
-    case = asyncio.run(pilot._run_case(backend, _client_factory, _user_tool_raises, block=False))
-    assert case["decision"] == "allow"  # business failure is NOT a policy block
-    assert case["outcome"] == "failure"
-    assert case["handler_return_status"] == "FAILURE"
+    with pytest.raises(PilotRefused, match="ALLOW_INVARIANT_OUTCOME_SUCCESS_REQUIRED"):
+        asyncio.run(pilot._run_case(backend, _client_factory, _user_tool_raises, block=False))
 
 
 def test_case15_effective_executed_binding_enforced(tmp_path):
@@ -501,3 +504,178 @@ def test_run_refuses_existing_artifact_without_overwrite(tmp_path, monkeypatch):
 
 def _close(coro):
     coro.close()
+
+
+# --- Verifier truth-boundary closure -------------------------------------------------
+# Exact frozen qualification metadata, complete-vs-partial artifacts, and
+# case↔Evidence cross-field binding. Forgeries recompute the artifact digest
+# (attacker-friendly) so the refusal must come from the semantic checks.
+
+
+def _forged(tmp_path: Path, envelope: dict, mutate) -> Path:
+    path = tmp_path / ("forged-" + hashlib.sha256(repr(mutate).encode()).hexdigest()[:8] + ".json")
+    artifact = json.loads(canonical_bytes(envelope).decode("utf-8"))
+    mutate(artifact)
+    artifact[pilot_artifact.DIGEST_KEY]["value"] = compute_digest(artifact)
+    path.write_bytes(canonical_bytes(artifact) + b"\n")
+    return path
+
+
+@pytest.mark.parametrize(
+    "package",
+    ["agent-framework-core", "agent-framework-openai", "openai", "pydantic"],
+)
+def test_closure_1_4_wrong_package_version_rejected(tmp_path, package):
+    envelope = _envelope_sync(tmp_path)
+    path = _forged(tmp_path, envelope, lambda artifact: artifact["package_versions"].update({package: "9.9.9"}))
+    status, reason = verify_artifact_file(path)
+    assert status == "REJECTED"
+    assert reason == "QUALIFICATION_PACKAGE_VERSION_MISMATCH:" + package
+
+
+def test_closure_5_provider_changed_rejected(tmp_path):
+    envelope = _envelope_sync(tmp_path)
+    path = _forged(tmp_path, envelope, lambda artifact: artifact.update(provider="openai-official"))
+    status, reason = verify_artifact_file(path)
+    assert (status, reason) == ("REJECTED", "PROVIDER_MISMATCH")
+
+
+def test_closure_6_requested_model_changed_rejected(tmp_path):
+    envelope = _envelope_sync(tmp_path)
+    path = _forged(tmp_path, envelope, lambda artifact: artifact.update(requested_model="deepseek-chat"))
+    status, reason = verify_artifact_file(path)
+    assert (status, reason) == ("REJECTED", "REQUESTED_MODEL_MISMATCH")
+
+
+def test_closure_7_tool_identifier_digest_forged_rejected(tmp_path):
+    envelope = _envelope_sync(tmp_path)
+    path = _forged(
+        tmp_path, envelope,
+        lambda artifact: artifact["tool"].update(identifier_digest="sha256:" + "0" * 64),
+    )
+    status, reason = verify_artifact_file(path)
+    assert (status, reason) == ("REJECTED", "TOOL_IDENTIFIER_DIGEST_MISMATCH")
+
+
+def test_closure_8_block_only_artifact_is_incomplete_not_verified(tmp_path):
+    envelope = _envelope_sync(tmp_path)
+    envelope["allow_case"] = {"status": "not_run", "reason": "allow_acknowledgement_missing"}
+    envelope[pilot_artifact.DIGEST_KEY]["value"] = compute_digest(envelope)
+    path = tmp_path / "block-only.json"
+    write_artifact(envelope, path)
+    status, reason = verify_artifact_file(path)
+    assert (status, reason) == ("INCOMPLETE", "ALLOW_CASE_NOT_RUN")
+    # the CLI must not exit 0 for an INCOMPLETE artifact
+    import contextlib
+    import io
+
+    buffer = io.StringIO()
+    with contextlib.redirect_stdout(buffer):
+        rc = pilot.main(["verify", str(path)])
+    assert rc != 0
+    assert "VERIFY_RESULT=INCOMPLETE" in buffer.getvalue()
+
+
+def test_closure_9_complete_block_allow_verifies(tmp_path):
+    status, reason = verify_artifact_file(_write_verified_artifact(tmp_path, _envelope_sync(tmp_path)))
+    assert (status, reason) == ("VERIFIED", None)
+
+
+def test_closure_10_case_decision_differs_from_evidence_rejected(tmp_path):
+    envelope = _envelope_sync(tmp_path)
+
+    def mutate(artifact):
+        artifact["block_case"]["decision"] = "allow"  # case says allow...
+        # ...while every other invariant keeps describing the real BLOCK run
+
+    path = _forged(tmp_path, envelope, mutate)
+    status, reason = verify_artifact_file(path)
+    assert status == "REJECTED"
+    assert "CASE_EVIDENCE_DECISION_MISMATCH" in reason or "BLOCK_CASE" in reason
+
+
+def test_closure_11_case_outcome_differs_from_evidence_rejected(tmp_path):
+    envelope = _envelope_sync(tmp_path)
+
+    def mutate(artifact):
+        artifact["allow_case"]["outcome"] = "failure"
+        artifact["allow_case"]["handler_return_status"] = "FAILURE"
+
+    path = _forged(tmp_path, envelope, mutate)
+    status, reason = verify_artifact_file(path)
+    assert status == "REJECTED"
+    assert "CASE_EVIDENCE_OUTCOME_MISMATCH" in reason or "ALLOW_OUTCOME_NOT_SUCCESS" in reason
+
+
+def test_closure_12_effective_digest_differs_from_evidence_rejected(tmp_path):
+    envelope = _envelope_sync(tmp_path)
+    path = _forged(
+        tmp_path, envelope,
+        lambda artifact: artifact["block_case"].update(effective_args_digest="1" * 64),
+    )
+    status, reason = verify_artifact_file(path)
+    assert status == "REJECTED"
+    assert reason == "CASE_EVIDENCE_EFFECTIVE_DIGEST_MISMATCH"
+
+
+def test_closure_13_allow_executed_digest_differs_from_evidence_rejected(tmp_path):
+    envelope = _envelope_sync(tmp_path)
+
+    def mutate(artifact):
+        # keep case-internal equality but diverge from the embedded Evidence
+        digest = "2" * 64
+        artifact["allow_case"]["executed_args_digest"] = digest
+        artifact["allow_case"]["effective_args_digest"] = digest
+
+    path = _forged(tmp_path, envelope, mutate)
+    status, reason = verify_artifact_file(path)
+    assert status == "REJECTED"
+    assert "CASE_EVIDENCE_EXECUTED_DIGEST_MISMATCH" in reason or "CASE_EVIDENCE_EFFECTIVE_DIGEST_MISMATCH" in reason
+
+
+def test_closure_block_executed_status_must_be_not_applicable(tmp_path):
+    envelope = _envelope_sync(tmp_path)
+
+    def mutate(artifact):
+        # forged BLOCK case claiming executed args were observed
+        artifact["block_case"]["executed_args_digest"] = "3" * 64
+
+    path = _forged(tmp_path, envelope, mutate)
+    status, reason = verify_artifact_file(path)
+    assert status == "REJECTED"
+    assert "BLOCK_CASE_EXECUTED_DIGEST_PRESENT" in reason
+
+
+def test_closure_14_readme_states_allow_failure_is_not_complete():
+    content = (KerniQ_root() / "docs" / "development" / "kerniq_maf_external_pilot_v0_1.md").read_text("utf-8")
+    assert "INCOMPLETE" in content
+    assert "does not count as a complete pilot" in content or "not count as a complete" in content
+    assert "operator identity" in content or "authorship" in content
+
+
+def KerniQ_root() -> Path:
+    return Path(__file__).resolve().parents[3]
+
+
+def test_closure_parity_expected_versions_mirror_qualification_pins():
+    # The core pin is taken directly from qualification.MAF_VERSION (single
+    # truth by import). The three mirrored literal pins must appear verbatim
+    # in qualification.qualify_framework's source; this fails if either side
+    # drifts.
+    import inspect
+
+    import kerniq_microsoft_agent_framework.qualification as qualification
+
+    assert pilot_artifact.EXPECTED_PACKAGE_VERSIONS["agent-framework-core"] == qualification.MAF_VERSION
+    source = inspect.getsource(qualification.qualify_framework)
+    for package in ("agent-framework-openai", "openai", "pydantic"):
+        expected = pilot_artifact.EXPECTED_PACKAGE_VERSIONS[package]
+        assert '"' + expected + '"' in source, (package, expected)
+
+
+def test_closure_verify_docstring_disclaims_authenticity():
+    import inspect
+
+    docstring = inspect.getdoc(pilot_artifact.verify_artifact_file)
+    assert "does NOT cryptographically prove" in docstring
+    assert "attest" in docstring

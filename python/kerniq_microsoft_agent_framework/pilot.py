@@ -281,9 +281,12 @@ async def _run_case(
                 raise PilotRefused("ALLOW_INVARIANT_SINGLE_ENTRY")
             if record.executed_digest is None or record.executed_digest != record.effective_digest:
                 raise PilotRefused("ALLOW_INVARIANT_ARGUMENT_BINDING")
-            if record.outcome not in ("success", "failure"):
-                raise PilotRefused("ALLOW_INVARIANT_OUTCOME")
-            case["handler_return_status"] = "SUCCESS" if record.outcome == "success" else "FAILURE"
+            # A complete pilot requires a SUCCESSFUL ALLOW: if the user tool
+            # raises, the real backend surfaces MiddlewareFailure anyway, and
+            # v0.1 does not claim complete artifacts for failed runs.
+            if record.outcome != "success":
+                raise PilotRefused("ALLOW_INVARIANT_OUTCOME_SUCCESS_REQUIRED")
+            case["handler_return_status"] = "SUCCESS"
         case["evidence_v0_2"] = project(record)
         return case
 
@@ -345,6 +348,9 @@ async def _run(args: argparse.Namespace) -> int:
     print("ARTIFACT_WRITTEN=" + output.name)
     status, reason = verify_artifact_file(output)
     print("SELF_VERIFY=" + status + ("" if reason is None else " REASON=" + reason))
+    if status == "INCOMPLETE":
+        print("PILOT_RUN=COMPLETE_PARTIAL (re-run with --i-understand-allow-executes-tool for a complete pilot artifact)")
+        return EXIT_OK
     if status != "VERIFIED":
         return EXIT_REFUSED
     print("PILOT_RUN=COMPLETE")
@@ -370,6 +376,9 @@ def run_verify(args: argparse.Namespace) -> int:
     print("VERIFY_RESULT=" + status)
     if reason:
         print("REASON=" + reason)
+    if status == "INCOMPLETE":
+        print("HINT=a BLOCK-only artifact is structurally valid but is NOT a complete pilot result; run the ALLOW phase with --i-understand-allow-executes-tool")
+    # INCOMPLETE and REJECTED are both non-zero: neither counts as external validation
     return EXIT_OK if status == "VERIFIED" else EXIT_REFUSED
 
 
