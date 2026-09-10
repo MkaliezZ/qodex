@@ -10,13 +10,14 @@
 
 **Orchestrate independent runtimes. Govern only where a real pre-dispatch boundary exists. Preserve explicit evidence and unknowns when stronger control is unavailable.**
 
-KerniQ was previously known as Qodex. Releases up to and including
-v0.2.0-beta.1 may still reference the Qodex name.
+KerniQ was previously known as Qodex. Some internal package scopes
+(`@qodex/*`), `qodex-config/` paths, and persisted identifiers intentionally
+retain the Qodex name for backward compatibility.
 
 ![Beta](https://img.shields.io/badge/status-beta-blue)
 ![License](https://img.shields.io/badge/license-MIT-blue)
 ![Platform](https://img.shields.io/badge/platform-Desktop%20(Tauri)-purple)
-![TypeScript](https://img.shields.io/badge/TypeScript-5.5-blue)
+![TypeScript](https://img.shields.io/badge/TypeScript-5.x-blue)
 [![CI](https://github.com/MkaliezZ/qodex/actions/workflows/ci.yml/badge.svg)](https://github.com/MkaliezZ/qodex/actions/workflows/ci.yml)
 ![Built With](https://img.shields.io/badge/built%20with-Tauri%20%7C%20React-cyan)
 
@@ -24,9 +25,9 @@ v0.2.0-beta.1 may still reference the Qodex name.
 
 ## What is KerniQ?
 
-KerniQ is a desktop-first, vendor-neutral control plane for AI agent workflows. It coordinates agent/runtime lifecycles, reconciles outputs, classifies what each runtime can truthfully expose, applies AgentFuse governance only where a reviewed execution-before boundary exists, and preserves explicit evidence and unknowns when stronger control is unavailable.
+KerniQ is a desktop-first, vendor-neutral **multi-agent control and governance plane**. It coordinates independent agent runtimes, classifies each runtime's truthful capability, applies AgentFuse governance only where a reviewed real pre-dispatch boundary exists, observes lifecycle and evidence when governance is unavailable, preserves explicit evidence and unknowns, and reconciles multi-agent outcomes.
 
-KerniQ is also a working coding-agent product surface: it includes provider abstraction, context assembly, skills, MCP, diff-first editing, Git checkpoints, session/action runtimes, multi-agent orchestration, and bounded native execution paths. Those product capabilities remain important, but they are no longer the whole definition of the project.
+KerniQ is also a working coding-agent product surface — provider abstraction, context assembly, skills, MCP, diff-first editing, Git checkpoints, session/action runtimes, multi-agent orchestration, and bounded native execution paths. That surface is one product face of KerniQ, not the whole definition of the project.
 
 The integration direction is **SDK-free by default**. KerniQ should not require users to inherit a KerniQ base class, import KerniQ into business logic, rewrite tools around a KerniQ SDK, or fork their agent framework. Existing native hooks, event streams, plugin seams, and process/runtime boundaries may be used when they already exist.
 
@@ -71,11 +72,30 @@ Current claims are intentionally bounded.
 
 | Area | Proven status |
 |:--|:--|
-| **KerniQ native Desktop Project Command** | One bounded AgentFuse-protected pre-dispatch path is proven for the reviewed Project Command scope. This is not a claim that every KerniQ action is governed. |
+| **KerniQ native Desktop Project Command** | **GOVERNED** — one bounded, reviewed native pre-dispatch path protected by approval, canonical AgentFuse decision evidence, and durable start evidence. Only this reviewed path is claimed; not every KerniQ action is governed. |
+| **DSH real governed runtime** | **GOVERNED** — a real DeepSeek Harness runtime, driven by a real model tool call through the real `tools/pre-execute` seam, with canonical AgentFuse decisions: BLOCK prevents dispatch and tool-body execution, ALLOW reaches physical execution, and a fail-closed admission path exists. Proven for the reviewed pinned boundary only — not all DSH versions, tools, or universal DSH governance ([governance proof](docs/development/kerniq_dsh_agentfuse_governance_v0_2.md)). |
+| **DSH Evidence projection** | One reviewed real-source offline projection into Evidence v0.2 is proven (separate from the governed runtime above). |
+| **Microsoft Agent Framework governance** | **GOVERNED, bounded** — real single-agent and official `Agent → B.as_tool → protected tool` delegated runs on the official pinned MAF Python runtime (`agent-framework-core` 1.17.0): the adapter-created local async `FunctionTool(value: str)` path where the canonical AgentFuse decision occurs before continuation release, with single-use physical-entry binding. The child local function execution boundary is governed; delegation itself is not claimed governed ([proof](docs/development/kerniq_microsoft_agent_framework_governance_proof_v0_8.md)). |
+| **Real multi-agent control plane** | A real two-worker control-plane proof with **Codex (OBSERVED)** and **DSH (GOVERNED)** as independent real workers: capability admission before task execution, real lifecycle coordination, durable worker/session evidence, a reconciliation path, and `governanceRequired` tasks that cannot silently downgrade. This proves KerniQ can coordinate runtimes with different truthful capability tiers — not that every worker is governed ([wiring proof](docs/development/kerniq_control_plane_product_wiring_v0_3.md)). |
 | **Evidence v0.2** | Frozen conformance proof exists for the canonical Evidence contract and its known/unknown boundaries. |
-| **DSH source projection** | One reviewed real-source offline projection into Evidence v0.2 is proven. |
-| **LangChain source projection** | One fixed real-source **limited offline projection profile** is proven. Full-capture qualification remains **REJECTED** and F-01 remains **UNRESOLVED**. This is not universal LangChain support. |
-| **External validation / adoption** | **Not proven yet.** A minimal local external validation CLI exists for one frozen OBSERVED LangChain profile (see [External Validation](#external-validation)); the first internal usability run failed on documentation friction and, after the doc fix, a second fresh-clone rerun passed (~61 s to a PASS + VERIFIED artifact on the synthetic sample). Still not external validation. |
+| **LangChain / LangGraph track** | **OBSERVED** — one frozen limited source/evidence profile (`langchain-create-agent-tool-run-jsonl-v0.1`) plus a minimal local external validation CLI; internal usability proven (see [External Validation](#external-validation)). Full-capture qualification remains **REJECTED**, F-01 **UNRESOLVED**, and model-request correlation unproven. Not universal LangChain support. |
+| **External validation / adoption** | **Not proven yet.** A minimal local external validation CLI exists for one frozen OBSERVED LangChain profile; the first internal usability run failed on documentation friction and, after the doc fix, a second fresh-clone rerun passed (~61 s to a PASS + VERIFIED artifact on the synthetic sample). Still not external validation. |
+
+### Runtime Capability Matrix
+
+Proof ≠ generic support. Each tier below is claimed only for the reviewed,
+pinned boundary in the linked evidence:
+
+| Runtime / boundary | Tier | Proven boundary |
+|:--|:--|:--|
+| KerniQ Project Command | **GOVERNED** | reviewed native desktop pre-dispatch path |
+| DeepSeek Harness (DSH) | **GOVERNED** | pinned real pre-dispatch tool path |
+| Microsoft Agent Framework | **GOVERNED** | pinned local async `FunctionTool(value: str)` path |
+| Codex | **OBSERVED** | real worker lifecycle/result observation |
+| LangChain / LangGraph | **OBSERVED** | frozen limited source/evidence profile |
+
+`OPAQUE` remains the explicit fallback classification where neither
+trustworthy control nor sufficient observation exists.
 
 The current Evidence Projection freeze is recorded in
 [`kerniq_evidence_projection_v0_5_2_freeze.md`](docs/development/kerniq_evidence_projection_v0_5_2_freeze.md).
@@ -85,8 +105,10 @@ The current Evidence Projection freeze is recorded in
 KerniQ does **not** currently claim:
 
 - universal LangChain support;
-- universal framework governance;
+- universal framework governance (including Microsoft Agent Framework support beyond the pinned bounded proof lane);
 - universal runtime projection;
+- all DSH versions/tools or all MAF tool types governed (hosted tools, MCP, and provider-side execution remain excluded);
+- Codex or LangChain governance (both remain OBSERVED);
 - proof of physical side effects from a terminal event alone;
 - generic cross-process exactly-once execution;
 - external validation or production adoption;
@@ -226,35 +248,30 @@ Full guide: [QUICK_START.md](docs/QUICK_START.md)
 
 ## Repository Structure
 
+Selected major components (not a complete package listing):
+
 ```text
 qodex/                      ← legacy repository name
 ├── apps/desktop/           ← Tauri + React desktop UI
-├── packages/
-│   ├── provider-sdk/       ← model provider abstraction
-│   ├── agent-runtime/      ← task execution orchestration
-│   ├── session-runtime/    ← durable session ledger and recovery
-│   ├── project-runtime/    ← file system access
-│   ├── context-engine/     ← context assembly pipeline
-│   ├── diff-engine/        ← patch generation and apply
-│   ├── git-runtime/        ← Git operations and checkpoints
-│   ├── planning-runtime/   ← task planning and dependencies
-│   ├── execution-graph-runtime/ ← graph-based execution
-│   ├── i18n-runtime/       ← internationalization
-│   ├── marketplace-runtime/← skill marketplace and registry
-│   ├── skill-runtime/      ← skill loading and resolution
-│   ├── mcp-runtime/        ← MCP tool management
-│   └── multi-agent-runtime/← multi-agent orchestration
+├── packages/               ← product runtimes and adapters, including
+│   ├── control-plane / action / session runtimes
+│   ├── agentfuse-adapter · dsh-control-plane-observer
+│   ├── codewhale-engine-adapter (governed-engine spike)
+│   ├── coding-pack-runtime / -store / -agentfuse
+│   └── provider / agent / multi-agent / project / skill / MCP / Git runtimes …
 ├── python/
-│   ├── kerniq_evidence_conformance/ ← Evidence v0.2 conformance
-│   ├── kerniq_evidence_projection/  ← reviewed offline source projection
-│   └── kerniq_external_validation/  ← minimal local external validator (pilot)
+│   ├── kerniq_agentfuse_bridge/        ← canonical AgentFuse loader/bridge
+│   ├── kerniq_evidence_conformance/    ← Evidence v0.2 conformance
+│   ├── kerniq_evidence_projection/     ← reviewed offline source projection
+│   ├── kerniq_external_validation/     ← minimal local external validator (pilot)
+│   └── kerniq_microsoft_agent_framework/ ← bounded MAF governed backend proof
 ├── docs/                   ← specifications, proofs, guides, development logs
 └── qodex-config/           ← AI agent workspace (rules, memory, ADRs, skills)
 ```
 
 > **Legacy compatibility:** The `@qodex/*` package scope, `qodex-config/`, and
-> related persisted identifiers remain unchanged during the KerniQ brand
-> migration to avoid breaking existing integrations and local data.
+> related persisted identifiers intentionally retain the Qodex name to avoid
+> breaking existing integrations and local data.
 
 ---
 
@@ -290,6 +307,8 @@ The existing GitHub CI workflow does **not** currently execute those three new o
 | [Installation](docs/INSTALLATION.md) | Setup for macOS / Windows / Linux |
 | [Architecture](docs/ARCHITECTURE.md) | Product architecture |
 | [Evidence Projection v0.5.2 Freeze](docs/development/kerniq_evidence_projection_v0_5_2_freeze.md) | Frozen Evidence v0.2 / DSH / limited LangChain projection claims and non-claims |
+| [DSH + AgentFuse Governance Proof v0.2](docs/development/kerniq_dsh_agentfuse_governance_v0_2.md) | Real DeepSeek Harness pre-dispatch governance: BLOCK non-execution and ALLOW execution |
+| [Microsoft Agent Framework Governance Proof v0.8](docs/development/kerniq_microsoft_agent_framework_governance_proof_v0_8.md) | Real single-agent and official `Agent.as_tool` delegated governance proof for one pinned local async FunctionTool boundary |
 | [External Validator Pilot README](docs/development/kerniq_langchain_external_validator_v0_6_3.md) | Minimal local external validation CLI for one frozen OBSERVED LangChain profile |
 | [Dev Log](docs/development/DEVLOG.md) | Development history |
 | [Product Roadmap](docs/development/PRODUCT_ROADMAP.md) | Product and distribution milestones |
@@ -300,12 +319,26 @@ The existing GitHub CI workflow does **not** currently execute those three new o
 
 ## Version Tracks
 
-KerniQ has more than one development track:
+KerniQ has more than one development track, and their milestone numbers are
+track-local — they are bounded development/proof labels, not all
+semantic-versioned product releases:
 
-- **Product/runtime milestones** cover the desktop product, native execution, Coding Pack, installation, and runtime integrations.
-- **Evidence/protocol proof milestones** cover Evidence contracts, source qualification, projection, and proof boundaries.
+- **Product / Desktop milestones** cover the desktop product, native
+  execution, Coding Pack, and installation (e.g. v0.4 agent loop, v0.6
+  managed Python, v0.7 Coding Pack, v0.8 installer work).
+- **Control-plane / runtime integration proofs** cover real runtime
+  governance and coordination evidence (e.g. the v0.2 DSH governance proof,
+  the v0.3 multi-agent wiring, the v0.8 Microsoft Agent Framework proof).
+- **Evidence / protocol proof milestones** cover Evidence contracts, source
+  qualification, projection, and proof boundaries (e.g. Evidence v0.2,
+  the v0.5.2 projection freeze, the v0.6.x LangChain profile and validator).
 
-These tracks intentionally use their own milestone numbering. **Evidence Projection v0.5.2 is not a claim that the whole KerniQ product release has moved backward to product v0.5.2.** Historical product milestones such as v0.6.x and v0.7.x remain valid in their own track.
+The same number can therefore appear in different tracks (product v0.3 Real
+Patch Loop vs control-plane v0.3 Governed Multi-Agent Wiring; product v0.8
+vs CodeWhale v0.8.0 spike vs MAF governance proof v0.8). **Evidence
+Projection v0.5.2 is not a claim that the whole KerniQ product release has
+moved backward to product v0.5.2**, and a proof milestone number is not a
+product release version. Historical milestones are not renumbered.
 
 ---
 
@@ -427,8 +460,10 @@ See the
 [Project Command adapter plan](docs/development/kerniq_project_command_action_runtime_adapter_planning_v0_6_1.md)
 and [real Tauri proof](docs/development/kerniq_project_command_real_tauri_proof_v0_6_1_6.md).
 The [final freeze seal](docs/development/kerniq_v0_6_1_project_command_final_freeze.md)
-records the exact merged evidence chain and bounded non-claims. It is active on
-`main`; the next implementation milestone has not started.
+records the exact merged evidence chain and bounded non-claims. The frozen
+scope was active on `main` at freeze time; subsequent work continued on
+later milestones (Coding Pack v0.7, runtime governance proofs, installer
+planning), which does not reopen the frozen Project Command scope.
 
 ## Coding Pack v0.7
 

@@ -10,12 +10,12 @@
 
 **统一编排独立 Runtime；只有在真实 pre-dispatch 边界存在时才声明治理；更强控制不可用时，明确保留证据与未知，而不是制造虚假的执行确定性。**
 
-KerniQ 原名 Qodex。为避免破坏已有集成与本地数据，部分历史包名、目录名和持久化标识仍保留 Qodex 名称。
+KerniQ 原名 Qodex。为避免破坏已有集成与本地数据，部分内部包名空间（`@qodex/*`）、`qodex-config/` 路径和持久化标识**有意保留** Qodex 名称（向后兼容）。
 
 ![Beta](https://img.shields.io/badge/status-beta-blue)
 ![License](https://img.shields.io/badge/license-MIT-blue)
 ![Platform](https://img.shields.io/badge/platform-Desktop%20(Tauri)-purple)
-![TypeScript](https://img.shields.io/badge/TypeScript-5.5-blue)
+![TypeScript](https://img.shields.io/badge/TypeScript-5.x-blue)
 [![CI](https://github.com/MkaliezZ/qodex/actions/workflows/ci.yml/badge.svg)](https://github.com/MkaliezZ/qodex/actions/workflows/ci.yml)
 ![Built With](https://img.shields.io/badge/built%20with-Tauri%20%7C%20React-cyan)
 
@@ -23,9 +23,9 @@ KerniQ 原名 Qodex。为避免破坏已有集成与本地数据，部分历史�
 
 ## KerniQ 是什么？
 
-KerniQ 是一个桌面优先、厂商无关的 AI Agent 控制平面。它负责协调 Agent / Runtime 生命周期、编排与结果汇总，区分不同 Runtime 真正能暴露的控制能力，并且只在经过审查的“执行前 / pre-dispatch”边界真实存在时接入 AgentFuse 治理；如果做不到，就明确降级为观察、证据投影或不支持，而不是把观察包装成执行控制。
+KerniQ 是一个桌面优先、厂商无关的**多 Agent 控制与治理平面（multi-agent control / governance plane）**。它协调独立的 Agent Runtime，如实划分每个 Runtime 的能力等级，只在经过审查的真实 pre-dispatch 边界存在时接入 AgentFuse 治理；治理不可用时降级为观察，明确保留 Evidence 与 unknown，并对多 Agent 结果做 reconciliation。
 
-KerniQ 同时仍是一套可运行的 AI 编程产品：包含 Provider 抽象、Context Engine、Skills、MCP、Diff-first 编辑、Git Checkpoint、Session / Action Runtime、多 Agent 编排以及受限的原生执行路径。这些能力继续保留，但它们不再是 KerniQ 的全部定义。
+KerniQ 同时也是一套可运行的 AI 编程产品：包含 Provider 抽象、Context Engine、Skills、MCP、Diff-first 编辑、Git Checkpoint、Session / Action Runtime、多 Agent 编排以及受限的原生执行路径。这套编程能力是 KerniQ 的一个 product surface，不是项目的全部定义。
 
 KerniQ / AgentFuse 的核心集成方向是 **SDK-free by default**。原则上不要求用户：
 
@@ -77,11 +77,28 @@ KerniQ 按“实际证明能力”而不是“希望拥有的能力”来分类 
 
 | 范围 | 当前证明状态 |
 |:--|:--|
-| **KerniQ 原生 Desktop Project Command** | 已证明一个受限、经过审查的 AgentFuse pre-dispatch 保护路径；不代表所有 KerniQ action 都被治理。 |
+| **KerniQ 原生 Desktop Project Command** | **GOVERNED** —— 已证明一条受限、经过审查的原生 pre-dispatch 路径（审批、canonical AgentFuse decision evidence、durable start evidence）。仅此审查路径成立；不代表所有 KerniQ action 都被治理。 |
+| **DSH 真实治理 Runtime** | **GOVERNED** —— 真实 DeepSeek Harness runtime，由真实 model tool call 经过真实 `tools/pre-execute` seam，canonical AgentFuse 决策：BLOCK 阻止 dispatch 与 tool-body 执行、ALLOW 到达物理执行，且存在 fail-closed admission 路径。仅适用于审查过的 pinned 边界——不支持“所有 DSH 版本 / 所有工具 / 通用 DSH 治理”（[governance proof](docs/development/kerniq_dsh_agentfuse_governance_v0_2.md)）。 |
+| **DSH Evidence projection** | 已证明一个经过审查的真实 source 离线投影到 Evidence v0.2（与上面的治理 runtime 是两件独立的事）。 |
+| **Microsoft Agent Framework 治理** | **GOVERNED（bounded）** —— 在官方 pinned MAF Python runtime（`agent-framework-core` 1.17.0）上完成真实 single-agent 与官方 `Agent → B.as_tool → protected tool` 委派运行：adapter 创建的本地 async `FunctionTool(value: str)` 路径，canonical AgentFuse 决策发生在 continuation release 之前，并有 single-use 物理入口绑定。被治理的是 **child 本地函数执行边界**，不声称 delegation 本身被治理（[proof](docs/development/kerniq_microsoft_agent_framework_governance_proof_v0_8.md)）。 |
+| **真实多 Agent 控制平面** | **Codex（OBSERVED）+ DSH（GOVERNED）** 两个独立真实 worker 的两 worker 控制平面 proof：任务执行前的 capability admission、真实生命周期协调、durable worker/session evidence、reconciliation 路径，以及 `governanceRequired` 任务不可静默降级。这证明 KerniQ 能协调不同真实能力等级的 Runtime——不是说所有 worker 都被治理（[wiring proof](docs/development/kerniq_control_plane_product_wiring_v0_3.md)）。 |
 | **Evidence v0.2** | 已有冻结的 conformance proof，用于约束 canonical Evidence contract 及 known / unknown 边界。 |
-| **DSH source projection** | 已证明一个经过审查的真实 source 离线投影到 Evidence v0.2。 |
-| **LangChain source projection** | 已证明一个固定真实 source 的**有限离线 projection profile**。Full capture qualification 仍为 **REJECTED**，F-01 仍为 **UNRESOLVED**。这不是通用 LangChain 支持。 |
-| **External validation / adoption** | **尚未证明。** 已存在一个最小本地 external validation CLI，仅支持一个冻结的 `OBSERVED` LangChain profile（见 [External Validation](#external-validation)）；首次内部 10 分钟 usability 因文档 friction 失败，文档修正后 fresh rerun 已 PASS。这仍不是 external validation。 |
+| **LangChain / LangGraph 轨道** | **OBSERVED** —— 一个冻结的有限 source/evidence profile（`langchain-create-agent-tool-run-jsonl-v0.1`）加上最小本地 external validation CLI；内部 usability 已证明（见 [External Validation](#external-validation)）。Full capture qualification 仍为 **REJECTED**，F-01 仍为 **UNRESOLVED**，model-request 关联未证明。不是通用 LangChain 支持。 |
+| **External validation / adoption** | **尚未证明。** 已存在一个最小本地 external validation CLI，仅支持一个冻结的 `OBSERVED` LangChain profile；首次内部 10 分钟 usability 因文档 friction 失败，文档修正后 fresh rerun 已 PASS（synthetic sample 上约 61 秒得到 PASS + VERIFIED artifact）。这仍不是 external validation。 |
+
+### Runtime Capability Matrix
+
+Proof ≠ generic support。下表每个 tier 仅对链接 evidence 中审查过的 pinned 边界成立：
+
+| Runtime / 边界 | Tier | 已证明边界 |
+|:--|:--|:--|
+| KerniQ Project Command | **GOVERNED** | 审查过的原生桌面 pre-dispatch 路径 |
+| DeepSeek Harness（DSH） | **GOVERNED** | pinned 的真实 pre-dispatch 工具路径 |
+| Microsoft Agent Framework | **GOVERNED** | pinned 的本地 async `FunctionTool(value: str)` 路径 |
+| Codex | **OBSERVED** | 真实 worker 生命周期 / 结果观察 |
+| LangChain / LangGraph | **OBSERVED** | 冻结的有限 source / evidence profile |
+
+当既不存在可信控制、也不存在足够观察时，`OPAQUE` 仍是显式的兜底分类。
 
 当前 Evidence Projection 冻结记录：
 [`kerniq_evidence_projection_v0_5_2_freeze.md`](docs/development/kerniq_evidence_projection_v0_5_2_freeze.md)
@@ -91,8 +108,10 @@ KerniQ 按“实际证明能力”而不是“希望拥有的能力”来分类 
 KerniQ 目前**没有**声称：
 
 - 通用 LangChain support；
-- 通用 Framework governance；
+- 通用 Framework governance（包括超出 pinned bounded proof lane 的 Microsoft Agent Framework 支持）；
 - 通用 Runtime projection；
+- 所有 DSH 版本 / 工具或所有 MAF 工具类型被治理（hosted tools、MCP、provider 侧执行仍被排除）；
+- Codex 或 LangChain 治理（两者保持 OBSERVED）；
 - 仅凭 terminal event 就能证明物理副作用；
 - 通用 cross-process exactly-once execution；
 - 已获得 external validation 或 production adoption；
@@ -216,14 +235,23 @@ cd apps/desktop && pnpm dev
 
 ## 仓库结构
 
+主要组件选列（不是完整 package 清单）：
+
 ```text
 qodex/                      ← 历史仓库名称
 ├── apps/desktop/           ← Tauri + React 桌面 UI
-├── packages/               ← 产品 Runtime / SDK / Engine
+├── packages/               ← 产品 Runtime 与 adapter，包括
+│   ├── control-plane / action / session runtimes
+│   ├── agentfuse-adapter · dsh-control-plane-observer
+│   ├── codewhale-engine-adapter（governed-engine spike）
+│   ├── coding-pack-runtime / -store / -agentfuse
+│   └── provider / agent / multi-agent / project / skill / MCP / Git runtimes …
 ├── python/
-│   ├── kerniq_evidence_conformance/ ← Evidence v0.2 conformance
-│   ├── kerniq_evidence_projection/  ← 经过审查的离线 source projection
-│   └── kerniq_external_validation/  ← 最小本地 external validator / pilot
+│   ├── kerniq_agentfuse_bridge/        ← canonical AgentFuse loader / bridge
+│   ├── kerniq_evidence_conformance/    ← Evidence v0.2 conformance
+│   ├── kerniq_evidence_projection/     ← 经过审查的离线 source projection
+│   ├── kerniq_external_validation/     ← 最小本地 external validator / pilot
+│   └── kerniq_microsoft_agent_framework/ ← bounded MAF governed backend proof
 ├── docs/                   ← 规范、proof、指南与开发日志
 └── qodex-config/           ← AI Agent 工作空间（rules / memory / ADR / skills）
 ```
@@ -259,12 +287,13 @@ Evidence Projection v0.5.2 freeze 在 CPython 3.11 和 3.13 上独立执行了�
 
 ## 开发轨道说明
 
-KerniQ 当前存在不止一条开发轨道：
+KerniQ 存在多条开发轨道，milestone 编号都是**轨道内局部编号**——它们是有边界的开发 / proof 标签，并不都是语义化版本的产品 release：
 
-- **Product / Runtime milestones**：桌面产品、原生执行、Coding Pack、安装与 Runtime integration。
-- **Evidence / Protocol proof milestones**：Evidence contract、source qualification、projection 与 proof boundary。
+- **Product / Desktop milestones**：桌面产品、原生执行、Coding Pack、安装（如 v0.4 agent loop、v0.6 managed Python、v0.7 Coding Pack、v0.8 安装器工作）。
+- **Control-plane / runtime integration proofs**：真实 runtime 治理与协调 evidence（如 v0.2 DSH governance proof、v0.3 多 Agent wiring、v0.8 Microsoft Agent Framework proof）。
+- **Evidence / Protocol proof milestones**：Evidence contract、source qualification、projection 与 proof boundary（如 Evidence v0.2、v0.5.2 projection freeze、v0.6.x LangChain profile 与 validator）。
 
-两条轨道会使用各自的 milestone 编号。**Evidence Projection v0.5.2 不代表整个 KerniQ 产品版本“退回”到产品 v0.5.2。** 历史产品 v0.6.x / v0.7.x 里程碑继续在自己的轨道上成立。
+同一个数字可能出现在不同轨道（产品 v0.3 Real Patch Loop 与 control-plane v0.3 Governed Multi-Agent Wiring；产品 v0.8、CodeWhale v0.8.0 spike 与 MAF governance proof v0.8）。**Evidence Projection v0.5.2 不代表整个 KerniQ 产品版本“退回”到产品 v0.5.2**，proof milestone 编号也不是产品 release 版本。历史 milestone 不重新编号。
 
 ---
 
@@ -276,6 +305,8 @@ KerniQ 当前存在不止一条开发轨道：
 | [Installation](docs/INSTALLATION.md) | macOS / Windows / Linux 安装 |
 | [Architecture](docs/ARCHITECTURE.md) | 产品架构 |
 | [Evidence Projection v0.5.2 Freeze](docs/development/kerniq_evidence_projection_v0_5_2_freeze.md) | Evidence v0.2 / DSH / limited LangChain projection 的冻结 claim 与 non-claim |
+| [DSH + AgentFuse Governance Proof v0.2](docs/development/kerniq_dsh_agentfuse_governance_v0_2.md) | 真实 DeepSeek Harness pre-dispatch 治理：BLOCK 不执行、ALLOW 到达执行 |
+| [Microsoft Agent Framework Governance Proof v0.8](docs/development/kerniq_microsoft_agent_framework_governance_proof_v0_8.md) | 一个 pinned 本地 async FunctionTool 边界的真实 single-agent 与官方 `Agent.as_tool` 委派治理 proof |
 | [External Validator Pilot README](docs/development/kerniq_langchain_external_validator_v0_6_3.md) | 一个冻结 OBSERVED LangChain profile 的最小本地 external validator 使用说明 |
 | [Dev Log](docs/development/DEVLOG.md) | 开发历史 |
 | [Product Roadmap](docs/development/PRODUCT_ROADMAP.md) | 产品与分发里程碑 |
