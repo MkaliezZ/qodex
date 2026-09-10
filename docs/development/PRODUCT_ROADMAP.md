@@ -1,8 +1,10 @@
 # KerniQ Product Roadmap
 
-KerniQ is evolving into a provider-neutral, skill-driven, memory-aware,
-approval-first, evidence-first, general-purpose Agent. Coding is the first
-mature Capability Pack, not the product boundary.
+KerniQ is evolving into a vendor-neutral multi-agent control and governance
+plane, with coding-agent capabilities as one product surface. The milestones
+below track the product track; bounded runtime governance proofs run on their
+own track (see "Runtime Governance Proof Track") and their milestone numbers
+are track-local labels, not product release versions.
 
 ## Milestones
 
@@ -70,7 +72,8 @@ process. It proves allow, human deny, canonical block, zero-dispatch
 persistence barriers, settlement interruption, restart no-replay, stale
 authority invalidation, and controlled lifecycle at-most-once behavior. A
 separate docs-only PR merged the final freeze seal. The v0.6.1 Project Command
-scope is frozen and the next implementation milestone has not started.
+scope is frozen; later work continued on subsequent milestones (Coding Pack
+v0.7, runtime governance proofs, installer planning) without reopening it.
 
 - [v0.6.1 planning document](kerniq_project_command_action_runtime_adapter_planning_v0_6_1.md)
 - [v0.6.1.6 real Tauri proof](kerniq_project_command_real_tauri_proof_v0_6_1_6.md)
@@ -165,6 +168,37 @@ the merged path with deterministic fixture bytes, real SQLite, pinned
 AgentFuse, native handle-relative export, bounded negative cases, and explicit
 uncertainty fault cases. The v0.7 line is frozen. Only security, proof,
 installation, compatibility, and real-user-feedback defects may reopen it.
+
+## Runtime Governance Proof Track
+
+Bounded real-runtime governance proofs run in parallel to product milestones.
+Completed proof lanes:
+
+- **DSH governed runtime (v0.2)** — a real DeepSeek Harness runtime with a
+  real model tool call through the real `tools/pre-execute` seam; canonical
+  AgentFuse BLOCK prevents dispatch/tool-body execution, ALLOW reaches
+  physical execution, and a fail-closed admission path exists
+  ([proof](kerniq_dsh_agentfuse_governance_v0_2.md)).
+- **Real multi-agent control plane (v0.3)** — Codex (OBSERVED) + DSH
+  (GOVERNED) as two independent real workers with capability admission
+  before task execution, durable worker/session evidence, reconciliation,
+  and no silent `governanceRequired` downgrade
+  ([wiring](kerniq_control_plane_product_wiring_v0_3.md)).
+- **LangChain OBSERVED track (v0.5.2 / v0.6.x)** — frozen limited
+  source/evidence profile, minimal local external validation CLI, and an
+  internal usability proof; external validation and adoption unproven.
+- **Microsoft Agent Framework bounded governed runtime proof (v0.8)** —
+  **completed**: real single-agent and official `Agent → B.as_tool →
+  protected tool` delegated runs on the pinned official MAF Python runtime
+  (`agent-framework-core` 1.17.0), canonical AgentFuse decision before
+  continuation release, single-use physical-entry binding, BLOCK
+  non-execution and ALLOW execution proven for the adapter-created local
+  async `FunctionTool(value: str)` boundary
+  ([proof](kerniq_microsoft_agent_framework_governance_proof_v0_8.md)).
+
+This is a bounded proof lane, not a production-ready integration. MAF
+productization remains unfinished: desktop wiring, generic configuration,
+broader tool types, distribution, and external validation are not done.
 
 ### v0.8 - Product Packaging and Closed Beta
 
