@@ -38,16 +38,18 @@ artifact, verified complete result) and remains false until then.
 
 | Candidate | Stage | Evidence |
 |:--|:--|:--|
-| MohammadHaroonAbuomar | **Contacted** | [issuecomment-5623023739](https://github.com/microsoft/agent-framework/issues/7522#issuecomment-5623023739) on #7522 (2026-09-11, human-authorized first batch) |
-| CorgiBoyG | **Contacted** | [issuecomment-5623027806](https://github.com/microsoft/agent-framework/issues/8079#issuecomment-5623027806) on #8079 (2026-09-11, human-authorized first batch) |
-| antsok | **Contacted** | [issuecomment-5623032115](https://github.com/microsoft/agent-framework/issues/7588#issuecomment-5623032115) on #7588 (2026-09-11, human-authorized first batch) |
+| MohammadHaroonAbuomar | **Contacted** | [issuecomment-5623713807](https://github.com/microsoft/agent-framework/issues/7522#issuecomment-5623713807) on #7522 (tone-corrected resend, 2026-09-11; original comment 5623023739 deleted) |
+| CorgiBoyG | **Contacted** | [issuecomment-5623721568](https://github.com/microsoft/agent-framework/issues/8079#issuecomment-5623721568) on #8079 (tone-corrected resend, 2026-09-11; original comment 5623027806 deleted) |
+| antsok | **Contacted** | [issuecomment-5623726610](https://github.com/microsoft/agent-framework/issues/7588#issuecomment-5623726610) on #7588 (tone-corrected resend, 2026-09-11; original comment 5623032115 deleted) |
 | likebean | Candidate identified (hold) | shortlist v0.1 entry 4; no draft this round |
 | m4masood | Candidate identified (hold) | shortlist v0.1 entry 5; no draft this round |
 | jmcgraw434 | Candidate identified (peer track) | shortlist v0.1 entry 6; peer-review framing if approached |
 
-**OUTREACH_SENT=true (first batch, 3 comments, 2026-09-11).** Three HIGH
-candidates are now CONTACTED and awaiting replies. No stage above Contacted
-has been reached for anyone: Interested / Pilot started / Artifact returned
-/ Artifact verified have not occurred. No automatic replies, follow-ups or
+**OUTREACH_SENT=true (tone-corrected batch, 2026-09-11).** The three
+original comments were judged too close to product promotion and were
+deleted; the replacements are engineer-to-engineer technical discussion
+comments (no project/platform mentions, no links, no CTA). Three HIGH
+candidates remain CONTACTED and awaiting replies. No stage above Contacted
+has been reached for anyone. No automatic replies, follow-ups or
 second-round sends; any further contact requires a new human decision.
 EXTERNAL_VALIDATION_PROVEN=false, ADOPTION_PROVEN=false unchanged.
